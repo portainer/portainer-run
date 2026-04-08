@@ -8,7 +8,7 @@ Portainer is an operator control plane. It is built for the people who manage in
 
 Portainer Run is that interface. It presents a service-centric view of your Kubernetes environments... deploy a container, see it running, stream its logs, inspect its revisions, and roll back if needed. The underlying platform is still Portainer, with all the RBAC and access controls that implies. Portainer Run just removes the distance between the developer and the outcome.
 
-It is intentionally narrow in scope. It does not replace Portainer. It surfaces a specific workflow (deploy and operate a containerised workload) in the simplest UI we could build for it.
+It is intentionally narrow in scope. It does not replace Portainer. It surfaces a specific workflow (deploy and operate a containerized workload) in the simplest UI we could build for it.
 
 ## What it does
 
@@ -24,13 +24,13 @@ Once connected, it provides a unified view across all environments the token can
 
 Clicking any service opens a detail panel with six tabs.
 
-**Overview** shows live status (ready/updated/available instances), configuration, labels, and full exposure detail (port chain, external IP, Ingress hostname and path).
+**Overview** shows live status (ready/updated/available instances), configuration, labels, and full exposure detail (port chain, external IP, Ingress hostname, and path).
 
 **Containers** shows per-container configuration: image, ports, pull policy, resource limits, environment variables, and volume mounts.
 
 **Metrics** shows CPU and memory sparklines per container, polled every 15 seconds via `metrics.k8s.io`. Requires metrics-server to be installed on the cluster.
 
-**Logs** streams or fetches pod logs with per-container selection, severity filtering, and text search. If an Anthropic API key is configured on the server, an AI Analyse button fetches logs from all instances and containers in parallel and sends them to Claude for triage.
+**Logs** streams or fetches pod logs with per-container selection, severity filtering, and text search. If an Anthropic API key is configured on the server, an AI Analyze button fetches logs from all instances and containers in parallel and sends them to Claude for triage.
 
 **Revisions** lists ReplicaSet history for the deployment, most recent first, with a Rollback button against each revision.
 
@@ -103,9 +103,6 @@ docker run -d \
   portainer-run
 ```
 
-### DNS resolution issues
-
-If the container cannot resolve your Portainer hostname (error: `EAI_AGAIN`), add `--dns 8.8.8.8` to the run command to override Docker's internal resolver.
 
 ## Environment variables
 
