@@ -814,6 +814,12 @@ async function connect() {
     // Show/hide admin nav item
     document.getElementById('adminNavItem').style.display = S.isAdmin ? 'flex' : 'none';
 
+    // Re-fetch server config to ensure AI availability is current
+    try {
+      const cfgR = await fetch('/config');
+      if (cfgR.ok) { const cfg = await cfgR.json(); S.isAiAvailable = !!cfg.aiAvailable; }
+    } catch(_) {}
+
     toast('Connected — ' + S.environments.length + ' environment(s)' + (S.isAdmin ? ' (admin)' : ''), 'ok');
     addContainerCard();
     refreshCache(false);
