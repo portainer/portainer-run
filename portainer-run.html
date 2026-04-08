@@ -41,6 +41,26 @@ nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25
 .nav-item.active{background:var(--accent-glow);color:var(--accent);border:1px solid rgba(14,165,233,.2);}
 .nav-item svg{width:16px;height:16px;flex-shrink:0;}
 .content{padding:32px 36px;overflow-y:auto;max-height:calc(100vh - 57px);}
+.chat-toggle-btn{display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text-dim);font-family:var(--mono);font-size:12px;padding:6px 12px;cursor:pointer;transition:all 0.15s;margin-left:12px;}
+.chat-toggle-btn:hover,.chat-toggle-btn.active{background:var(--accent);border-color:var(--accent);color:#000;}
+.chat-panel{display:none;flex-direction:column;border-left:1px solid var(--border);background:var(--bg);position:fixed;top:57px;right:0;width:360px;height:calc(100vh - 57px);z-index:9999;box-shadow:-4px 0 20px rgba(0,0,0,0.5);overflow:hidden;transition:margin-right 0.2s;}.chat-panel.open{display:flex;}
+
+.chat-header{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.chat-title{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text-bright);}
+.chat-input-wrap{display:flex;flex-direction:column;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.chat-input{background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text-bright);font-family:var(--mono);font-size:12px;padding:8px 10px;outline:none;resize:vertical;min-height:80px;max-height:200px;line-height:1.5;transition:border-color 0.15s;}
+.chat-input:focus{border-color:var(--accent);}
+.chat-messages{flex:1;overflow-y:auto;overflow-x:hidden;padding:12px 14px;display:flex;flex-direction:column;gap:10px;}
+.chat-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;opacity:0.6;}
+.chat-msg{display:flex;flex-direction:column;gap:4px;}
+.chat-msg-user{align-self:flex-end;background:var(--accent);color:#000;border-radius:10px 10px 2px 10px;padding:8px 12px;font-size:12px;max-width:85%;line-height:1.5;font-family:var(--mono);}
+.chat-msg-assistant{align-self:flex-start;background:var(--surface2);border:1px solid var(--border);border-radius:2px 10px 10px 10px;padding:10px 12px;font-size:12px;max-width:95%;line-height:1.6;}
+.chat-msg-assistant p{margin:0 0 6px;} .chat-msg-assistant p:last-child{margin:0;}
+.chat-msg-assistant ul{margin:4px 0;padding-left:16px;}
+.chat-action-btn{display:inline-flex;align-items:center;gap:6px;margin-top:8px;background:var(--accent);color:#000;border:none;border-radius:5px;padding:6px 12px;font-size:12px;font-family:var(--mono);cursor:pointer;font-weight:600;}
+.chat-action-btn:hover{opacity:0.85;}
+.chat-action-btn.secondary{background:var(--surface2);color:var(--text-bright);border:1px solid var(--border2);}
+.chat-thinking{color:var(--text-dim);font-size:11px;font-family:var(--mono);display:flex;align-items:center;gap:6px;}
 .page{display:none;animation:fadeIn .2s ease;}
 .page.active{display:block;}
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
@@ -117,7 +137,7 @@ nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25
 /* ── DETAIL PANEL ── */
 .overlay-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(3px);z-index:150;display:none;}
 .overlay-bg.open{display:block;}
-.detail-panel{position:fixed;top:0;right:0;bottom:0;width:700px;background:var(--surface);border-left:1px solid var(--border2);z-index:151;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s ease;}
+.detail-panel{position:fixed;top:0;right:0;bottom:0;width:700px;background:var(--surface);border-left:1px solid var(--border2);z-index:151;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s ease,right .25s ease;}body.chat-open .detail-panel{right:360px;}
 .detail-panel.open{transform:translateX(0);}
 .dp-head{padding:20px 24px;border-bottom:1px solid var(--border);background:var(--surface2);display:flex;align-items:center;gap:12px;flex-shrink:0;}
 .dp-head h2{font-family:var(--mono);font-size:16px;font-weight:600;color:var(--text-bright);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -175,7 +195,7 @@ nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25
 .modal-foot{padding:14px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;}
 
 /* ── TOAST ── */
-.toast-wrap{position:fixed;bottom:28px;right:28px;display:flex;flex-direction:column;gap:8px;z-index:300;}
+.toast-wrap{position:fixed;bottom:28px;right:28px;display:flex;flex-direction:column;gap:8px;z-index:10000;transition:right 0.25s ease;}body.chat-open .toast-wrap{right:388px;}
 .toast{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;font-family:var(--mono);font-size:12.5px;color:var(--text-bright);box-shadow:0 8px 32px rgba(0,0,0,.4);animation:slideUp .2s ease;max-width:380px;}
 .toast.ok{border-left:3px solid var(--green);}
 .toast.err{border-left:3px solid var(--red);}
@@ -291,6 +311,10 @@ nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25
     <div class="dot" id="statusDot"></div>
     <span id="statusText" style="font-family:var(--mono);font-size:12px">Not connected</span>
   </div>
+  <button class="chat-toggle-btn" id="chatToggleBtn" onclick="toggleChat()" title="Assistant">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    <span>Assistant</span>
+  </button>
 </header>
 
 <!-- ── CONNECT SCREEN ── -->
@@ -502,7 +526,7 @@ nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25
         </div>
 
         <div class="form-actions">
-          <button class="btn btn-ghost" onclick="nav('services',document.querySelectorAll('.nav-item')[0])">Cancel</button>
+          <button class="btn btn-ghost" onclick="resetDeployForm();nav('services',document.querySelectorAll('.nav-item')[0])">Cancel</button>
           <button class="btn btn-primary" id="deployBtn" onclick="deployService()">Deploy Service</button>
         </div>
       </div>
@@ -684,6 +708,28 @@ nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25
     </div>
 
   </div>
+
+</div>
+
+<!-- ── CHAT PANEL ── -->
+<div id="chatPanel" class="chat-panel">
+  <div class="chat-header">
+    <span class="chat-title">Assistant</span>
+    <span class="ai-badge">Claude</span>
+    <button class="btn btn-ghost btn-xs" onclick="toggleChat()" style="margin-left:auto;">✕</button>
+  </div>
+  <div class="chat-input-wrap">
+    <textarea id="chatInput" class="chat-input" placeholder="Ask about your services, paste a docker-compose, or describe what you want to deploy..." rows="4" onkeydown="chatKeydown(event)"></textarea>
+    <button class="btn btn-primary btn-sm" id="chatSendBtn" onclick="sendChat()" style="align-self:flex-end;">Send</button>
+  </div>
+  <div class="chat-messages" id="chatMessages">
+    <div class="chat-empty">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.3;margin-bottom:8px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <div style="font-size:12px;color:var(--text-dim);text-align:center;line-height:1.6;">
+        Ask about your services or describe what you want to deploy.
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ── DELETE MODAL ── -->
@@ -762,7 +808,7 @@ function kube(envId, path, opts = {}) {
 }
 
 // ── SERVER CONFIG ─────────────────────────────────────────────────────────────
-(async function loadConfig() {
+async function loadConfig() {
   const el = document.getElementById('serverTarget');
   try {
     const r = await fetch('/config');
@@ -776,7 +822,7 @@ function kube(envId, path, opts = {}) {
     el.style.color = 'var(--red)';
     S.isAiAvailable = false;
   }
-})();
+}
 
 // ── CONNECT ───────────────────────────────────────────────────────────────────
 async function connect() {
@@ -818,6 +864,24 @@ async function connect() {
     try {
       const cfgR = await fetch('/config');
       if (cfgR.ok) { const cfg = await cfgR.json(); S.isAiAvailable = !!cfg.aiAvailable; }
+    } catch(_) {}
+
+    // Persist token for page refresh survival
+    try { sessionStorage.setItem('portainer_run_token', tok); } catch(_) {}
+
+    // Load cached state immediately so UI populates before live fetch completes
+    try {
+      const cacheRes = await fetch('/cache', { headers: { 'X-API-Key': tok } });
+      if (cacheRes.ok) {
+        const cached = await cacheRes.json();
+        if (cached && Array.isArray(cached.deployments) && cached.deployments.length) {
+          S.cache.deployments = cached.deployments;
+          S.cache.lastFetch   = cached.lastFetch || null;
+          S.cache.everLoaded  = true;
+          renderDashboard();
+          setCacheStatus('cached');
+        }
+      }
     } catch(_) {}
 
     toast('Connected — ' + S.environments.length + ' environment(s)' + (S.isAdmin ? ' (admin)' : ''), 'ok');
@@ -1230,8 +1294,9 @@ async function saveAllEdits() {
 
     toast('Changes saved — rolling update in progress', 'ok');
     setTimeout(() => { S.cache.fetching = false; refreshCache(false); }, 1500);
-    // Refresh detail panel
-    setTimeout(() => openDetail(envId, ns, name), 1500);
+    // Close detail panel and return to services after save
+    closeDetail();
+    setTimeout(() => { S.cache.fetching = false; refreshCache(false); }, 500);
   } catch(e) {
     toast('Save failed: ' + e.message, 'err');
   } finally {
@@ -1240,29 +1305,401 @@ async function saveAllEdits() {
   }
 }
 
-function disconnect() {
-  S.token = ''; S.environments = []; S.currentDetail = null; S.isAdmin = false; S.isAiAvailable = false;
+// ── CHAT PANEL ────────────────────────────────────────────────────────────────
 
-  S.cache = { deployments: [], lastFetch: null, fetching: false };
-  if (S.refreshTimer) { clearTimeout(S.refreshTimer); S.refreshTimer = null; }
+const chatHistory = [];
+let chatPendingDeploy = null;
 
-  stopMetricsPolling();
-  dpStopStream();
-  stopLogStream();
-  closeDetail();
-
-  document.getElementById('adminNavItem').style.display = 'none';
-  document.getElementById('connectScreen').style.display = 'grid';
-  document.getElementById('mainApp').style.display = 'none';
-  document.getElementById('statusDot').className = 'dot';
-  document.getElementById('statusText').textContent = 'Not connected';
-
-  // Clear token field and any error state so the form is fresh
-  const tokenEl = document.getElementById('apiToken');
-  if (tokenEl) tokenEl.value = '';
-  const errEl = document.getElementById('connectError');
-  if (errEl) { errEl.style.display = 'none'; errEl.innerHTML = ''; }
+function toggleChat() {
+  const panel = document.getElementById('chatPanel');
+  const btn = document.getElementById('chatToggleBtn');
+  const mainApp = document.getElementById('mainApp');
+  const isOpen = panel.classList.contains('open');
+  panel.classList.toggle('open', !isOpen);
+  btn.classList.toggle('active', !isOpen);
+  document.body.classList.toggle('chat-open', !isOpen);
+  if (mainApp) mainApp.style.marginRight = isOpen ? '0' : '360px';
+  if (!isOpen) setTimeout(() => document.getElementById('chatInput').focus(), 200);
 }
+
+function chatKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+}
+
+function buildContext() {
+  const page = [...document.querySelectorAll('.page.active')].map(p => p.id.replace('page-', ''))[0] || 'unknown';
+  const envNames = S.environments.map(e => e.Name).join(', ') || 'none';
+  const depCount = S.cache.deployments.length;
+  const depNames = S.cache.deployments.map(d => d.metadata.name).slice(0, 20).join(', ') || 'none';
+  let ctx = `Current page: ${page}. Environments: ${envNames}. Managed services: ${depCount}${depCount > 0 ? ' (' + depNames + ')' : ''}.`;
+  if (S.currentDetail) {
+    const { name, ns, envId } = S.currentDetail;
+    const envName = S.environments.find(e => e.Id === envId)?.Name || envId;
+    const d = S.currentDetail.d;
+    const ready = d?.status?.readyReplicas || 0;
+    const desired = d?.spec?.replicas || 0;
+    ctx += ` Viewing service "${name}" in namespace "${ns}" on "${envName}". Status: ${ready}/${desired} instances ready.`;
+    const ctrs = d?.spec?.template?.spec?.containers || [];
+    if (ctrs.length) ctx += ` Containers: ${ctrs.map(ct => ct.name + ' (' + ct.image + ')').join(', ')}.`;
+  }
+  return ctx;
+}
+
+function addChatMessage(role, content, extras) {
+  const msgs = document.getElementById('chatMessages');
+  const empty = msgs.querySelector('.chat-empty');
+  if (empty) empty.remove();
+  const wrap = document.createElement('div');
+  wrap.className = 'chat-msg';
+  if (role === 'user') {
+    wrap.innerHTML = `<div class="chat-msg-user">${esc(content)}</div>`;
+  } else {
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-msg-assistant';
+    bubble.innerHTML = mdToHtml(content);
+    if (extras?.actions) {
+      const btnWrap = document.createElement('div');
+      btnWrap.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;';
+      extras.actions.forEach(action => {
+        const btn = document.createElement('button');
+        btn.className = 'chat-action-btn' + (action.secondary ? ' secondary' : '');
+        btn.textContent = action.label;
+        btn.onclick = action.onClick;
+        btnWrap.appendChild(btn);
+      });
+      bubble.appendChild(btnWrap);
+    }
+    wrap.appendChild(bubble);
+  }
+  msgs.insertBefore(wrap, msgs.firstChild);
+  return wrap;
+}
+
+function addThinkingIndicator() {
+  const msgs = document.getElementById('chatMessages');
+  const empty = msgs.querySelector('.chat-empty');
+  if (empty) empty.remove();
+  const wrap = document.createElement('div');
+  wrap.className = 'chat-msg';
+  wrap.innerHTML = '<div class="chat-thinking"><div class="spinner" style="width:10px;height:10px;border-width:2px;"></div> Thinking...</div>';
+  msgs.insertBefore(wrap, msgs.firstChild);
+  return wrap;
+}
+
+async function sendChat() {
+  const input = document.getElementById('chatInput');
+  const btn = document.getElementById('chatSendBtn');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  btn.disabled = true;
+  // Show summary for compose pastes instead of full YAML
+  const isCompose = text.includes('services:') && (text.includes('image:') || text.includes('build:'));
+  const displayText = isCompose ? `Docker Compose pasted (${(text.match(/image:/g)||[]).length} container${(text.match(/image:/g)||[]).length !== 1 ? 's' : ''} detected)` : text;
+  addChatMessage('user', displayText);
+  chatHistory.push({ role: 'user', content: text });
+  const thinking = addThinkingIndicator();
+  try {
+    if (isCompose) {
+      thinking.remove();
+      await handleComposePaste(text);
+      btn.disabled = false;
+      return;
+    }
+    const ctx = buildContext();
+
+    // Detect if this is a health/triage question about a specific service
+    // If so, gather diagnostics before sending to Claude
+    let diagnosticData = '';
+    const lowerText = text.toLowerCase();
+    const isHealthQ = /(health|status|slow|broken|error|crash|fail|issue|problem|check|investigat|triage|log|metric|event)/i.test(lowerText);
+    if (isHealthQ) {
+      // Find the service being asked about
+      const targetDep = S.cache.deployments.find(d =>
+        lowerText.includes(d.metadata.name.toLowerCase())
+      ) || (S.currentDetail ? S.cache.deployments.find(d => d.metadata.name === S.currentDetail.name) : null);
+
+      if (targetDep) {
+        const dName = targetDep.metadata.name;
+        const dNs = targetDep.metadata.namespace;
+        const dEnvId = targetDep._envId;
+        thinking.innerHTML = '<div class="chat-thinking"><div class="spinner" style="width:10px;height:10px;border-width:2px;"></div> Fetching diagnostics for ' + dName + '...</div>';
+
+        try {
+          const podsR = await kube(dEnvId, `/api/v1/namespaces/${dNs}/pods?labelSelector=${encodeURIComponent('app=' + dName)}`);
+          if (podsR.ok) {
+            const pods = (await podsR.json()).items || [];
+            if (pods.length) {
+              // Gather logs, conditions, events in parallel
+              const [logChunks, condChunks, eventChunks] = await Promise.all([
+                // Logs
+                Promise.all(pods.flatMap(pod =>
+                  (pod.spec.containers || []).map(async ct => {
+                    try {
+                      const r = await kube(dEnvId, `/api/v1/namespaces/${dNs}/pods/${pod.metadata.name}/log?tailLines=100&container=${encodeURIComponent(ct.name)}`);
+                      return `=== Logs: ${pod.metadata.name}/${ct.name} ===
+${r.ok ? (await r.text()) || '[no output]' : '[unavailable]'}`;
+                    } catch(_) { return ''; }
+                  })
+                )),
+                // Pod conditions
+                Promise.resolve(pods.map(pod => {
+                  const lines = [`=== Pod: ${pod.metadata.name} (${pod.status?.phase || '?'}) ===`];
+                  (pod.status?.conditions || []).forEach(c => lines.push(`  ${c.type}: ${c.status}${c.reason ? ' (' + c.reason + ')' : ''}${c.message ? ' - ' + c.message : ''}`));
+                  (pod.status?.containerStatuses || []).forEach(cs => {
+                    lines.push(`  Container ${cs.name}: ready=${cs.ready}, restarts=${cs.restartCount}`);
+                    if (cs.state?.waiting) lines.push(`    Waiting: ${cs.state.waiting.reason || ''} ${cs.state.waiting.message || ''}`);
+                  });
+                  return lines.join('\n')             })),
+                // Events
+                Promise.all([
+                  kube(dEnvId, `/api/v1/namespaces/${dNs}/events?fieldSelector=${encodeURIComponent('involvedObject.name=' + dName)}`).then(async r => {
+                    if (!r.ok) return '';
+                    const evts = ((await r.json()).items || []).sort((a,b) => new Date(b.lastTimestamp||0) - new Date(a.lastTimestamp||0)).slice(0,10);
+                    return evts.length ? '=== Events ===\n' + evts.map(e => `  [${e.type}] ${e.reason}: ${e.message}`).join('\n') : '';
+                  }).catch(() => ''),
+                  ...pods.map(pod => kube(dEnvId, `/api/v1/namespaces/${dNs}/events?fieldSelector=${encodeURIComponent('involvedObject.name=' + pod.metadata.name)}`).then(async r => {
+                    if (!r.ok) return '';
+                    const evts = ((await r.json()).items || []).sort((a,b) => new Date(b.lastTimestamp||0) - new Date(a.lastTimestamp||0)).slice(0,5);
+                    return evts.length ? `=== Pod Events: ${pod.metadata.name} ===
+` + evts.map(e => `  [${e.type}] ${e.reason}: ${e.message}`).join('\n') : '';
+                  }).catch(() => '')),
+                ]),
+              ]);
+
+              const allDiag = [...condChunks, ...eventChunks, ...logChunks].filter(Boolean).join('\n\n');
+              if (allDiag.trim()) {
+                diagnosticData = '\n\nLIVE DIAGNOSTIC DATA for ' + dName + ':\n' + (allDiag.length > 30000 ? allDiag.slice(-30000) : allDiag);
+              }
+            }
+          }
+        } catch(_) {}
+        thinking.innerHTML = '<div class="chat-thinking"><div class="spinner" style="width:10px;height:10px;border-width:2px;"></div> Analysing...</div>';
+      }
+    }
+
+    const systemPrompt = `You are the built-in assistant for Portainer Run, a Kubernetes deployment tool. You help users manage, deploy, and troubleshoot their containerised applications.
+
+SCOPE: Only answer questions about container operations, deployments, Kubernetes workloads, logs, metrics, and application health. Politely decline anything outside this scope.
+
+Session context: ${ctx}${diagnosticData}
+
+IMPORTANT RULES:
+- If the user asks to SCALE an existing service (e.g. "scale nginx to 3"), respond in plain English confirming what you will do. State clearly: "I'll scale [name] to [N] instances." Do NOT output a deploy-config block for scale requests.
+- If the user asks to DEPLOY a NEW service that does not exist yet, output a deploy-config JSON block.
+- If LIVE DIAGNOSTIC DATA is provided above, you already have the logs, events, and pod status. Analyse them immediately and give a specific answer. NEVER ask the user to go check the logs or metrics themselves — you already have that data. NEVER output a JSON action plan. Just answer in plain English based on what you can see.
+- Never use Kubernetes jargon. Say "instances" not "replicas", "stopped" not "CrashLoopBackOff", "restarting" not "CrashLoopBackOff".`;
+
+    const response = await fetch('/ai/triage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1500,
+        stream: true,
+        system: systemPrompt,
+        messages: chatHistory.slice(-10),
+      }),
+    });
+    if (!response.ok) {
+      let eb = {}; try { eb = await response.json(); } catch(_) {}
+      throw new Error(eb?.error?.message || 'HTTP ' + response.status);
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = '', buf = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n'); buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const evt = JSON.parse(data);
+          if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') fullText += evt.delta.text;
+        } catch(_) {}
+      }
+    }
+    thinking.remove();
+    chatHistory.push({ role: 'assistant', content: fullText });
+    const deployMatch = fullText.match(/```deploy-config[^\n]*\n([\s\S]*?)```/);
+    if (deployMatch) {
+      try {
+        const cfg = JSON.parse(deployMatch[1]);
+        chatPendingDeploy = cfg;
+        addChatMessage('assistant', buildDeployPreview(cfg), {
+          actions: [
+            { label: 'Open in Deploy form', onClick: () => applyDeployConfig(cfg) },
+            { label: 'Cancel', secondary: true, onClick: () => { chatPendingDeploy = null; } },
+          ],
+        });
+      } catch(_) { addChatMessage('assistant', fullText); }
+    } else {
+      const ap = extractActionProposal(fullText);
+      addChatMessage('assistant', fullText, ap || undefined);
+    }
+  } catch(e) {
+    thinking.remove();
+    addChatMessage('assistant', 'Sorry, I ran into an error: ' + (e.message || 'Unknown'));
+  } finally { btn.disabled = false; }
+}
+
+function buildDeployPreview(cfg) {
+  const ctrs = cfg.containers || [];
+  let p = `**Deployment preview: ${cfg.name || 'unnamed'}**\n\n`;
+  p += `**Namespace:** ${cfg.namespace || 'default'} | **Instances:** ${cfg.instances || 1}`;
+  if (cfg.exposure) p += ` | **Exposure:** ${cfg.exposure.type}${cfg.exposure.ports ? ' on port ' + cfg.exposure.ports.join(', ') : ''}`;
+  p += '\n\n**Containers:**\n\n';
+  ctrs.forEach((ct, i) => {
+    p += `- ${i === 0 ? 'Primary' : 'Sidecar'}: **${ct.name}** (${ct.image})`;
+    if (ct.env?.length) p += ` — ${ct.env.map(e => e.name).join(', ')}`;
+    if (ct.storage) p += ` — ${ct.storage.size} at ${ct.storage.mountPath} (vol: ${cfg.name}-${ct.storage.name || ct.name + '-data'})`;
+    p += '\n';
+  });
+  if (cfg.warnings?.length) p += '\n**Notes:** ' + cfg.warnings.join(' · ');
+  return p;
+}
+
+function extractActionProposal(text) {
+  var m = text.match(/scale\s+["']{0,1}([\w-]+)["']{0,1}\s+(?:(?:down|up)\s+to|to)\s+(\d+)/i);
+  if (!m) return null;
+
+  var tgt = m[1].toLowerCase();
+  var count = parseInt(m[2]);
+
+  var dep = S.cache.deployments.find(function(d) {
+    return d.metadata.name.toLowerCase() === tgt ||
+      text.toLowerCase().includes(d.metadata.name.toLowerCase());
+  });
+  if (!dep) return null;
+
+  var depName = dep.metadata.name;
+  var envId = dep._envId;
+  var ns = dep.metadata.namespace;
+
+  return {
+    actions: [{
+      label: 'Open Edit tab for ' + depName,
+      onClick: function() {
+        openDetail(envId, ns, depName);
+        setTimeout(function() {
+          var editTab = Array.from(document.querySelectorAll('.dp-tab')).find(function(t) {
+            return t.textContent.trim() === 'Edit';
+          });
+          if (editTab) dpTab('edit', editTab);
+          setTimeout(function() {
+            var instEl = document.getElementById('editInstances');
+            if (instEl) { instEl.value = count; instEl.focus(); }
+          }, 400);
+        }, 500);
+        addChatMessage('assistant', 'Opened the Edit tab for ' + depName + '. Instances set to ' + count + '. Hit Save changes when ready.');
+      }
+    }]
+  };
+}
+
+
+async function handleComposePaste(yaml) {
+  addChatMessage('assistant', 'Detected a Docker Compose file. Translating...');
+  const thinking = addThinkingIndicator();
+  try {
+    const ctx = buildContext();
+    const response = await fetch('/ai/triage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514', max_tokens: 2000, stream: false,
+        system: `Translate the Docker Compose file into a Portainer Run deployment config. All services become containers in ONE deployment (sidecar model, shared localhost). Return ONLY valid JSON in a code block tagged deploy-config like this: \`\`\`deploy-config\n{...}\n\`\`\` No other text. Structure: {"name":"...","namespace":"default","instances":1,"exposure":{"type":"NodePort","ports":[80]},"containers":[{"name":"...","image":"...","env":[{"name":"K","value":"v"}],"cpuReq":"100m","cpuLim":"500m","memReq":"128Mi","memLim":"512Mi","storage":{"name":"vol","size":"1Gi","mountPath":"/data"}}],"warnings":[]}. Session: ${ctx}`,
+        messages: [{ role: 'user', content: 'Translate:\n\n' + yaml }],
+      }),
+    });
+    thinking.remove();
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const data = await response.json();
+    const text = (data.content || []).map(b => b.text || '').join('');
+    const m = text.match(/```deploy-config[^\n]*\n([\s\S]*?)```/);
+    if (m) {
+      const cfg = JSON.parse(m[1]);
+      chatPendingDeploy = cfg;
+      chatHistory.push({ role: 'assistant', content: text });
+      addChatMessage('assistant', buildDeployPreview(cfg), {
+        actions: [
+          { label: 'Open in Deploy form', onClick: () => applyDeployConfig(cfg) },
+          { label: 'Cancel', secondary: true, onClick: () => { chatPendingDeploy = null; } },
+        ],
+      });
+    } else {
+      addChatMessage('assistant', 'Could not parse the Compose file. Please check it and try again.');
+    }
+  } catch(e) {
+    thinking.remove();
+    addChatMessage('assistant', 'Failed to translate Compose file: ' + e.message);
+  }
+}
+
+function applyDeployConfig(cfg) {
+  nav('deploy', [...document.querySelectorAll('.nav-item')].find(el => el.textContent.trim() === 'Deploy'));
+  const nameEl = document.getElementById('dName');
+  if (nameEl && cfg.name) nameEl.value = cfg.name;
+  const instEl = document.getElementById('dInstances');
+  if (instEl && cfg.instances) instEl.value = cfg.instances;
+  const nsEl = document.getElementById('dNamespace');
+  if (nsEl && cfg.namespace) {
+    const opt = [...nsEl.options].find(o => o.value === cfg.namespace);
+    if (opt) nsEl.value = cfg.namespace;
+  }
+  const expEl = document.getElementById('dExposeType');
+  if (expEl && cfg.exposure?.type) {
+    expEl.value = cfg.exposure.type === 'none' ? 'none' : cfg.exposure.type;
+    onExposeTypeChange();
+    if ((cfg.exposure.type === 'NodePort' || cfg.exposure.type === 'LoadBalancer') && cfg.exposure.ports) {
+      document.getElementById('svcPortList').innerHTML = '';
+      cfg.exposure.ports.forEach(p => addSvcPort(p));
+    }
+  }
+  document.getElementById('containerList').innerHTML = '';
+  containers.length = 0;
+  (cfg.containers || []).forEach((ct, i) => {
+    addContainerCard(i === 0);
+    const id = containers[containers.length - 1].id;
+    const card = document.getElementById('cc-' + id);
+    if (!card) return;
+    const g = f => card.querySelector(`[data-field="${f}"]`);
+    if (g('cname')) g('cname').value = ct.name || '';
+    if (g('image')) g('image').value = ct.image || '';
+    if (g('cpuReq')) g('cpuReq').value = ct.cpuReq || '';
+    if (g('cpuLim')) g('cpuLim').value = ct.cpuLim || '';
+    if (g('memReq')) g('memReq').value = ct.memReq || '';
+    if (g('memLim')) g('memLim').value = ct.memLim || '';
+    if (ct.env?.length) {
+      const envList = card.querySelector(`[data-envlist="${id}"]`);
+      if (envList) ct.env.forEach(ev => {
+        const row = document.createElement('div');
+        row.innerHTML = editEnvRow(id, Date.now(), ev.name, ev.value || '');
+        envList.appendChild(row.firstElementChild);
+      });
+    }
+    if (ct.storage) {
+      toggleVolume(id).then(() => {
+        const g2 = f => card.querySelector(`[data-field="${f}"]`);
+        if (g2('volName')) g2('volName').value = (cfg.name + '-' + (ct.storage.name || ct.name + '-data')).slice(0, 60).replace(/-+$/, '');
+        if (g2('volPath')) g2('volPath').value = ct.storage.mountPath || '/data';
+        const sm = (ct.storage.size || '1Gi').match(/^([\d.]+)(Mi|Gi|Ti)$/);
+        if (sm) {
+          if (g2('volSizeNum')) g2('volSizeNum').value = sm[1];
+          if (g2('volSizeUnit')) g2('volSizeUnit').value = sm[2];
+        }
+      });
+    }
+  });
+  addChatMessage('assistant', `Deploy form populated with **${cfg.name}**. Review the settings and click Deploy when ready.`);
+  chatPendingDeploy = null;
+}
+
+
 
 function populateEnvDropdown() {
   const sel = document.getElementById('dEnvId');
@@ -1270,46 +1707,51 @@ function populateEnvDropdown() {
   if (S.environments.length) onEnvChange();
 }
 
-// ── NAV ───────────────────────────────────────────────────────────────────────
 function nav(name, el) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
   if (el) el.classList.add('active');
-  // Initialise deploy form state whenever that page is shown
-  if (name === 'deploy') {
+  if (name === 'services') {
+    renderServices(S.cache.deployments);
+  } else if (name === 'dashboard') {
+    renderDashboard();
+  } else if (name === 'deploy') {
     onExposeTypeChange();
   }
 }
 
-document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && document.getElementById('apiToken') === document.activeElement) connect();
-  if (e.key === 'Escape') { closeDetail(); closeDeleteModal(); }
-});
-
-// ── CACHE + SERVICES ──────────────────────────────────────────────────────────
-
-function setCacheStatus(state) {
-  const dot = document.getElementById('cacheDot');
-  const lbl = document.getElementById('cacheStatus');
-  if (!dot || !lbl) return;
-  if (state === 'loading') {
-    dot.className = 'cache-dot loading';
-    lbl.textContent = 'Refreshing data...';
-  } else if (state === 'fresh') {
-    dot.className = 'cache-dot fresh';
-    const ago = S.cache.lastFetch ? Math.round((Date.now() - S.cache.lastFetch) / 1000) : 0;
-    lbl.textContent = 'Updated just now — auto-refreshes every 2 min';
-  } else if (state === 'stale') {
-    dot.className = 'cache-dot stale';
-    const mins = S.cache.lastFetch ? Math.round((Date.now() - S.cache.lastFetch) / 60000) : '?';
-    lbl.textContent = `Last updated ${mins} min ago`;
+function disconnect() {
+  if (S.token) {
+    fetch('/cache', { method: 'DELETE', headers: { 'X-API-Key': S.token } }).catch(() => {});
   }
+  try { sessionStorage.removeItem('portainer_run_token'); } catch(_) {}
+  S.token = ''; S.environments = []; S.currentDetail = null; S.isAdmin = false; S.isAiAvailable = false;
+  try { sessionStorage.removeItem('portainer_run_token'); } catch(_) {}
+  S.cache = { deployments: [], lastFetch: null, fetching: false, everLoaded: false };
+  if (S.refreshTimer) { clearTimeout(S.refreshTimer); S.refreshTimer = null; }
+  stopMetricsPolling();
+  dpStopStream();
+  stopLogStream();
+  closeDetail();
+  document.getElementById('adminNavItem').style.display = 'none';
+  document.getElementById('connectScreen').style.display = 'grid';
+  document.getElementById('mainApp').style.display = 'none';
+  document.getElementById('statusDot').className = 'dot';
+  document.getElementById('statusText').textContent = 'Not connected';
+  const chatPanel = document.getElementById('chatPanel');
+  if (chatPanel) chatPanel.classList.remove('open');
+  document.body.classList.remove('chat-open');
+  const chatToggleBtn = document.getElementById('chatToggleBtn');
+  if (chatToggleBtn) chatToggleBtn.classList.remove('active');
+  const mainApp = document.getElementById('mainApp');
+  if (mainApp) mainApp.style.marginRight = '0';
+  const tokenEl = document.getElementById('apiToken');
+  if (tokenEl) tokenEl.value = '';
+  const errEl = document.getElementById('connectError');
+  if (errEl) { errEl.style.display = 'none'; errEl.innerHTML = ''; }
 }
 
-// ── PROGRESSIVE CACHE ────────────────────────────────────────────────────────
-// Fetches deployments per-environment and renders each as it arrives.
-// The UI is shown immediately after connect; data streams in behind it.
 
 async function fetchEnvDeployments(env) {
   try {
@@ -1318,14 +1760,10 @@ async function fetchEnvDeployments(env) {
     const nss = (await nsR.json()).items.map(n => n.metadata.name);
     const results = await Promise.all(nss.map(async ns => {
       try {
-        // Try label selector first; fall back to full list + client filter
-        // (some clusters restrict label-selector queries on certain namespaces)
         let r = await kube(env.Id, `/apis/apps/v1/namespaces/${ns}/deployments?labelSelector=${encodeURIComponent("managed-by=portainer-run")}`);
         if (!r.ok) return [];
         const data = await r.json();
         let items = data.items || [];
-        // If label selector returned nothing, try unlabelled list and filter client-side
-        // (handles clusters that don't support label selector on this API group)
         if (!items.length) {
           const r2 = await kube(env.Id, `/apis/apps/v1/namespaces/${ns}/deployments`);
           if (r2.ok) {
@@ -1342,6 +1780,27 @@ async function fetchEnvDeployments(env) {
     return results.flat();
   } catch(_) { return []; }
 }
+
+function setCacheStatus(state) {
+  const dot = document.getElementById('cacheDot');
+  const lbl = document.getElementById('cacheStatus');
+  if (!dot || !lbl) return;
+  if (state === 'loading') {
+    dot.className = 'cache-dot loading';
+    lbl.textContent = 'Refreshing data...';
+  } else if (state === 'cached') {
+    dot.className = 'cache-dot stale';
+    lbl.textContent = 'Showing last known state — live data loading...';
+  } else if (state === 'fresh') {
+    dot.className = 'cache-dot fresh';
+    lbl.textContent = 'Updated just now — auto-refreshes every 1 min';
+  } else if (state === 'stale') {
+    dot.className = 'cache-dot stale';
+    const mins = S.cache.lastFetch ? Math.round((Date.now() - S.cache.lastFetch) / 60000) : '?';
+    lbl.textContent = `Last updated ${mins} min ago`;
+  }
+}
+
 
 async function refreshCache(manual = false) {
   if (S.cache.fetching && !manual) return;
@@ -1366,6 +1825,7 @@ async function refreshCache(manual = false) {
         ...S.cache.deployments.filter(d => d._envId !== env.Id),
         ...deps,
       ];
+      S.cache.everLoaded = true; // Live data arrived
       // Re-render with whatever we have so far
       renderDashboard();
       if (document.getElementById('page-services').classList.contains('active')) {
@@ -1373,7 +1833,8 @@ async function refreshCache(manual = false) {
       }
     }));
 
-    S.cache.lastFetch = Date.now();
+    S.cache.lastFetch  = Date.now();
+    S.cache.everLoaded = true;
     setCacheStatus('fresh');
     // Final render with complete data
     renderDashboard();
@@ -1405,15 +1866,18 @@ async function manualRefresh() {
 
 
 function loadServices() {
+  // Always render from the shared cache — no independent fetch.
+  // The single refresh cycle started on connect keeps this up to date.
   if (S.cache.deployments.length > 0) {
-    // Instant render from cache
     renderServices(S.cache.deployments);
     setCacheStatus(S.cache.fetching ? 'loading' : 'fresh');
   } else if (S.cache.fetching) {
     document.getElementById('servicesContainer').innerHTML =
-      '<div class="loading-row"><div class="spinner"></div>Loading deployments in parallel — this will be cached for subsequent visits...</div>';
+      '<div class="loading-row"><div class="spinner"></div>Loading — data will appear as each environment responds...</div>';
   } else {
-    refreshCache(false);
+    // Nothing in cache and no fetch running — only happens on very first connect
+    // before refreshCache() has had a chance to start. Trigger it once.
+    if (!S.cache.fetching) refreshCache(false);
   }
 }
 function renderDashboard() {
@@ -1436,10 +1900,28 @@ function renderDashboard() {
 
   // Per-environment health breakdown
   const grid = document.getElementById('envHealthGrid');
-  if (!deps.length && !S.cache.fetching) {
-    grid.innerHTML = '<div class="empty" style="padding:30px 0"><p>No deployments found across any environment.</p></div>';
+
+  // Show skeleton rows only on very first load before any data has arrived at all.
+  // If we have cached data (even showing 0s), always render real values.
+  if (!deps.length && S.cache.fetching && !S.cache.everLoaded) {
+    // Truly nothing yet — first connect, no cache, fetch in progress
+    grid.innerHTML = S.environments.map(e => `
+      <div class="env-health-row" style="opacity:0.4;">
+        <div class="env-health-name">${esc(e.Name)}</div>
+        <div class="env-health-stat"><div class="env-health-stat-val">—</div><div class="env-health-stat-lbl">Total</div></div>
+        <div class="env-health-stat"><div class="env-health-stat-val">—</div><div class="env-health-stat-lbl">Running</div></div>
+        <div class="env-health-stat"><div class="env-health-stat-val">—</div><div class="env-health-stat-lbl">Degraded</div></div>
+        <div class="env-health-stat"><div class="env-health-stat-val">—</div><div class="env-health-stat-lbl">Down</div></div>
+      </div>`).join('');
     return;
   }
+
+  if (!deps.length && !S.cache.fetching) {
+    // Fetch complete, genuinely no portainer-run deployments exist yet
+    grid.innerHTML = '<div class="empty" style="padding:30px 0"><p>No services deployed yet. Use the Deploy page to create your first service.</p></div>';
+    return;
+  }
+
   const byEnv = {};
   S.environments.forEach(e => { byEnv[e.Id] = { name: e.Name, total:0, running:0, degraded:0, unavailable:0, scaledDown:0 }; });
   deps.forEach(d => {
@@ -2060,6 +2542,26 @@ function showManualNsInput(show) {
   el.style.display = show ? 'block' : 'none';
 }
 
+function resetDeployForm() {
+  // Clear service name and instances
+  const nameEl = document.getElementById('dName');
+  if (nameEl) nameEl.value = '';
+  const instEl = document.getElementById('dInstances');
+  if (instEl) instEl.value = '1';
+
+  // Reset exposure
+  const expEl = document.getElementById('dExposeType');
+  if (expEl) { expEl.value = 'none'; onExposeTypeChange(); }
+  const svcPortList = document.getElementById('svcPortList');
+  if (svcPortList) svcPortList.innerHTML = '';
+
+  // Reset containers to single empty primary card
+  const containerList = document.getElementById('containerList');
+  if (containerList) containerList.innerHTML = '';
+  containers = [];
+  addContainerCard(true);
+}
+
 async function deployService() {
   const name = document.getElementById('dName').value.trim();
   const envId = document.getElementById('dEnvId').value;
@@ -2211,8 +2713,7 @@ async function deployService() {
     toast(`"${name}" deployed — ${containerSpecs.length} container(s), ${exposeLabel}`, 'ok');
     document.getElementById('dName').value = '';
     document.getElementById('containerList').innerHTML = '';
-    containers = [];
-    addContainerCard();
+    resetDeployForm();
     nav('services', document.querySelectorAll('.nav-item')[0]);
     setTimeout(() => { S.cache.fetching = false; refreshCache(false); }, 1200);
   } catch(e) {
@@ -2468,7 +2969,7 @@ async function runAITriageFromDetail() {
   btn.innerHTML = '<div class="spinner"></div>';
   panel.style.display = 'block';
   document.getElementById('dpAiTitle').textContent = `Analysing: ${name}`;
-  body.innerHTML = '<span style="color:var(--text-dim)">Fetching logs from all instances...</span>';
+  body.innerHTML = '<span style="color:var(--text-dim)">Gathering diagnostics from all instances...</span>';
 
   try {
     const podsR = await kube(envId, `/api/v1/namespaces/${ns}/pods?labelSelector=${encodeURIComponent('app=' + name)}`);
@@ -2480,6 +2981,10 @@ async function runAITriageFromDetail() {
     }
 
     btn.innerHTML = '<div class="spinner"></div>';
+
+    // ── Gather all diagnostic data in parallel ────────────────────────────────
+
+    // 1. Logs — all pods × containers
     const logChunks = await Promise.all(
       pods.flatMap(pod =>
         (pod.spec.containers || []).map(async container => {
@@ -2487,19 +2992,107 @@ async function runAITriageFromDetail() {
             const r = await kube(envId,
               `/api/v1/namespaces/${ns}/pods/${pod.metadata.name}/log?tailLines=300&container=${encodeURIComponent(container.name)}`
             );
-            const text = r.ok ? await r.text() : `[Could not fetch: HTTP ${r.status}]`;
-            return `=== Instance: ${pod.metadata.name} | Container: ${container.name} ===
-${text}`;
-          } catch(e) { return `=== Instance: ${pod.metadata.name} | Container: ${container.name} ===
+            const text = r.ok ? await r.text() : `[Could not fetch logs: HTTP ${r.status}]`;
+            return `=== Logs: ${pod.metadata.name} / ${container.name} ===
+${text || '[No log output]'}`;
+          } catch(e) { return `=== Logs: ${pod.metadata.name} / ${container.name} ===
 [Error: ${e.message}]`; }
         })
       )
     );
 
-    const combined = logChunks.join('\n\n');
-    const truncated = combined.length > 80000
-      ? '[Earlier logs omitted]\n...\n' + combined.slice(-80000)
-      : combined;
+    // 2. Pod conditions and container states from pod status
+    const podStatusChunks = pods.map(pod => {
+      const lines = [`=== Pod status: ${pod.metadata.name} ===`];
+      lines.push(`Phase: ${pod.status?.phase || 'Unknown'}`);
+
+      // Pod-level conditions
+      const conditions = pod.status?.conditions || [];
+      if (conditions.length) {
+        lines.push('Conditions:');
+        conditions.forEach(cond => {
+          lines.push(`  ${cond.type}: ${cond.status}${cond.reason ? ' (' + cond.reason + ')' : ''}${cond.message ? ' — ' + cond.message : ''}`);
+        });
+      }
+
+      // Per-container states
+      const containerStatuses = pod.status?.containerStatuses || [];
+      containerStatuses.forEach(cs => {
+        lines.push(`Container: ${cs.name}`);
+        lines.push(`  Ready: ${cs.ready}, Restart count: ${cs.restartCount}`);
+        if (cs.state?.waiting) {
+          lines.push(`  State: Waiting — ${cs.state.waiting.reason || ''}${cs.state.waiting.message ? ': ' + cs.state.waiting.message : ''}`);
+        } else if (cs.state?.terminated) {
+          lines.push(`  State: Terminated — exit code ${cs.state.terminated.exitCode}, reason: ${cs.state.terminated.reason || 'unknown'}${cs.state.terminated.message ? ', ' + cs.state.terminated.message : ''}`);
+        } else if (cs.state?.running) {
+          lines.push(`  State: Running since ${cs.state.running.startedAt}`);
+        }
+        if (cs.lastState?.terminated) {
+          const lt = cs.lastState.terminated;
+          lines.push(`  Last termination: exit code ${lt.exitCode}, reason: ${lt.reason || 'unknown'}${lt.message ? ', ' + lt.message : ''}`);
+        }
+      });
+
+      return lines.join('\n');
+    });
+
+    // 3. Kubernetes events — Deployment, ReplicaSet, and Pod level
+    // Scheduling failures (disk pressure, affinity, resource limits) may be
+    // attached to the Deployment or ReplicaSet when the pod was never created.
+
+    // Find current ReplicaSet for this deployment
+    let rsName = '';
+    try {
+      const rsR = await kube(envId, `/apis/apps/v1/namespaces/${ns}/replicasets`);
+      if (rsR.ok) {
+        const rsList = (await rsR.json()).items || [];
+        const currentRs = rsList
+          .filter(rs => rs.metadata.ownerReferences?.some(o => o.kind === 'Deployment' && o.name === name))
+          .sort((a, b) => {
+            const ra = parseInt(a.metadata.annotations?.['deployment.kubernetes.io/revision'] || '0');
+            const rb = parseInt(b.metadata.annotations?.['deployment.kubernetes.io/revision'] || '0');
+            return rb - ra;
+          })[0];
+        if (currentRs) rsName = currentRs.metadata.name;
+      }
+    } catch(_) {}
+
+    async function fetchEventsFor(objectName, label) {
+      try {
+        const r = await kube(envId,
+          `/api/v1/namespaces/${ns}/events?fieldSelector=${encodeURIComponent('involvedObject.name=' + objectName)}`
+        );
+        if (!r.ok) return `=== Events (${label}: ${objectName}) ===\n[Could not fetch: HTTP ${r.status}]`;
+        const items = (await r.json()).items || [];
+        if (!items.length) return `=== Events (${label}: ${objectName}) ===\n[No events]`;
+        const lines = [`=== Events (${label}: ${objectName}) ===`];
+        items
+          .sort((a, b) => new Date(b.lastTimestamp || 0) - new Date(a.lastTimestamp || 0))
+          .slice(0, 20)
+          .forEach(e => {
+            const ts = e.lastTimestamp ? new Date(e.lastTimestamp).toISOString() : '?';
+            lines.push(`  [${e.type}] ${ts} ${e.reason}: ${e.message} (count: ${e.count || 1})`);
+          });
+        return lines.join('\n');
+      } catch(err) { return `=== Events (${label}: ${objectName}) ===\n[Error: ${err.message}]`; }
+    }
+
+    const eventChunks = await Promise.all([
+      fetchEventsFor(name, 'Deployment'),
+      ...(rsName ? [fetchEventsFor(rsName, 'ReplicaSet')] : []),
+      ...pods.map(pod => fetchEventsFor(pod.metadata.name, 'Pod')),
+    ]);
+
+    // ── Assemble full diagnostic context ─────────────────────────────────────
+    const allSections = [
+      ...podStatusChunks,
+      ...eventChunks,
+      ...logChunks,
+    ].join('\n\n');
+
+    const truncated = allSections.length > 90000
+      ? '[Earlier content omitted]\n...\n' + allSections.slice(-90000)
+      : allSections;
 
     body.innerHTML = '<span class="ai-cursor"></span>';
 
@@ -2508,19 +3101,25 @@ ${text}`;
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 1500,
+        max_tokens: 2000,
         stream: true,
-        messages: [{ role: 'user', content: `You are a Kubernetes operations expert triaging a deployment.
+        messages: [{ role: 'user', content: `You are an operations assistant helping a user diagnose a containerised application. Use plain English — avoid Kubernetes jargon where possible, and explain technical terms when you must use them.
 
-Service: ${name}
+Application: ${name}
 Namespace: ${ns}
 Instance count: ${pods.length}
 
-Logs from all instances and containers:
+The following diagnostic data has been gathered from all instances. It includes pod status and conditions, Kubernetes events, and application logs. Events and pod conditions are particularly important when logs are empty or the app failed to start.
 
 ${truncated}
 
-Provide a concise triage report: current state, issues identified (with specific log lines), root cause assessment, and recommended actions in priority order. If healthy, say so briefly.` }],
+Provide a concise diagnostic report covering:
+1. Current state of the application in plain terms
+2. Any problems identified — cite specific events, conditions, or log lines as evidence
+3. Most likely root cause
+4. Recommended actions in priority order
+
+If the application is healthy, say so briefly. If logs are empty but events show a problem, focus your analysis on the events and container state.` }],
       }),
     });
 
@@ -2864,6 +3463,26 @@ function toggleMetricsPolling() {
   if (S.metrics.polling) stopMetricsPolling();
   else startMetricsPolling();
 }
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+
+// Initialise config then auto-reconnect if session token exists
+(async () => {
+  await loadConfig();
+  try {
+    const saved = sessionStorage.getItem('portainer_run_token');
+    if (saved) {
+      document.getElementById('apiToken').value = saved;
+      await connect();
+    }
+  } catch(_) {}
+})();
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('apiToken') === document.activeElement) connect();
+  if (e.key === 'Escape') { closeDetail(); closeDeleteModal(); }
+});
+
 
 </script>
 </body>
