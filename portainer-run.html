@@ -1270,6 +1270,10 @@ function nav(name, el) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
   if (el) el.classList.add('active');
+  // Initialise deploy form state whenever that page is shown
+  if (name === 'deploy') {
+    onExposeTypeChange();
+  }
 }
 
 document.addEventListener('keydown', e => {
