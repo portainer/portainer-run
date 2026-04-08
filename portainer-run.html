@@ -1480,7 +1480,10 @@ ${r.ok ? (await r.text()) || '[no output]' : '[unavailable]'}`;
       }
     }
 
+    const diagnosticNote = diagnosticData ? 'LIVE DIAGNOSTIC DATA IS PROVIDED BELOW. You have direct access to the logs, events, and pod status. Analyse them and answer immediately. Do NOT say you lack access or ask the user to check anything themselves.' : '';
     const systemPrompt = `You are the built-in assistant for Portainer Run, a Kubernetes deployment tool. You help users manage, deploy, and troubleshoot their containerised applications.
+
+${diagnosticNote}
 
 SCOPE: Only answer questions about container operations, deployments, Kubernetes workloads, logs, metrics, and application health. Politely decline anything outside this scope.
 
@@ -1500,7 +1503,7 @@ IMPORTANT RULES:
         max_tokens: 1500,
         stream: true,
         system: systemPrompt,
-        messages: chatHistory.slice(-10),
+        messages: diagnosticData ? chatHistory.slice(-2) : chatHistory.slice(-10),
       }),
     });
     if (!response.ok) {
@@ -1614,7 +1617,24 @@ async function handleComposePaste(yaml) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514', max_tokens: 2000, stream: false,
-        system: `Translate the Docker Compose file into a Portainer Run deployment config. All services become containers in ONE deployment (sidecar model, shared localhost). Return ONLY valid JSON in a code block tagged deploy-config like this: \`\`\`deploy-config\n{...}\n\`\`\` No other text. Structure: {"name":"...","namespace":"default","instances":1,"exposure":{"type":"NodePort","ports":[80]},"containers":[{"name":"...","image":"...","env":[{"name":"K","value":"v"}],"cpuReq":"100m","cpuLim":"500m","memReq":"128Mi","memLim":"512Mi","storage":{"name":"vol","size":"1Gi","mountPath":"/data"}}],"warnings":[]}. Session: ${ctx}`,
+        system: `Translate the Docker Compose file into a Portainer Run deployment config.
+
+RULES:
+- All services become separate containers in ONE deployment (sidecar model, shared localhost network)
+- Each compose service maps to exactly ONE container object in the containers array
+- Each container gets ONLY the environment variables defined for THAT service in the compose file — do NOT merge env vars across services
+- The first service listed is the primary container, all others are sidecars
+- volumes become storage config on the container that mounts them
+- ports from the first service become the exposure config
+- build directives cannot be mapped — add to warnings
+- Change any db hostnames to localhost (since all containers share localhost in a pod)
+
+Return ONLY valid JSON in a code block tagged deploy-config like this: \`\`\`deploy-config\n{...}\n\`\`\` No other text.
+
+Structure (example with 2 services):
+{"name":"my-app","namespace":"default","instances":1,"exposure":{"type":"NodePort","ports":[80]},"containers":[{"name":"web","image":"nginx:latest","env":[{"name":"DB_HOST","value":"localhost"}],"cpuReq":"100m","cpuLim":"500m","memReq":"128Mi","memLim":"512Mi","storage":null},{"name":"db","image":"mysql:8","env":[{"name":"MYSQL_ROOT_PASSWORD","value":"secret"},{"name":"MYSQL_DATABASE","value":"app"}],"cpuReq":"100m","cpuLim":"500m","memReq":"256Mi","memLim":"512Mi","storage":{"name":"db-data","size":"5Gi","mountPath":"/var/lib/mysql"}}],"warnings":[]}
+
+Session: ${ctx}`,
         messages: [{ role: 'user', content: 'Translate:\n\n' + yaml }],
       }),
     });
