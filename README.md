@@ -68,7 +68,7 @@ docker run -d \
   -e PORTAINER_URL=https://portainer.example.com:9443 \
   -e ANTHROPIC_API_KEY=sk-ant-... \
   --name portainer-run \
-  portainer-run
+  portainer/portainer-run
 ```
 
 On first start the container generates a self-signed TLS certificate (3 year validity) and writes it to `/certs` inside the container. The browser will warn about the certificate on first access; accept the exception to proceed.
@@ -87,7 +87,7 @@ docker run -d \
   -e SSL_CERT=/certs/fullchain.pem \
   -e SSL_KEY=/certs/privkey.pem \
   --name portainer-run \
-  portainer-run
+  portainer/portainer-run
 ```
 
 ### Run (custom ports)
@@ -100,7 +100,7 @@ docker run -d \
   -e PORT=8443 \
   -e HTTP_PORT=8080 \
   --name portainer-run \
-  portainer-run
+  portainer/portainer-run
 ```
 
 
