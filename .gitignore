@@ -1,0 +1,5 @@
+# Local runtime artifacts produced by `node server.js`
+*.crt
+*.key
+.env
+data/
