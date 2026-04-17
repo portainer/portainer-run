@@ -68,6 +68,19 @@ nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25
 .chat-msg-assistant{align-self:flex-start;background:var(--surface2);border:1px solid var(--border);border-radius:2px 10px 10px 10px;padding:10px 12px;font-size:12px;max-width:95%;line-height:1.6;}
 .chat-msg-assistant p{margin:0 0 6px;} .chat-msg-assistant p:last-child{margin:0;}
 .chat-msg-assistant ul{margin:4px 0;padding-left:16px;}
+.chat-msg-assistant h1,.chat-msg-assistant h2,.chat-msg-assistant h3,.chat-msg-assistant h4,.chat-msg-assistant h5,.chat-msg-assistant h6{font-family:var(--mono);font-weight:600;color:var(--text-bright);margin:8px 0 4px;line-height:1.3;}
+.chat-msg-assistant h1{font-size:14px;}
+.chat-msg-assistant h2{font-size:13px;}
+.chat-msg-assistant h3,.chat-msg-assistant h4{font-size:12px;}
+.chat-msg-assistant h5,.chat-msg-assistant h6{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;}
+.chat-msg-assistant em{font-style:italic;color:var(--text-bright);}
+.chat-msg-assistant hr{border:none;border-top:1px solid var(--border);margin:10px 0;}
+.chat-msg-assistant blockquote{border-left:2px solid var(--accent-dim);padding:2px 0 2px 8px;margin:6px 0;color:var(--text-dim);}
+.chat-msg-assistant table{border-collapse:collapse;margin:6px 0;width:100%;font-size:11px;}
+.chat-msg-assistant th,.chat-msg-assistant td{border:1px solid var(--border);padding:4px 6px;text-align:left;vertical-align:top;}
+.chat-msg-assistant th{background:var(--bg);color:var(--text-bright);font-weight:600;}
+.chat-msg-assistant code{font-family:var(--mono);font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:0 4px;color:var(--accent);}
+.chat-msg-assistant pre{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:8px;overflow-x:auto;margin:6px 0;font-family:var(--mono);font-size:11px;color:var(--text-bright);}
 .chat-action-btn{display:inline-flex;align-items:center;gap:6px;margin-top:8px;background:var(--accent);color:#000;border:none;border-radius:5px;padding:6px 12px;font-size:12px;font-family:var(--mono);cursor:pointer;font-weight:600;}
 .chat-action-btn:hover{opacity:0.85;}
 .chat-action-btn.secondary{background:var(--surface2);color:var(--text-bright);border:1px solid var(--border2);}
@@ -303,7 +316,20 @@ nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25
 .ai-body pre{background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:10px 12px;overflow-x:auto;margin:10px 0;font-family:var(--mono);font-size:12px;color:var(--text-bright);}
 .ai-body ul,.ai-body ol{padding-left:20px;margin-bottom:12px;}
 .ai-body li{margin-bottom:4px;}
-.ai-body h3{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text-bright);margin:16px 0 8px;}
+.ai-body h1,.ai-body h2,.ai-body h3,.ai-body h4,.ai-body h5,.ai-body h6{font-family:var(--mono);font-weight:600;color:var(--text-bright);margin:16px 0 8px;line-height:1.3;}
+.ai-body h1{font-size:17px;}
+.ai-body h2{font-size:15px;}
+.ai-body h3{font-size:13px;}
+.ai-body h4{font-size:13px;}
+.ai-body h5{font-size:12px;color:var(--text);}
+.ai-body h6{font-size:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;}
+.ai-body em{font-style:italic;color:var(--text-bright);}
+.ai-body hr{border:none;border-top:1px solid var(--border);margin:16px 0;}
+.ai-body blockquote{border-left:3px solid var(--accent-dim);padding:6px 0 6px 12px;margin:10px 0;color:var(--text-dim);background:var(--surface2);border-radius:0 4px 4px 0;}
+.ai-body table{border-collapse:collapse;margin:10px 0;width:100%;font-size:12.5px;}
+.ai-body th,.ai-body td{border:1px solid var(--border);padding:6px 10px;text-align:left;vertical-align:top;}
+.ai-body th{background:var(--surface2);color:var(--text-bright);font-weight:600;}
+.ai-body tr:nth-child(even) td{background:rgba(255,255,255,0.015);}
 .ai-cursor{display:inline-block;width:7px;height:14px;background:var(--accent);animation:blink .8s infinite;vertical-align:middle;border-radius:1px;}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
 .ai-unavail{display:flex;align-items:center;gap:10px;padding:12px 16px;font-family:var(--mono);font-size:12px;color:var(--text-dim);background:var(--surface2);border-radius:8px;margin-top:12px;}
@@ -1799,7 +1825,11 @@ Session context: ${ctx}${diagnosticData}
 
 IMPORTANT RULES:
 - If the user asks to SCALE an existing service (e.g. "scale nginx to 3"), respond in plain English confirming what you will do. State clearly: "I'll scale [name] to [N] instances." Do NOT output a deploy-config block for scale requests.
-- If the user asks to DEPLOY a NEW service that does not exist yet, output a deploy-config JSON block.
+- If the user asks to DEPLOY a NEW service that does not exist yet, you MUST respond with a fenced code block tagged exactly "deploy-config" (NOT "json", NOT plain JSON, NOT yaml). The app parses this exact tag to populate the Deploy form. Format:
+  \`\`\`deploy-config
+  {"name":"my-app","namespace":"default","instances":1,"exposure":{"type":"NodePort","ports":[80]},"containers":[{"name":"web","image":"nginx:latest","env":[],"cpuReq":"100m","cpuLim":"500m","memReq":"128Mi","memLim":"512Mi","storage":null}],"warnings":[]}
+  \`\`\`
+  Required fields: name, namespace, instances, exposure, containers (array). Each container needs: name, image. Optional per container: env (array of {name,value}), cpuReq/cpuLim/memReq/memLim, storage ({name,size,mountPath} or null). Add a brief sentence before or after the block, never inside.
 - If LIVE DIAGNOSTIC DATA is provided above, you already have the logs, events, and pod status. Analyse them immediately and give a specific answer. NEVER ask the user to go check the logs or metrics themselves — you already have that data. NEVER output a JSON action plan. Just answer in plain English based on what you can see.
 - Never use Kubernetes jargon. Say "instances" not "replicas", "stopped" not "CrashLoopBackOff", "restarting" not "CrashLoopBackOff".
 - Always respond in English. Do not use Chinese, Japanese, Korean, or other non-Latin characters in your reply, even for connector words or internal reasoning. The only exception is when quoting log lines or container output verbatim.`;
@@ -1839,18 +1869,15 @@ IMPORTANT RULES:
     }
     thinking.remove();
     chatHistory.push({ role: 'assistant', content: fullText });
-    const deployMatch = fullText.match(/```deploy-config[^\n]*\n([\s\S]*?)```/);
-    if (deployMatch) {
-      try {
-        const cfg = JSON.parse(deployMatch[1]);
-        chatPendingDeploy = cfg;
-        addChatMessage('assistant', buildDeployPreview(cfg), {
-          actions: [
-            { label: 'Open in Deploy form', onClick: () => applyDeployConfig(cfg) },
-            { label: 'Cancel', secondary: true, onClick: () => { chatPendingDeploy = null; } },
-          ],
-        });
-      } catch(_) { addChatMessage('assistant', fullText); }
+    const cfg = extractDeployConfig(fullText);
+    if (cfg) {
+      chatPendingDeploy = cfg;
+      addChatMessage('assistant', buildDeployPreview(cfg), {
+        actions: [
+          { label: 'Open in Deploy form', onClick: () => applyDeployConfig(cfg) },
+          { label: 'Cancel', secondary: true, onClick: () => { chatPendingDeploy = null; } },
+        ],
+      });
     } else {
       const ap = extractActionProposal(fullText);
       addChatMessage('assistant', fullText, ap || undefined);
@@ -1875,6 +1902,50 @@ function buildDeployPreview(cfg) {
   });
   if (cfg.warnings?.length) p += '\n**Notes:** ' + cfg.warnings.join(' · ');
   return p;
+}
+
+// Tolerant deploy-config extractor. Tries (in order):
+//   1. ```deploy-config fence — the documented format
+//   2. ```json (or any) fence whose JSON has containers[] + name — common LLM drift
+//   3. Bare top-level JSON object with containers[] + name — last resort
+// Returns parsed config or null. Conservative: requires both `name` and a `containers`
+// array so non-deploy JSON in the response is not mistaken for a deploy.
+function extractDeployConfig(text) {
+  function looksLikeDeploy(o) { return o && typeof o === 'object' && typeof o.name === 'string' && Array.isArray(o.containers); }
+
+  var m = text.match(/```deploy-config[^\n]*\n([\s\S]*?)```/);
+  if (m) { try { var c = JSON.parse(m[1]); if (looksLikeDeploy(c)) return c; } catch(_) {} }
+
+  var fenceRe = /```[\w-]*[^\n]*\n([\s\S]*?)```/g;
+  var fm;
+  while ((fm = fenceRe.exec(text)) !== null) {
+    try { var cf = JSON.parse(fm[1]); if (looksLikeDeploy(cf)) return cf; } catch(_) {}
+  }
+
+  if (/"containers"\s*:/.test(text) && /"name"\s*:/.test(text)) {
+    var start = text.indexOf('{');
+    while (start !== -1) {
+      var depth = 0, inStr = false, esc = false;
+      for (var i = start; i < text.length; i++) {
+        var ch = text[i];
+        if (esc) { esc = false; continue; }
+        if (ch === '\\') { esc = true; continue; }
+        if (ch === '"') { inStr = !inStr; continue; }
+        if (inStr) continue;
+        if (ch === '{') depth++;
+        else if (ch === '}') {
+          depth--;
+          if (depth === 0) {
+            try { var cb = JSON.parse(text.slice(start, i + 1)); if (looksLikeDeploy(cb)) return cb; } catch(_) {}
+            break;
+          }
+        }
+      }
+      start = text.indexOf('{', start + 1);
+    }
+  }
+
+  return null;
 }
 
 function extractActionProposal(text) {
@@ -1952,9 +2023,8 @@ Session: ${ctx}`,
     if (!response.ok) throw new Error('HTTP ' + response.status);
     const data = await response.json();
     const text = (data.content || []).map(b => b.text || '').join('');
-    const m = text.match(/```deploy-config[^\n]*\n([\s\S]*?)```/);
-    if (m) {
-      const cfg = JSON.parse(m[1]);
+    const cfg = extractDeployConfig(text);
+    if (cfg) {
       chatPendingDeploy = cfg;
       chatHistory.push({ role: 'assistant', content: text });
       addChatMessage('assistant', buildDeployPreview(cfg), {
@@ -4763,30 +4833,63 @@ If the application is healthy, say so briefly. If logs are empty but events show
 
 
 function mdToHtml(md) {
-  // Escape HTML first, then apply markdown transforms
-  let h = md
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  // Fenced code blocks
-  h = h.replace(/```[\w]*\n([\s\S]*?)```/g, '<pre>$1</pre>');
-  // Inline code
+  // 1. Escape HTML first; all subsequent transforms operate on safe text
+  let h = md.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  // 2. Fenced code blocks (must run before any inline transforms)
+  h = h.replace(/```[\w-]*\n([\s\S]*?)```/g, (_m, code) => '<pre>' + code + '</pre>');
+
+  // 3. GFM tables: header row + separator row + body rows
+  h = h.replace(
+    /^(\|.+\|)\n(\|[\s:|-]+\|)\n((?:\|.+\|(?:\n|$))+)/gm,
+    (_m, header, _sep, body) => {
+      const cells = (row) => row.replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+      const heads = cells(header);
+      const rows  = body.trimEnd().split('\n').map(cells);
+      const thead = '<thead><tr>' + heads.map((c) => '<th>' + c + '</th>').join('') + '</tr></thead>';
+      const tbody = '<tbody>' + rows.map(
+        (r) => '<tr>' + r.map((c) => '<td>' + c + '</td>').join('') + '</tr>'
+      ).join('') + '</tbody>';
+      return '<table>' + thead + tbody + '</table>';
+    }
+  );
+
+  // 4. Headers: # through ###### (use [ \t] so we don't eat trailing newlines)
+  h = h.replace(/^(#{1,6})[ \t]+(.+?)[ \t]*$/gm, (_m, hashes, text) => {
+    const lvl = hashes.length;
+    return '<h' + lvl + '>' + text + '</h' + lvl + '>';
+  });
+
+  // 5. Horizontal rule: ---, ***, or ___ on their own line
+  h = h.replace(/^[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*$/gm, '<hr>');
+
+  // 6. Blockquote (> was escaped to &gt; in step 1). Merge consecutive lines.
+  h = h.replace(/^&gt;[ \t]?(.+)$/gm, '<blockquote>$1</blockquote>');
+  h = h.replace(/<\/blockquote>\n<blockquote>/g, '<br>');
+
+  // 7. Inline code
   h = h.replace(/`([^`\n]+)`/g, '<code>$1</code>');
-  // Bold
+
+  // 8. Bold (must run before italic so ** isn't mis-parsed as two *)
   h = h.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
-  // Headers
-  h = h.replace(/^#{1,3} (.+)$/gm, '<h3>$1</h3>');
-  // Bullet list items
+
+  // 9. Italic — single * around non-whitespace; won't match list bullets ("* item")
+  h = h.replace(/\*(\S(?:[^*\n]*?\S)?)\*/g, '<em>$1</em>');
+
+  // 10. Lists
   h = h.replace(/^[ \t]*[-*] (.+)$/gm, '<li>$1</li>');
-  // Numbered list items
   h = h.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
-  // Wrap consecutive li in ul
   h = h.replace(/(<li>[\s\S]*?<\/li>)(\n<li>[\s\S]*?<\/li>)*/g, '<ul>$&</ul>');
-  // Double newlines to paragraph breaks
+
+  // 11. Paragraph wrapping
   h = h.replace(/\n\n+/g, '</p><p>');
-  // Wrap in paragraph
   h = '<p>' + h + '</p>';
-  h = h.replace(/<p>(\s*<(?:h3|ul|pre|li))/g, '$1');
-  h = h.replace(/(<\/(?:h3|ul|pre)>)\s*<\/p>/g, '$1');
+
+  // 12. Cleanup: block elements should not be wrapped in <p>
+  h = h.replace(/<p>(\s*<(?:h[1-6]|ul|pre|li|table|hr|blockquote))/g, '$1');
+  h = h.replace(/(<\/(?:h[1-6]|ul|pre|table|blockquote)>|<hr>)\s*<\/p>/g, '$1');
   h = h.replace(/<p>\s*<\/p>/g, '');
+
   return h;
 }
 
