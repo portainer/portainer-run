@@ -996,7 +996,12 @@ function toast(msg, type = 'info') {
 }
 
 function esc(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s)
+    .replace(/&/g,  '&amp;')
+    .replace(/</g,  '&lt;')
+    .replace(/>/g,  '&gt;')
+    .replace(/"/g,  '&quot;')
+    .replace(/'/g,  '&#39;');
 }
 
 function age(ts) {
@@ -1796,7 +1801,8 @@ IMPORTANT RULES:
 - If the user asks to SCALE an existing service (e.g. "scale nginx to 3"), respond in plain English confirming what you will do. State clearly: "I'll scale [name] to [N] instances." Do NOT output a deploy-config block for scale requests.
 - If the user asks to DEPLOY a NEW service that does not exist yet, output a deploy-config JSON block.
 - If LIVE DIAGNOSTIC DATA is provided above, you already have the logs, events, and pod status. Analyse them immediately and give a specific answer. NEVER ask the user to go check the logs or metrics themselves — you already have that data. NEVER output a JSON action plan. Just answer in plain English based on what you can see.
-- Never use Kubernetes jargon. Say "instances" not "replicas", "stopped" not "CrashLoopBackOff", "restarting" not "CrashLoopBackOff".`;
+- Never use Kubernetes jargon. Say "instances" not "replicas", "stopped" not "CrashLoopBackOff", "restarting" not "CrashLoopBackOff".
+- Always respond in English. Do not use Chinese, Japanese, Korean, or other non-Latin characters in your reply, even for connector words or internal reasoning. The only exception is when quoting log lines or container output verbatim.`;
 
     const response = await fetch('/ai/triage', {
       method: 'POST',
@@ -1931,6 +1937,7 @@ RULES:
 - ports from the first service become the exposure config
 - build directives cannot be mapped — add to warnings
 - Change any db hostnames to localhost (since all containers share localhost in a pod)
+- All string values in the JSON (names, warnings, env values) must be in English using Latin characters only. No Chinese, Japanese, Korean or other non-Latin scripts.
 
 Return ONLY valid JSON in a code block tagged deploy-config like this: \`\`\`deploy-config\n{...}\n\`\`\` No other text.
 
@@ -4685,7 +4692,7 @@ ${text || '[No log output]'}`;
         model: aiModel(),
         max_tokens: 2000,
         stream: true,
-        messages: [{ role: 'user', content: `You are an operations assistant helping a user diagnose a containerised application. Use plain English — avoid Kubernetes jargon where possible, and explain technical terms when you must use them.
+        messages: [{ role: 'user', content: `You are an operations assistant helping a user diagnose a containerised application. Use plain English — avoid Kubernetes jargon where possible, and explain technical terms when you must use them. Respond entirely in English using Latin characters only; do not use Chinese, Japanese, Korean, or other non-Latin scripts anywhere in your reply, even for connector words or internal reasoning. The only exception is when quoting log lines or container output verbatim.
 
 Application: ${name}
 Namespace: ${ns}
