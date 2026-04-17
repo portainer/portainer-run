@@ -104,12 +104,32 @@ function readCacheFile() {
   return {};
 }
 
+// Atomic write via tmp-file + rename (rename is atomic on POSIX). Prevents a
+// crash mid-write from leaving a truncated/partial cache.json that breaks the
+// next JSON.parse.
 function writeCacheFile(data) {
+  const tmp = CACHE_FILE + '.tmp.' + process.pid;
   try {
-    fs.writeFileSync(CACHE_FILE, JSON.stringify(data), 'utf8');
+    fs.writeFileSync(tmp, JSON.stringify(data), 'utf8');
+    fs.renameSync(tmp, CACHE_FILE);
   } catch(e) {
     console.warn('[cache] write failed:', e.message);
+    try { fs.unlinkSync(tmp); } catch(_) {}
   }
+}
+
+// Serialise read-modify-write cycles so two concurrent POSTs/DELETEs don't
+// drop one another's update. The in-process queue is sufficient because only
+// this one server process owns the file. If we ever run multiple replicas
+// against a shared cache volume we'd need flock or an external store.
+let cacheMutation = Promise.resolve();
+function mutateCache(fn) {
+  const next = cacheMutation.then(() => fn(readCacheFile())).then(data => {
+    if (data !== undefined) writeCacheFile(data);
+  });
+  // Swallow errors on the chain so one bad mutation doesn't poison future ones.
+  cacheMutation = next.catch(() => {});
+  return next;
 }
 
 function handleCache(req, res) {
@@ -131,27 +151,29 @@ function handleCache(req, res) {
 
   if (req.method === 'POST') {
     readBody(req).then(body => {
-      try {
-        const data  = JSON.parse(body.toString());
-        const all   = readCacheFile();
-        all[key]    = { ...data, savedAt: Date.now() };
-        writeCacheFile(all);
-        res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
-        res.end(JSON.stringify({ ok: true }));
-      } catch(_) {
+      let data;
+      try { data = JSON.parse(body.toString()); }
+      catch(_) {
         res.writeHead(400, { 'Content-Type': 'application/json', ...CORS });
         res.end(JSON.stringify({ error: 'Invalid JSON' }));
+        return;
       }
+      mutateCache(all => {
+        all[key] = { ...data, savedAt: Date.now() };
+        return all;
+      }).then(() => {
+        res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
+        res.end(JSON.stringify({ ok: true }));
+      });
     });
     return;
   }
 
   if (req.method === 'DELETE') {
-    const all = readCacheFile();
-    delete all[key];
-    writeCacheFile(all);
-    res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
-    res.end(JSON.stringify({ ok: true }));
+    mutateCache(all => { delete all[key]; return all; }).then(() => {
+      res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
+      res.end(JSON.stringify({ ok: true }));
+    });
     return;
   }
 
