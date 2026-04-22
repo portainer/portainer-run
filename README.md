@@ -1,14 +1,14 @@
 # Portainer Run
  
-A simplified self-service operations portal for Kubernetes, backed by the Portainer API. The proof-of-concept for IPOP — Internal Platform Operations Portal.
+A simplified self-service operations portal for Kubernetes, backed by the Portainer API.
  
 ## Why this exists
  
 AI has made everyone a developer. Not a software engineer, not a full-stack engineer... a developer. Someone who can take a business problem, describe it to an AI coding tool, and get a working application out the other side. The barrier to creation has effectively gone.
  
-The best AI-assisted development tools know this. It's why they push hosting onto their own SaaS or PaaS — it's the only way to keep the experience seamless end to end. And it works, right up until the app needs to talk to something inside your network. An internal database. An on-prem API. A system that lives behind the firewall and isn't going anywhere. At that point the experience collapses, and the only path forward is a ticket to the platform team.
+The best AI-assisted development tools know this. It's why they push hosting onto their own SaaS or PaaS; it's the only way to keep the experience seamless end to end. And it works, right up until the app needs to talk to something inside your network. An internal database. An on-prem API. A system that lives behind the firewall and isn't going anywhere. At that point the experience collapses, and the only path forward is a ticket to the platform team.
  
-That platform team is already stretched. The influx of deployment requests coming from people who have never touched infrastructure — app owners, business developers, support staff, people who vibe-coded their first container last Tuesday — is a real and growing problem with no clean answer today. Buying an IDP that takes a year to configure before anyone can use it is not the answer.
+That platform team is already stretched. The influx of deployment requests coming from people who have never touched infrastructure (app owners, business developers, support staff, people who vibe-coded their first container last Tuesday) is a real and growing problem with no clean answer today. Buying an IDP that takes a year to configure before anyone can use it is not the answer.
  
 Portainer Run sits in that gap. The container image is already an artefact AI coding tools can produce. Portainer Run is the "now run it, inside your environment" layer — with the platform team's guardrails baked in via Portainer's existing RBAC and policy controls. The platform team's role shifts from processing every deployment ticket to setting the rules once.
  
