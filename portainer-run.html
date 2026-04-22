@@ -496,7 +496,7 @@ nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25
               <div class="field">
                 <label>Namespace</label>
                 <select id="dNamespace"><option value="">Select target first...</option></select>
-                <div class="hint">Namespace must already exist in the target</div>
+                <div class="hint">Pick an existing namespace.</div>
               </div>
             </div>
             <div class="frow" style="margin-bottom:16px;">
@@ -2043,6 +2043,9 @@ function nav(name, el) {
     renderDashboard();
   } else if (name === 'deploy') {
     onExposeTypeChange();
+    // Refresh the namespace dropdown on every tab visit so namespaces
+    // added on the cluster after login become visible without reconnecting.
+    if (document.getElementById('dEnvId').value) onEnvChange();
   } else if (name === 'catalogue') {
     loadCatalogue();
   } else if (name === 'secrets') {
@@ -4049,6 +4052,52 @@ function onExposeTypeChange() {
   }
 }
 
+// Fallback blocklist used when Portainer's /kubernetes/{id}/namespaces endpoint
+// isn't reachable (namespace-scoped token, older Portainer version). Kubernetes
+// doesn't expose an "is-system" bit natively, so we fall back to conventional
+// names. Portainer's own UI uses the same baseline and allows operators to
+// flag additional namespaces as system — but that extra list only comes from
+// Portainer's endpoint, so UI-flagged namespaces are only honoured when that
+// endpoint is available.
+const DEFAULT_SYSTEM_NAMESPACES = new Set([
+  'kube-system', 'kube-public', 'kube-node-lease',
+  'portainer', 'portainer-agent', 'portainer-agent-system',
+]);
+
+// Returns { names: [non-system namespace names], source: 'portainer' | 'kubernetes' }.
+// Throws { scoped: true } when the token cannot list namespaces cluster-wide.
+async function fetchNonSystemNamespaces(envId) {
+  // 1. Portainer's native endpoint returns IsSystem per namespace, honouring
+  //    anything operators flag as system in the Portainer UI.
+  try {
+    const pr = await api(`/kubernetes/${envId}/namespaces`);
+    if (pr.ok) {
+      const data = await pr.json();
+      const entries = Array.isArray(data) ? data : Object.values(data || {});
+      const names = entries
+        .filter(ns => ns && !ns.IsSystem)
+        .map(ns => ns.Name || ns.name)
+        .filter(Boolean);
+      if (names.length || entries.length) {
+        return { names, source: 'portainer' };
+      }
+    }
+  } catch(_) { /* fall through to raw K8s */ }
+
+  // 2. Fall back to the raw Kubernetes API + conventional blocklist.
+  const kr = await kube(envId, '/api/v1/namespaces');
+  if (kr.status === 401 || kr.status === 403) {
+    const err = new Error('namespace-scoped');
+    err.scoped = true;
+    throw err;
+  }
+  if (!kr.ok) throw new Error('HTTP ' + kr.status);
+  const names = (await kr.json()).items
+    .map(n => n.metadata.name)
+    .filter(n => !DEFAULT_SYSTEM_NAMESPACES.has(n));
+  return { names, source: 'kubernetes' };
+}
+
 async function onEnvChange() {
   const envId = document.getElementById('dEnvId').value;
   const nsSel = document.getElementById('dNamespace');
@@ -4058,21 +4107,31 @@ async function onEnvChange() {
     showManualNsInput(false);
     return;
   }
-  nsSel.innerHTML = '<option value="">Loading namespaces...</option>';
+  // Remember the current pick so silent refreshes don't wipe the user's
+  // selection. Only show the "Loading..." placeholder on a cold load.
+  const prevValue  = nsSel.value;
+  const hadOptions = !!nsSel.querySelector('option[value]:not([value=""])');
+  if (!hadOptions) {
+    nsSel.innerHTML = '<option value="">Loading namespaces...</option>';
+  }
   status.textContent = '';
   showManualNsInput(false);
   try {
-    const r = await kube(envId, '/api/v1/namespaces');
-    if (r.status === 403 || r.status === 401) {
-      // Token cannot list namespaces at cluster scope — namespace-scoped PAT
-      showManualNsInput(true);
-      nsSel.innerHTML = '<option value="">—</option>';
-      status.textContent = 'Token is namespace-scoped — enter your namespace below.';
-      status.style.color = 'var(--amber)';
-      return;
+    let allNss;
+    try {
+      const r = await fetchNonSystemNamespaces(envId);
+      allNss = r.names;
+    } catch(err) {
+      if (err.scoped) {
+        // Token cannot list namespaces at cluster scope — namespace-scoped PAT
+        showManualNsInput(true);
+        nsSel.innerHTML = '<option value="">—</option>';
+        status.textContent = 'Token is namespace-scoped — enter your namespace below.';
+        status.style.color = 'var(--amber)';
+        return;
+      }
+      throw err;
     }
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const allNss = (await r.json()).items.map(n => n.metadata.name);
     // Only show namespaces where this token can actually list deployments
     const accessible = (await Promise.all(
       allNss.map(async ns => {
@@ -4090,6 +4149,7 @@ async function onEnvChange() {
       return;
     }
     nsSel.innerHTML = accessible.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    if (prevValue && accessible.includes(prevValue)) nsSel.value = prevValue;
     status.textContent = accessible.length + ' accessible namespace(s)';
     status.style.color = 'var(--green)';
     showManualNsInput(false);
