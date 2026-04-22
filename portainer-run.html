@@ -10,7 +10,7 @@
 :root {
   --bg:#0a0c0f; --surface:#111419; --surface2:#181c23;
   --border:#1e2530; --border2:#2a3240;
-  --text:#c8d0dc; --text-dim:#5a6478; --text-bright:#e8edf5;
+  --text:#c8d0dc; --text-dim:#b8c8d8; --text-bright:#e8edf5;
   --accent:#0ea5e9; --accent-dim:#0369a1; --accent-glow:rgba(14,165,233,.15);
   --green:#22c55e; --red:#ef4444; --amber:#f59e0b;
   --mono:'IBM Plex Mono',monospace; --sans:'IBM Plex Sans',sans-serif;
@@ -34,13 +34,24 @@ header{display:flex;align-items:center;gap:16px;padding:14px 28px;border-bottom:
 /* ── LAYOUT ── */
 .main{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - 57px);}
 nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25,.6);}
-.nav-label{font-family:var(--mono);font-size:10px;font-weight:500;color:var(--text-dim);letter-spacing:.12em;text-transform:uppercase;padding:10px 12px 6px;}
+.nav-label{font-family:var(--mono);font-size:10px;font-weight:500;color:#b8c8d8;letter-spacing:.12em;text-transform:uppercase;padding:10px 12px 6px;}
 .nav-section{padding:0 12px;margin-bottom:4px;}
-.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:6px;cursor:pointer;color:var(--text-dim);font-size:13px;transition:all .12s;user-select:none;}
-.nav-item:hover{background:var(--surface2);color:var(--text);}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:6px;cursor:pointer;color:var(--text);font-size:13px;transition:all .12s;user-select:none;}
+.nav-item:hover{background:var(--surface2);color:var(--text-bright);}
 .nav-item.active{background:var(--accent-glow);color:var(--accent);border:1px solid rgba(14,165,233,.2);}
 .nav-item svg{width:16px;height:16px;flex-shrink:0;}
 .content{padding:32px 36px;overflow-y:auto;max-height:calc(100vh - 57px);}
+.cat-filter-btn{font-family:var(--mono);font-size:12px;padding:5px 14px;border-radius:20px;border:1px solid var(--border2);background:transparent;color:var(--text-dim);cursor:pointer;transition:all 0.15s;}
+.cat-filter-btn:hover{border-color:var(--accent);color:var(--accent);}
+.cat-filter-btn.active{background:var(--accent);border-color:var(--accent);color:#000;}
+.cat-card{background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:18px 20px;display:flex;flex-direction:column;gap:10px;transition:border-color 0.15s;}
+.cat-card:hover{border-color:var(--accent);}
+.cat-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
+.cat-card-name{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--text-bright);}
+.cat-badge{font-size:10px;padding:2px 8px;border-radius:10px;font-family:var(--mono);white-space:nowrap;flex-shrink:0;}
+.cat-card-desc{font-size:13px;color:var(--text-dim);line-height:1.6;flex:1;}
+.cat-card-meta{display:flex;gap:12px;font-family:var(--mono);font-size:11px;color:var(--text-dim);}
+.cat-deploy-btn{width:100%;justify-content:center;margin-top:4px;}
 .chat-toggle-btn{display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text-dim);font-family:var(--mono);font-size:12px;padding:6px 12px;cursor:pointer;transition:all 0.15s;margin-left:12px;}
 .chat-toggle-btn:hover,.chat-toggle-btn.active{background:var(--accent);border-color:var(--accent);color:#000;}
 .chat-panel{display:none;flex-direction:column;border-left:1px solid var(--border);background:var(--bg);position:fixed;top:57px;right:0;width:360px;height:calc(100vh - 57px);z-index:9999;box-shadow:-4px 0 20px rgba(0,0,0,0.5);overflow:hidden;transition:margin-right 0.2s;}.chat-panel.open{display:flex;}
@@ -76,6 +87,9 @@ nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25
 /* ── FORMS ── */
 .field{display:flex;flex-direction:column;gap:6px;}
 .field label{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--text-dim);letter-spacing:.06em;text-transform:uppercase;}
+.field-label{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--text-dim);letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:6px;}
+#wzEnvId:focus,#wzNamespace:focus,#wzManualNs:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow);}
+#wzEnvId option,#wzNamespace option{background:var(--surface2);color:var(--text-bright);}
 .field input,.field select,.field textarea{background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text-bright);font-family:var(--mono);font-size:13px;padding:9px 12px;outline:none;transition:border-color .15s,box-shadow .15s;width:100%;}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow);}
 .field select option{background:var(--surface2);}
@@ -103,8 +117,8 @@ nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25
 
 /* ── SERVICES LIST ── */
 .svc-grid{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
-.svc-grid-head{display:grid;grid-template-columns:2fr 1.5fr 1fr 1fr 1.5fr 80px 120px;padding:10px 16px;background:var(--surface2);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:11px;font-weight:500;color:var(--text-dim);letter-spacing:.08em;text-transform:uppercase;}
-.svc-row{display:grid;grid-template-columns:2fr 1.5fr 1fr 1fr 1.5fr 80px 120px;padding:13px 16px;border-bottom:1px solid var(--border);align-items:center;transition:background .1s;cursor:pointer;}
+.svc-grid-head{display:grid;grid-template-columns:2fr 1.5fr 1fr 1fr 2fr 80px 175px;padding:10px 16px;background:var(--surface2);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:11px;font-weight:500;color:var(--text-dim);letter-spacing:.08em;text-transform:uppercase;overflow:hidden;}
+.svc-row{display:grid;grid-template-columns:2fr 1.5fr 1fr 1fr 2fr 80px 175px;padding:13px 16px 13px 13px;border-bottom:1px solid var(--border);border-left:3px solid transparent;align-items:center;transition:background .1s,border-color .2s;cursor:pointer;min-width:0;}
 .svc-row:last-child{border-bottom:none;}
 .svc-row:hover{background:var(--surface2);}
 .svc-name{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--accent);}
@@ -115,12 +129,29 @@ nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25
 .pill-pend{background:rgba(245,158,11,.12);color:var(--amber);}
 .pill-fail{background:rgba(239,68,68,.12);color:var(--red);}
 .pill-off{background:rgba(90,100,120,.2);color:var(--text-dim);}
+.status-cell{display:flex;flex-direction:column;gap:4px;}
+.status-light{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;font-weight:600;}
+.status-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;}
+.status-dot-run{background:var(--green);box-shadow:0 0 6px rgba(34,197,94,.7);}
+.status-dot-pend{background:var(--amber);box-shadow:0 0 6px rgba(245,158,11,.7);animation:pulse-amber 1.8s ease-in-out infinite;}
+.status-dot-fail{background:var(--red);box-shadow:0 0 6px rgba(239,68,68,.8);animation:pulse-red 1.2s ease-in-out infinite;}
+.status-dot-off{background:#3a4455;box-shadow:none;}
+.status-reason{font-family:var(--mono);font-size:10px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;}
+@keyframes pulse-amber{0%,100%{opacity:1;}50%{opacity:.45;}}
+@keyframes pulse-red{0%,100%{opacity:1;}50%{opacity:.35;}}
+.svc-row-run{border-left:3px solid rgba(34,197,94,.5);}
+.svc-row-pend{border-left:3px solid rgba(245,158,11,.5);}
+.svc-row-fail{border-left:3px solid rgba(239,68,68,.6);}
+.svc-row-off{border-left:3px solid rgba(58,68,85,.4);}
 .svc-age{font-family:var(--mono);font-size:12px;color:var(--text-dim);}
 .svc-exposure{font-family:var(--mono);font-size:11px;color:var(--text-dim);}
 .exp-nodeport{color:var(--amber);}
 .exp-lb{color:var(--green);}
 .exp-ingress{color:var(--accent);}
 .exp-none{color:var(--text-dim);}
+.btn-open{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;font-size:12px;font-family:var(--mono);font-weight:600;background:rgba(14,165,233,.12);color:var(--accent);border:1px solid rgba(14,165,233,.3);border-radius:6px;cursor:pointer;text-decoration:none;transition:background .15s,border-color .15s;white-space:nowrap;}
+.btn-open:hover{background:rgba(14,165,233,.22);border-color:rgba(14,165,233,.6);}
+.exp-pending{font-family:var(--mono);font-size:10px;color:var(--text-dim);}
 .svc-actions{display:flex;gap:6px;justify-content:flex-end;}
 
 /* ── EMPTY STATE ── */
@@ -203,7 +234,7 @@ nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25
 @keyframes slideUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 
 /* ── NS BADGE ── */
-.ns-badge{display:inline-flex;align-items:center;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;padding:2px 8px;font-family:var(--mono);font-size:11px;color:var(--text-dim);}
+.ns-badge{display:inline-flex;align-items:center;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;padding:2px 8px;font-family:var(--mono);font-size:11px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
 
 /* ── DASHBOARD ── */
 .dash-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:32px;}
@@ -233,7 +264,7 @@ nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25
 .ready-env-head{display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--surface2);border-bottom:1px solid var(--border);}
 .ready-env-name{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--text-bright);flex:1;}
 .ready-env-badge{font-family:var(--mono);font-size:11px;padding:3px 10px;border-radius:20px;font-weight:500;}
-.ready-checks{display:grid;grid-template-columns:repeat(4,1fr);gap:0;}
+.ready-checks{display:grid;grid-template-columns:repeat(5,1fr);gap:0;}
 .ready-check{padding:16px 18px;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:6px;}
 .ready-check:last-child{border-right:none;}
 .ready-check-label{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);}
@@ -295,6 +326,19 @@ nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25
 .inline-edit{display:flex;align-items:center;gap:8px;}
 .inline-edit input{background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text-bright);font-family:var(--mono);font-size:13px;padding:5px 10px;outline:none;width:80px;}
 .inline-edit input:focus{border-color:var(--accent);}
+
+@media (max-width:1100px) {
+  .svc-grid-head,.svc-row{grid-template-columns:2fr 1fr 1fr 2fr 80px 160px;}
+  .svc-image{display:none;}
+  .svc-grid-head span:nth-child(2){display:none;}
+}
+@media (max-width:820px) {
+  .svc-grid-head,.svc-row{grid-template-columns:2fr 1fr 2fr 140px;}
+  .svc-image{display:none;}
+  .svc-ns{display:none;}
+  .svc-age{display:none;}
+  .svc-grid-head span:nth-child(2),.svc-grid-head span:nth-child(3),.svc-grid-head span:nth-child(6){display:none;}
+}
 </style>
 </head>
 <body>
@@ -307,7 +351,7 @@ nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25
     Portainer Run
   </div>
   <div class="header-sep"></div>
-  <div class="conn-badge" onclick="disconnect()">
+  <div class="conn-badge" title="Connected environments — click Disconnect in the sidebar to log out">
     <div class="dot" id="statusDot"></div>
     <span id="statusText" style="font-family:var(--mono);font-size:12px">Not connected</span>
   </div>
@@ -360,6 +404,12 @@ nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25
       <div class="nav-item" onclick="nav('deploy',this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12l7-7 7 7"/></svg>Deploy
       </div>
+      <div class="nav-item" onclick="nav('catalogue',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Catalogue
+      </div>
+      <div class="nav-item" onclick="nav('secrets',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Secrets
+      </div>
       
     </div>
     <div class="nav-label" style="margin-top:16px;" id="adminNavLabel">Admin</div>
@@ -393,6 +443,7 @@ nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25
         <div class="cache-dot" id="cacheDot"></div>
         <span id="cacheStatus">Loading...</span>
       </div>
+      <div id="envNotice" style="display:none;font-family:var(--mono);font-size:12px;color:var(--text-dim);margin-bottom:16px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;"></div>
       <div class="dash-cards" id="dashCards">
         <div class="dash-card"><div class="dash-card-label">Total Services</div><div class="dash-card-value">—</div></div>
         <div class="dash-card ok"><div class="dash-card-label">Running</div><div class="dash-card-value">—</div></div>
@@ -553,6 +604,48 @@ nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25
       </div>
     </div>
 
+    <!-- CATALOGUE -->
+    <div class="page" id="page-catalogue">
+      <div class="page-header">
+        <div>
+          <h1>Catalogue</h1>
+          <p class="page-sub">Deploy pre-configured applications to any environment.</p>
+        </div>
+        <span id="catalogueStatus" style="font-family:var(--mono);font-size:12px;color:var(--text-dim);align-self:center;"></span>
+      </div>
+      <div id="catalogueFilters" style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;"></div>
+      <div id="catalogueGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">
+        <div style="color:var(--text-dim);font-family:var(--mono);font-size:13px;grid-column:1/-1;padding:40px 0;text-align:center;">Loading catalogue...</div>
+      </div>
+    </div>
+
+    <!-- SECRETS -->
+    <div class="page" id="page-secrets">
+      <div class="page-header">
+        <div>
+          <h1>Secrets</h1>
+          <p class="page-sub">Store credentials and sensitive config. Values are write-only — they cannot be read back once saved.</p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openNewSecretModal()">+ New Secret</button>
+      </div>
+
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px 18px;margin-bottom:20px;">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--text-dim);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;">Showing secrets in</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <label class="field-label">Environment</label>
+            <select id="secretsEnvId" onchange="secretsEnvChanged()" style="background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text-bright);font-family:var(--mono);font-size:13px;padding:7px 32px 7px 12px;outline:none;appearance:none;-webkit-appearance:none;background-image:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%238fa3b8" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>');background-repeat:no-repeat;background-position:right 8px center;background-size:14px;width:100%;"></select>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <label class="field-label">Namespace</label>
+            <select id="secretsNsId" onchange="loadSecrets()" style="background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text-bright);font-family:var(--mono);font-size:13px;padding:7px 32px 7px 12px;outline:none;appearance:none;-webkit-appearance:none;background-image:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%238fa3b8" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>');background-repeat:no-repeat;background-position:right 8px center;background-size:14px;width:100%;"></select>
+          </div>
+        </div>
+      </div>
+
+      <div id="secretsList"></div>
+    </div>
+
   </div><!-- /content -->
 </div><!-- /mainApp -->
 
@@ -709,6 +802,8 @@ nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25
 
   </div>
 
+  </div>
+
 </div>
 
 <!-- ── CHAT PANEL ── -->
@@ -744,6 +839,121 @@ nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25
   </div>
 </div>
 
+<div class="modal-overlay" id="wizardModal">
+  <div class="modal" style="width:480px;">
+    <div class="modal-head" style="display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--text-dim);margin-bottom:4px;">DEPLOY WIZARD</div>
+        <h3 id="wzTitle" style="margin:0;">Template</h3>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span id="wzBadge" class="cat-badge" style="flex-shrink:0;"></span>
+        <button onclick="closeWizard()" style="background:none;border:none;cursor:pointer;color:var(--text-dim);padding:2px;line-height:1;border-radius:4px;transition:color .15s;" onmouseover="this.style.color='var(--text-bright)'" onmouseout="this.style.color='var(--text-dim)'">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 1: Where? -->
+    <div id="wzStep1">
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:16px;">
+        <div>
+          <label class="field-label">Environment</label>
+          <select id="wzEnvId" onchange="wzLoadNamespaces()" style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text-bright);font-family:var(--mono);font-size:13px;padding:9px 12px;outline:none;appearance:none;-webkit-appearance:none;background-image:url('data:image/svg+xml,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"%238fa3b8\" stroke-width=\"2\"><polyline points=\"6 9 12 15 18 9\"/></svg>');background-repeat:no-repeat;background-position:right 10px center;background-size:16px;padding-right:32px;"></select>
+        </div>
+        <div>
+          <label class="field-label">Namespace <span id="wzNsStatus" style="font-size:11px;color:var(--text-dim);font-family:var(--mono);margin-left:6px;"></span></label>
+          <select id="wzNamespace" style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text-bright);font-family:var(--mono);font-size:13px;padding:9px 12px;outline:none;appearance:none;-webkit-appearance:none;background-image:url('data:image/svg+xml,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"%238fa3b8\" stroke-width=\"2\"><polyline points=\"6 9 12 15 18 9\"/></svg>');background-repeat:no-repeat;background-position:right 10px center;background-size:16px;padding-right:32px;"><option value="">Select environment first...</option></select>
+          <input id="wzManualNs" type="text" placeholder="Enter namespace" style="width:100%;margin-top:6px;display:none;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text-bright);font-family:var(--mono);font-size:13px;padding:9px 12px;outline:none;" />
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost btn-sm" onclick="closeWizard()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="wzNext()">Next →</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Confirm -->
+    <div id="wzStep2" style="display:none;">
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:16px 18px;line-height:2;">
+          <div style="display:grid;grid-template-columns:120px 1fr;gap:2px 12px;">
+            <span style="color:var(--text-dim);font-family:var(--mono);font-size:12px;">TEMPLATE</span>
+            <span id="wzSumTemplate" style="color:var(--text-bright);font-family:var(--mono);font-size:14px;"></span>
+            <span style="color:var(--text-dim);font-family:var(--mono);font-size:12px;">ENVIRONMENT</span>
+            <span id="wzSumEnv" style="color:var(--text-bright);font-family:var(--mono);font-size:14px;"></span>
+            <span style="color:var(--text-dim);font-family:var(--mono);font-size:12px;">NAMESPACE</span>
+            <span id="wzSumNs" style="color:var(--text-bright);font-family:var(--mono);font-size:14px;"></span>
+            <span style="color:var(--text-dim);font-family:var(--mono);font-size:12px;">CONTAINERS</span>
+            <span id="wzSumContainers" style="color:var(--text-bright);font-family:var(--mono);font-size:14px;"></span>
+            <span style="color:var(--text-dim);font-family:var(--mono);font-size:12px;">EXPOSURE</span>
+            <span id="wzSumExposure" style="color:var(--text-bright);font-family:var(--mono);font-size:14px;"></span>
+            <span id="wzSumGpuRow" style="display:none;color:var(--amber);font-family:var(--mono);font-size:12px;">GPU REQUIRED</span>
+            <span id="wzSumGpu" style="color:var(--amber);font-family:var(--mono);font-size:14px;font-weight:600;"></span>
+          </div>
+        </div>
+        <p style="font-size:13px;color:var(--text-dim);margin:0;">Default resource limits and environment variables will be applied. To customise before deploying, use <strong style="color:var(--text);">Customize</strong> instead.</p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost btn-sm" onclick="wzBack()">← Back</button>
+        <button class="btn btn-ghost btn-sm" onclick="wzCustomize()">Customize</button>
+        <button class="btn btn-primary btn-sm" id="wzDeployBtn" onclick="wzDeploy()">Deploy Now</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="newSecretModal">
+  <div class="modal" style="width:660px;">
+    <div class="modal-head" style="display:flex;align-items:center;justify-content:space-between;">
+      <h3>New Secret</h3>
+      <button onclick="closeNewSecretModal()" style="background:none;border:none;cursor:pointer;color:var(--text-dim);padding:2px;border-radius:4px;transition:color .15s;" onmouseover="this.style.color='var(--text-bright)'" onmouseout="this.style.color='var(--text-dim)'">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:16px;">
+      <div>
+        <label class="field-label">Environment</label>
+        <select id="newSecretEnvId" onchange="newSecretEnvChanged()" style="display:block;width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text-bright);font-family:var(--mono);font-size:13px;padding:9px 32px 9px 12px;outline:none;appearance:none;-webkit-appearance:none;background-image:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%238fa3b8" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>');background-repeat:no-repeat;background-position:right 10px center;background-size:14px;"></select>
+      </div>
+      <div>
+        <label class="field-label">Namespace <span id="newSecretNsStatus" style="font-size:10px;color:var(--text-dim);font-family:var(--mono);margin-left:4px;"></span></label>
+        <select id="newSecretNsId" style="display:block;width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text-bright);font-family:var(--mono);font-size:13px;padding:9px 32px 9px 12px;outline:none;appearance:none;-webkit-appearance:none;background-image:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%238fa3b8" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>');background-repeat:no-repeat;background-position:right 10px center;background-size:14px;"><option value="">Select environment first...</option></select>
+      </div>
+      <div>
+        <label class="field-label">Secret name</label>
+        <input id="newSecretName" type="text" placeholder="e.g. wordpress-db-creds" style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text-bright);font-family:var(--mono);font-size:13px;padding:9px 12px;outline:none;" />
+        <div class="hint">Lowercase letters, numbers, and hyphens only.</div>
+      </div>
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <label class="field-label" style="margin:0;">Credentials</label>
+          <button class="btn btn-ghost btn-xs" onclick="addSecretKeyRow()">+ Add</button>
+        </div>
+        <div id="secretKeyList" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 14px;font-size:12px;color:var(--text-dim);">
+        <strong style="color:var(--text);">Note:</strong> Values are encrypted at rest in Kubernetes and cannot be read back through this interface once saved.
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost btn-sm" onclick="closeNewSecretModal()">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="saveSecretBtn" onclick="saveSecret()">Save Secret</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="deleteSecretModal">
+  <div class="modal">
+    <div class="modal-head"><h3>Delete Secret</h3></div>
+    <div class="modal-body">Delete <strong id="deleteSecretTarget"></strong>? Any apps using this secret will lose access to its values.</div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost btn-sm" onclick="closeDeleteSecretModal()">Cancel</button>
+      <button class="btn btn-danger btn-sm" id="confirmDeleteSecretBtn" onclick="confirmDeleteSecret()">Delete</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast-wrap" id="toasts"></div>
 
 <script>
@@ -753,10 +963,13 @@ const S = {
   environments: [],
   isAdmin: false,
   isAiAvailable: false,
+  aiProvider: 'anthropic', // 'anthropic' | 'openai'
+  baseDomain: '',
   currentDetail: null,
   deleteTarget: null,
   logStream: null,
   allLogLines: [],
+  disabledEnvs: {}, // envId → { reason, disabledAt }
   cache: {
     deployments: [],
     lastFetch: null,
@@ -817,6 +1030,7 @@ async function loadConfig() {
     el.textContent = d.portainerUrl || 'Unknown';
     el.style.color = 'var(--accent)';
     S.isAiAvailable = !!d.aiAvailable;
+    S.aiProvider = d.aiProvider || 'anthropic';
   } catch(e) {
     el.textContent = 'Proxy not reachable — is server.js running?';
     el.style.color = 'var(--red)';
@@ -844,12 +1058,10 @@ async function connect() {
     // Accept all Kubernetes endpoint types (4=KubeAgent, 5=Edge, 6=EdgeAsync, 7=KubeEdge)
     const kubeEps = eps.filter(e => [4,5,6,7].includes(e.Type));
     S.environments = kubeEps.length ? kubeEps : eps;
-    populateEnvDropdown();
     document.getElementById('connectScreen').style.display = 'none';
     document.getElementById('mainApp').style.display = 'grid';
     document.getElementById('statusDot').className = 'dot on';
-    document.getElementById('statusText').textContent =
-      S.environments.length === 1 ? S.environments[0].Name : S.environments.length + ' environments';
+    // Status text updated after loadDisabledEnvs below
     // Check if user is a Portainer admin
     try {
       const meR = await api('/users/me');
@@ -864,7 +1076,7 @@ async function connect() {
     // Re-fetch server config to ensure AI availability is current
     try {
       const cfgR = await fetch('/config');
-      if (cfgR.ok) { const cfg = await cfgR.json(); S.isAiAvailable = !!cfg.aiAvailable; }
+      if (cfgR.ok) { const cfg = await cfgR.json(); S.isAiAvailable = !!cfg.aiAvailable; S.aiProvider = cfg.aiProvider || 'anthropic'; S.baseDomain = cfg.baseDomain || ''; }
     } catch(_) {}
 
     // Persist token for page refresh survival
@@ -889,6 +1101,10 @@ async function connect() {
     const chatBtn = document.getElementById('chatToggleBtn');
     if (chatBtn) chatBtn.style.display = S.isAiAvailable ? 'flex' : 'none';
     addContainerCard();
+    await loadDisabledEnvs();
+    populateEnvDropdown(); // populate with disabled envs filtered out
+    document.getElementById('statusText').textContent =
+      visibleEnvironments().length === 1 ? visibleEnvironments()[0].Name : visibleEnvironments().length + ' environments';
     refreshCache(false);
     nav('dashboard', document.querySelector('.nav-item'));
   } catch(e) {
@@ -910,9 +1126,13 @@ async function runReadinessChecks() {
       <div class="ready-env-head">
         <span class="ready-env-name">${esc(env.Name)}</span>
         <span class="ready-env-badge" style="background:rgba(90,100,120,.2);color:var(--text-dim);">Checking...</span>
+        <button id="dis-btn-${env.Id}" onclick="toggleEnvDisabled('${env.Id}','${esc(env.Name)}')"
+          style="margin-left:auto;font-family:var(--mono);font-size:11px;padding:4px 12px;border-radius:5px;cursor:pointer;border:1px solid var(--border2);background:none;color:var(--text-dim);transition:all .15s;flex-shrink:0;">
+          ${S.disabledEnvs[env.Id] ? '✓ Re-enable' : '⊘ Disable'}
+        </button>
       </div>
       <div class="ready-checks">
-        ${['Ingress','Load Balancer','Storage','Nodes'].map(label => `
+        ${['Ingress','Load Balancer','Storage','Nodes','GPU'].map(label => `
           <div class="ready-check">
             <div class="ready-check-label">${label}</div>
             <div class="ready-check-status rcheck-loading">
@@ -928,14 +1148,15 @@ async function runReadinessChecks() {
 }
 
 async function checkEnvironment(env) {
-  const [ingressResult, lbResult, storageResult, nodeResult] = await Promise.all([
+  const [ingressResult, lbResult, storageResult, nodeResult, gpuResult] = await Promise.all([
     checkIngress(env.Id),
     checkLoadBalancer(env.Id),
     checkStorage(env.Id),
     checkNodes(env.Id),
+    checkGPU(env.Id),
   ]);
 
-  const results = [ingressResult, lbResult, storageResult, nodeResult];
+  const results = [ingressResult, lbResult, storageResult, nodeResult, gpuResult];
   const allOk = results.every(r => r.ok);
   const anyFail = results.some(r => r.ok === false);
 
@@ -954,6 +1175,8 @@ async function checkEnvironment(env) {
     badge.textContent = 'Warnings';
     badge.style.cssText = 'background:rgba(245,158,11,.12);color:var(--amber);font-family:var(--mono);font-size:11px;padding:3px 10px;border-radius:20px;font-weight:500;';
   }
+  // Reflect current disabled state on the button
+  updateDisableBtn(env.Id);
 
   // Update each check cell
   const checks = card.querySelectorAll('.ready-check');
@@ -1061,6 +1284,84 @@ async function checkNodes(envId) {
     }
   } catch(e) {
     return { ok: false, label: 'Error', detail: e.message };
+  }
+}
+
+// GPU resource keys to detect on nodes
+const GPU_RESOURCE_KEYS = ['nvidia.com/gpu', 'amd.com/gpu', 'gpu.intel.com/i915', 'habana.ai/gaudi'];
+
+async function checkGPU(envId) {
+  try {
+    const r = await kube(envId, '/api/v1/nodes');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const nodes = (await r.json()).items || [];
+    const gpuNodes = [];
+    const typeCounts = {};
+    for (const node of nodes) {
+      const allocatable = node.status?.allocatable || {};
+      for (const key of GPU_RESOURCE_KEYS) {
+        const count = parseInt(allocatable[key] || '0');
+        if (count > 0) {
+          typeCounts[key] = (typeCounts[key] || 0) + count;
+          gpuNodes.push(node.metadata.name);
+        }
+      }
+    }
+    if (!Object.keys(typeCounts).length) {
+      return { ok: null, label: 'None detected', detail: 'No GPU nodes found — GPU workloads will not schedule' };
+    }
+    const summary = Object.entries(typeCounts).map(([k, v]) => `${v}× ${k.split('/')[1] || k}`).join(', ');
+    const nodeLabel = [...new Set(gpuNodes)].length + ' node(s)';
+    return { ok: true, label: summary, detail: nodeLabel + ' with GPU capacity' };
+  } catch(e) {
+    return { ok: false, label: 'Error', detail: e.message };
+  }
+}
+
+// Detect GPU type for a given environment and update the card label
+async function detectEnvGpuType(envId, containerId) {
+  const labelEl = document.getElementById(`gpu-type-${containerId}`);
+  if (!labelEl) return;
+  if (!envId) { labelEl.textContent = 'Select an environment first'; labelEl.dataset.gpuKey = ''; return; }
+  labelEl.textContent = 'Detecting...';
+  try {
+    const r = await kube(envId, '/api/v1/nodes');
+    if (!r.ok) throw new Error();
+    const nodes = (await r.json()).items || [];
+    const typeCounts = {};
+    for (const node of nodes) {
+      const allocatable = node.status?.allocatable || {};
+      for (const key of GPU_RESOURCE_KEYS) {
+        const count = parseInt(allocatable[key] || '0');
+        if (count > 0) typeCounts[key] = (typeCounts[key] || 0) + count;
+      }
+    }
+    if (!Object.keys(typeCounts).length) {
+      labelEl.textContent = '⚠ No GPU nodes in this environment';
+      labelEl.style.color = 'var(--amber)';
+      labelEl.dataset.gpuKey = 'nvidia.com/gpu'; // fallback
+      return;
+    }
+    // Use the most common GPU type
+    const topKey = Object.entries(typeCounts).sort((a,b) => b[1]-a[1])[0][0];
+    const totalCount = Object.values(typeCounts).reduce((a,b) => a+b, 0);
+    labelEl.textContent = `${totalCount} GPU(s) available · ${topKey}`;
+    labelEl.style.color = 'var(--green)';
+    labelEl.dataset.gpuKey = topKey;
+  } catch(_) {
+    labelEl.textContent = 'Could not detect GPU type';
+    labelEl.style.color = 'var(--text-dim)';
+    labelEl.dataset.gpuKey = 'nvidia.com/gpu';
+  }
+}
+
+function onGpuToggle(containerId, checkbox) {
+  const opts = document.getElementById(`gpu-opts-${containerId}`);
+  if (!opts) return;
+  opts.style.display = checkbox.checked ? '' : 'none';
+  if (checkbox.checked) {
+    const envId = document.getElementById('dEnvId')?.value;
+    detectEnvGpuType(envId, containerId);
   }
 }
 
@@ -1501,7 +1802,7 @@ IMPORTANT RULES:
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: aiModel(),
         max_tokens: 1500,
         stream: true,
         system: systemPrompt,
@@ -1618,7 +1919,7 @@ async function handleComposePaste(yaml) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514', max_tokens: 2000, stream: false,
+        model: aiModel(), max_tokens: 2000, stream: false,
         system: `Translate the Docker Compose file into a Portainer Run deployment config.
 
 RULES:
@@ -1725,10 +2026,10 @@ function applyDeployConfig(cfg) {
 
 
 
-function populateEnvDropdown() {
+function populateEnvDropdown(triggerChange = true) {
   const sel = document.getElementById('dEnvId');
-  sel.innerHTML = S.environments.map(e => `<option value="${e.Id}">${e.Name}</option>`).join('');
-  if (S.environments.length) onEnvChange();
+  sel.innerHTML = visibleEnvironments().map(e => `<option value="${e.Id}">${e.Name}</option>`).join('');
+  if (triggerChange && visibleEnvironments().length) onEnvChange();
 }
 
 function nav(name, el) {
@@ -1742,7 +2043,853 @@ function nav(name, el) {
     renderDashboard();
   } else if (name === 'deploy') {
     onExposeTypeChange();
+  } else if (name === 'catalogue') {
+    loadCatalogue();
+  } else if (name === 'secrets') {
+    loadSecretsPage();
   }
+}
+
+
+// ── CATALOGUE ─────────────────────────────────────────────────────────────────
+
+let catalogueTemplates = [];
+let catalogueFilter = 'all';
+
+const CATEGORY_LABELS = {
+  all: 'All',
+  cms: 'CMS',
+  database: 'Database',
+  web: 'Web',
+  monitoring: 'Monitoring',
+  messaging: 'Messaging',
+  devtools: 'Dev Tools',
+};
+
+const CATEGORY_COLORS = {
+  cms: 'var(--accent)',
+  database: '#40EFDE',
+  web: '#a78bfa',
+  monitoring: '#fb923c',
+  messaging: '#34d399',
+  devtools: '#94a3b8',
+};
+
+async function loadCatalogue() {
+  const grid = document.getElementById('catalogueGrid');
+  const status = document.getElementById('catalogueStatus');
+  if (!grid) return;
+
+  grid.innerHTML = '<div style="color:var(--text-dim);font-family:var(--mono);font-size:13px;grid-column:1/-1;padding:40px 0;text-align:center;"><div class="spinner" style="margin:0 auto 12px;"></div>Loading catalogue...</div>';
+
+  try {
+    const r = await fetch('/templates');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    if (data.error) throw new Error(data.message || data.error);
+    catalogueTemplates = data.templates || [];
+    if (status) status.textContent = catalogueTemplates.length + ' templates';
+    renderCatalogueFilters();
+    renderCatalogueGrid();
+  } catch(e) {
+    grid.innerHTML = '<div style="color:var(--red);font-family:var(--mono);font-size:13px;grid-column:1/-1;padding:40px 0;text-align:center;">Could not load catalogue: ' + esc(e.message) + '<br><span style="color:var(--text-dim);font-size:11px;">Check TEMPLATE_URL in server configuration.</span></div>';
+  }
+}
+
+function renderCatalogueFilters() {
+  const el = document.getElementById('catalogueFilters');
+  if (!el) return;
+
+  const categories = ['all', ...new Set(catalogueTemplates.map(t => t.category).filter(Boolean))];
+  el.innerHTML = categories.map(cat => {
+    const active = cat === catalogueFilter;
+    return '<button class="cat-filter-btn' + (active ? ' active' : '') + '" onclick="setCatalogueFilter(\'' + cat + '\')">' + (CATEGORY_LABELS[cat] || cat) + '</button>';
+  }).join('');
+}
+
+function setCatalogueFilter(cat) {
+  catalogueFilter = cat;
+  renderCatalogueFilters();
+  renderCatalogueGrid();
+}
+
+function renderCatalogueGrid() {
+  const grid = document.getElementById('catalogueGrid');
+  if (!grid) return;
+
+  const filtered = catalogueFilter === 'all'
+    ? catalogueTemplates
+    : catalogueTemplates.filter(t => t.category === catalogueFilter);
+
+  if (!filtered.length) {
+    grid.innerHTML = '<div style="color:var(--text-dim);font-family:var(--mono);font-size:13px;grid-column:1/-1;padding:40px 0;text-align:center;">No templates in this category.</div>';
+    return;
+  }
+
+  grid.innerHTML = filtered.map(t => {
+    const color = CATEGORY_COLORS[t.category] || 'var(--text-dim)';
+    const catLabel = CATEGORY_LABELS[t.category] || t.category || '';
+    const containerCount = t.manifest?.spec?.template?.spec?.containers?.length || 1;
+    const port = t.manifest?.spec?.template?.spec?.containers?.[0]?.ports?.[0]?.containerPort || 80;
+    return '<div class="cat-card">' +
+      '<div class="cat-card-head">' +
+        '<div class="cat-card-name">' + esc(t.name) + '</div>' +
+        '<span class="cat-badge" style="background:' + color + '22;color:' + color + ';border:1px solid ' + color + '44;">' + esc(catLabel) + '</span>' +
+      '</div>' +
+      '<div class="cat-card-desc">' + esc(t.description) + '</div>' +
+      '<div class="cat-card-meta">' +
+        '<span>' + containerCount + ' container' + (containerCount !== 1 ? 's' : '') + '</span>' +
+        '<span>port ' + port + '</span>' +
+      '</div>' +
+      '<button class="btn btn-primary cat-deploy-btn" onclick="openDeployWizard(\'' + t.id + '\')">Deploy Wizard</button>' +
+    '</div>';
+  }).join('');
+}
+
+function parseKnativeManifest(manifest) {
+  var spec = manifest.spec && manifest.spec.template && manifest.spec.template.spec || {};
+  var containers = spec.containers || [];
+  var volumes = spec.volumes || [];
+  var annotations = manifest.metadata && manifest.metadata.annotations || {};
+  var instances = parseInt(annotations['autoscaling.knative.dev/minScale'] || '1') || 1;
+
+  // Map containers
+  var mappedContainers = containers.map(function(ct, i) {
+    // Find storage for this container
+    var storage = null;
+    var vm = (ct.volumeMounts || [])[0];
+    if (vm) {
+      var vol = volumes.find(function(v) { return v.name === vm.name; });
+      if (vol) {
+        storage = {
+          name: vm.name,
+          size: '1Gi',
+          mountPath: vm.mountPath,
+        };
+      }
+    }
+
+    // Detect GPU in resource limits
+    var gpuKey = null, gpuCount = 0;
+    var limits = ct.resources && ct.resources.limits || {};
+    var gpuKeys = ['nvidia.com/gpu','amd.com/gpu','gpu.intel.com/i915','habana.ai/gaudi'];
+    for (var gk of gpuKeys) {
+      if (limits[gk]) { gpuKey = gk; gpuCount = parseInt(limits[gk]) || 1; break; }
+    }
+    return {
+      name: ct.name || ('container-' + i),
+      image: ct.image || '',
+      env: (ct.env || []).map(function(e) { return { name: e.name, value: e.value || '' }; }),
+      cpuReq: ct.resources && ct.resources.requests && ct.resources.requests.cpu || '100m',
+      cpuLim: ct.resources && ct.resources.limits && ct.resources.limits.cpu || '500m',
+      memReq: ct.resources && ct.resources.requests && ct.resources.requests.memory || '128Mi',
+      memLim: ct.resources && ct.resources.limits && ct.resources.limits.memory || '512Mi',
+      storage: storage,
+      gpuKey: gpuKey,
+      gpuCount: gpuCount,
+    };
+  });
+
+  // Determine exposure port from first container
+  var port = containers[0] && containers[0].ports && containers[0].ports[0] && containers[0].ports[0].containerPort || 80;
+
+  // Exposure: use Ingress if baseDomain is set, else NodePort
+  var exposure;
+  if (S.baseDomain) {
+    exposure = {
+      type: 'Ingress',
+      host: manifest.metadata.name + '.' + S.baseDomain,
+      port: port,
+    };
+  } else {
+    exposure = {
+      type: 'NodePort',
+      ports: [port],
+    };
+  }
+
+  return {
+    name: manifest.metadata && manifest.metadata.name || 'app',
+    namespace: 'default',
+    instances: instances,
+    exposure: exposure,
+    containers: mappedContainers,
+    warnings: [],
+  };
+}
+
+// ── DEPLOY WIZARD ─────────────────────────────────────────────────────────────
+let wzTemplateId = null;
+
+function openDeployWizard(id) {
+  var template = catalogueTemplates.find(function(t) { return t.id === id; });
+  if (!template || !template.manifest) { toast('Template not found', 'err'); return; }
+  wzTemplateId = id;
+
+  // Header
+  document.getElementById('wzTitle').textContent = template.name;
+  const badge = document.getElementById('wzBadge');
+  const color = CATEGORY_COLORS[template.category] || 'var(--text-dim)';
+  const label = CATEGORY_LABELS[template.category] || template.category || '';
+  badge.textContent = label;
+  badge.style.cssText = 'background:' + color + '22;color:' + color + ';border:1px solid ' + color + '44;flex-shrink:0;';
+
+  // Populate environment dropdown
+  const envSel = document.getElementById('wzEnvId');
+  envSel.innerHTML = visibleEnvironments().map(e => '<option value="' + e.Id + '">' + esc(e.Name) + '</option>').join('');
+
+  // Reset namespace
+  document.getElementById('wzNamespace').innerHTML = '<option value="">Select environment first...</option>';
+  document.getElementById('wzNsStatus').textContent = '';
+  document.getElementById('wzManualNs').style.display = 'none';
+  document.getElementById('wzManualNs').value = '';
+
+  // Show step 1
+  document.getElementById('wzStep1').style.display = '';
+  document.getElementById('wzStep2').style.display = 'none';
+  document.getElementById('wizardModal').classList.add('open');
+
+  // Auto-load namespaces for first env
+  if (visibleEnvironments().length) wzLoadNamespaces();
+}
+
+async function wzLoadNamespaces() {
+  const envId = document.getElementById('wzEnvId').value;
+  const nsSel = document.getElementById('wzNamespace');
+  const status = document.getElementById('wzNsStatus');
+  const manualNs = document.getElementById('wzManualNs');
+  if (!envId) return;
+
+  nsSel.innerHTML = '<option value="">Loading...</option>';
+  status.textContent = '';
+  manualNs.style.display = 'none';
+
+  try {
+    const r = await kube(envId, '/api/v1/namespaces');
+    if (r.status === 403 || r.status === 401) {
+      nsSel.innerHTML = '<option value="">—</option>';
+      manualNs.style.display = '';
+      manualNs.placeholder = 'Enter namespace (token is namespace-scoped)';
+      status.textContent = 'Enter namespace manually';
+      status.style.color = 'var(--amber)';
+      return;
+    }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const allNss = (await r.json()).items.map(n => n.metadata.name);
+    const accessible = (await Promise.all(
+      allNss.map(async ns => {
+        try {
+          const pr = await kube(envId, '/apis/apps/v1/namespaces/' + ns + '/deployments?limit=1');
+          return pr.ok ? ns : null;
+        } catch(_) { return null; }
+      })
+    )).filter(Boolean);
+    if (!accessible.length) {
+      nsSel.innerHTML = '<option value="">—</option>';
+      manualNs.style.display = '';
+      status.textContent = 'No accessible namespaces — enter manually';
+      status.style.color = 'var(--amber)';
+      return;
+    }
+    nsSel.innerHTML = accessible.map(n => '<option value="' + esc(n) + '">' + esc(n) + '</option>').join('');
+    // Default to 'default' if present
+    const defOpt = [...nsSel.options].find(o => o.value === 'default');
+    if (defOpt) nsSel.value = 'default';
+    status.textContent = accessible.length + ' namespace(s)';
+    status.style.color = 'var(--green)';
+  } catch(e) {
+    nsSel.innerHTML = '<option value="">—</option>';
+    manualNs.style.display = '';
+    status.textContent = 'Could not load namespaces';
+    status.style.color = 'var(--red)';
+  }
+}
+
+function wzNext() {
+  const envId = document.getElementById('wzEnvId').value;
+  const manualNs = document.getElementById('wzManualNs');
+  const ns = manualNs.style.display !== 'none'
+    ? manualNs.value.trim()
+    : document.getElementById('wzNamespace').value;
+
+  if (!envId) { toast('Select an environment', 'err'); return; }
+  if (isEnvDisabled(envId)) { toast('This environment has been disabled by an administrator — no new deployments allowed', 'err'); return; }
+  if (!ns) { toast('Select or enter a namespace', 'err'); return; }
+
+  const template = catalogueTemplates.find(t => t.id === wzTemplateId);
+  const env = S.environments.find(e => String(e.Id) === String(envId));
+  const containers = template?.manifest?.spec?.template?.spec?.containers || [];
+  const containerSummary = containers.map(c => c.image || c.name).join(', ');
+
+  const cfg = parseKnativeManifest(template.manifest);
+  let exposureSummary = 'None';
+  if (cfg.exposure && cfg.exposure.type !== 'none') {
+    if (cfg.exposure.type === 'Ingress' && cfg.exposure.host) {
+      exposureSummary = 'Ingress → ' + cfg.exposure.host;
+    } else if (cfg.exposure.ports && cfg.exposure.ports.length) {
+      exposureSummary = cfg.exposure.type + ' port ' + cfg.exposure.ports.join(', ');
+    } else if (cfg.exposure.port) {
+      exposureSummary = cfg.exposure.type + ' port ' + cfg.exposure.port;
+    } else {
+      exposureSummary = cfg.exposure.type;
+    }
+  }
+
+  // Detect if any container requires a GPU
+  const gpuContainers = cfg.containers.filter(c => c.gpuKey && c.gpuCount > 0);
+  const gpuSummary = gpuContainers.length
+    ? gpuContainers.map(c => `${c.gpuCount}× ${c.gpuKey.split('/')[1] || c.gpuKey}`).join(', ')
+    : null;
+
+  document.getElementById('wzSumTemplate').textContent = template?.name || wzTemplateId;
+  document.getElementById('wzSumEnv').textContent = env?.Name || envId;
+  document.getElementById('wzSumNs').textContent = ns;
+  document.getElementById('wzSumContainers').textContent = containerSummary || '—';
+
+  // GPU row — show if template requires GPU
+  const gpuRow = document.getElementById('wzSumGpuRow');
+  if (gpuRow) {
+    if (gpuSummary) {
+      gpuRow.style.display = '';
+      document.getElementById('wzSumGpu').textContent = gpuSummary;
+    } else {
+      gpuRow.style.display = 'none';
+    }
+  }
+  document.getElementById('wzSumExposure').textContent = exposureSummary;
+
+  document.getElementById('wzStep1').style.display = 'none';
+  document.getElementById('wzStep2').style.display = '';
+}
+
+function wzBack() {
+  document.getElementById('wzStep1').style.display = '';
+  document.getElementById('wzStep2').style.display = 'none';
+}
+
+function wzCustomize() {
+  const template = catalogueTemplates.find(t => t.id === wzTemplateId);
+  if (!template) return;
+  closeWizard();
+  const cfg = parseKnativeManifest(template.manifest);
+  // Pre-fill environment and namespace into deploy form
+  const envId = document.getElementById('wzEnvId').value;
+  const manualNs = document.getElementById('wzManualNs');
+  const ns = manualNs.style.display !== 'none'
+    ? manualNs.value.trim()
+    : document.getElementById('wzNamespace').value;
+  applyDeployConfig(cfg);
+  // Set env and namespace on deploy form after applyDeployConfig navigates there
+  setTimeout(() => {
+    const envSel = document.getElementById('dEnvId');
+    if (envSel && envId) { envSel.value = envId; onEnvChange(); }
+    setTimeout(() => {
+      const nsSel = document.getElementById('dNamespace');
+      if (nsSel && ns) {
+        const opt = [...nsSel.options].find(o => o.value === ns);
+        if (opt) nsSel.value = ns;
+      }
+    }, 800);
+  }, 100);
+}
+
+async function wzDeploy() {
+  const template = catalogueTemplates.find(t => t.id === wzTemplateId);
+  if (!template || !template.manifest) { toast('Template not found', 'err'); return; }
+
+  const envId = document.getElementById('wzEnvId').value;
+  const manualNs = document.getElementById('wzManualNs');
+  const ns = manualNs.style.display !== 'none'
+    ? manualNs.value.trim()
+    : document.getElementById('wzNamespace').value;
+
+  if (!envId || !ns) { toast('Environment and namespace are required', 'err'); return; }
+
+  const cfg = parseKnativeManifest(template.manifest);
+  const name = cfg.name;
+  const btn = document.getElementById('wzDeployBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner" style="display:inline-block;width:12px;height:12px;margin-right:6px;"></div>Deploying...';
+
+  try {
+    // Create PVCs
+    for (const ct of cfg.containers) {
+      if (!ct.storage) continue;
+      const pvcManifest = {
+        apiVersion: 'v1', kind: 'PersistentVolumeClaim',
+        metadata: { name: ct.storage.name, namespace: ns, labels: { app: name, 'managed-by': 'portainer-run' } },
+        spec: {
+          accessModes: ['ReadWriteOnce'],
+          resources: { requests: { storage: ct.storage.size || '1Gi' } },
+        },
+      };
+      const pr = await kube(envId, '/api/v1/namespaces/' + ns + '/persistentvolumeclaims', {
+        method: 'POST', body: JSON.stringify(pvcManifest),
+      });
+      if (!pr.ok && pr.status !== 409) {
+        const j = await pr.json().catch(()=>{});
+        throw new Error('Volume "' + ct.storage.name + '" failed: ' + (j?.message || 'HTTP ' + pr.status));
+      }
+    }
+
+    // Build container specs
+    const containerSpecs = cfg.containers.map(ct => {
+      const resources = {
+        requests: { cpu: ct.cpuReq, memory: ct.memReq },
+        limits: { cpu: ct.cpuLim, memory: ct.memLim },
+      };
+      if (ct.gpuKey && ct.gpuCount > 0) {
+        resources.limits[ct.gpuKey] = String(ct.gpuCount);
+        resources.requests[ct.gpuKey] = String(ct.gpuCount);
+      }
+      const spec = { name: ct.name, image: ct.image, resources };
+      if (ct.env?.length) spec.env = ct.env;
+      if (ct.envFrom?.length) spec.envFrom = ct.envFrom;
+      if (ct.storage) spec.volumeMounts = [{ name: ct.storage.name, mountPath: ct.storage.mountPath }];
+      return spec;
+    });
+
+    const podVolumes = cfg.containers
+      .filter(ct => ct.storage)
+      .map(ct => ({ name: ct.storage.name, persistentVolumeClaim: { claimName: ct.storage.name } }));
+
+    const manifest = {
+      apiVersion: 'apps/v1', kind: 'Deployment',
+      metadata: { name, namespace: ns, labels: { app: name, 'managed-by': 'portainer-run' } },
+      spec: {
+        replicas: cfg.instances || 1,
+        selector: { matchLabels: { app: name } },
+        template: {
+          metadata: { labels: { app: name, 'managed-by': 'portainer-run' } },
+          spec: {
+            containers: containerSpecs,
+            ...(podVolumes.length ? { volumes: podVolumes } : {}),
+          },
+        },
+      },
+    };
+
+    const r = await kube(envId, '/apis/apps/v1/namespaces/' + ns + '/deployments', {
+      method: 'POST', body: JSON.stringify(manifest),
+    });
+    if (r.status === 409) throw new Error('A deployment named "' + name + '" already exists in namespace "' + ns + '".');
+    if (!r.ok) { const j = await r.json().catch(()=>{}); throw new Error(j?.message || 'HTTP ' + r.status); }
+
+    // Create service based on exposure config
+    const exposure = cfg.exposure;
+    if (exposure && exposure.type !== 'none') {
+      const port = exposure.port || (exposure.ports?.[0]) || 80;
+      const svcType = exposure.type === 'Ingress' ? 'ClusterIP' : (exposure.type || 'ClusterIP');
+      await kube(envId, '/api/v1/namespaces/' + ns + '/services', {
+        method: 'POST',
+        body: JSON.stringify({
+          apiVersion: 'v1', kind: 'Service',
+          metadata: { name, namespace: ns, labels: { app: name, 'managed-by': 'portainer-run' } },
+          spec: {
+            selector: { app: name },
+            type: svcType,
+            ports: [{ port, targetPort: port, protocol: 'TCP' }],
+          },
+        }),
+      }).catch(() => {}); // non-fatal
+    }
+
+    closeWizard();
+    toast('"' + name + '" deployed to ' + ns + ' — ' + containerSpecs.length + ' container(s)', 'ok');
+    setTimeout(() => { S.cache.fetching = false; refreshCache(false); }, 1200);
+    nav('services', document.querySelectorAll('.nav-item')[0]);
+
+  } catch(e) {
+    toast('Deploy failed: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'Deploy Now';
+  }
+}
+
+function closeWizard() {
+  document.getElementById('wizardModal').classList.remove('open');
+  wzTemplateId = null;
+}
+
+// Keep deployFromTemplate for any internal callers
+function deployFromTemplate(id) {
+  openDeployWizard(id);
+}
+
+
+// ── SECRETS ───────────────────────────────────────────────────────────────────
+
+let secretDeleteTarget = null; // { envId, ns, name }
+
+function loadSecretsPage() {
+  const envSel = document.getElementById('secretsEnvId');
+  envSel.innerHTML = visibleEnvironments().map(e => `<option value="${e.Id}">${esc(e.Name)}</option>`).join('');
+  if (visibleEnvironments().length) secretsEnvChanged();
+}
+
+async function secretsEnvChanged() {
+  const envId = document.getElementById('secretsEnvId').value;
+  const nsSel = document.getElementById('secretsNsId');
+  nsSel.innerHTML = '<option value="">Loading...</option>';
+  document.getElementById('secretsList').innerHTML = '';
+  try {
+    const r = await kube(envId, '/api/v1/namespaces');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const allNs = (await r.json()).items.map(n => n.metadata.name);
+    const accessible = (await Promise.all(
+      allNs.map(async ns => {
+        try { const pr = await kube(envId, `/apis/apps/v1/namespaces/${ns}/deployments?limit=1`); return pr.ok ? ns : null; }
+        catch(_) { return null; }
+      })
+    )).filter(Boolean);
+    nsSel.innerHTML = accessible.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    // Default to 'default'
+    const defOpt = [...nsSel.options].find(o => o.value === 'default');
+    if (defOpt) nsSel.value = 'default';
+    loadSecrets();
+  } catch(e) {
+    nsSel.innerHTML = '<option value="">Could not load</option>';
+  }
+}
+
+async function loadSecrets() {
+  const envId = document.getElementById('secretsEnvId').value;
+  const ns    = document.getElementById('secretsNsId').value;
+  const el    = document.getElementById('secretsList');
+  if (!envId || !ns) return;
+
+  el.innerHTML = '<div style="color:var(--text-dim);font-family:var(--mono);font-size:13px;padding:30px 0;text-align:center;"><div class="spinner" style="margin:0 auto 10px;"></div>Loading secrets...</div>';
+
+  try {
+    // Only show secrets with our label so we don't expose cluster secrets
+    const r = await kube(envId, `/api/v1/namespaces/${ns}/secrets`);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const secrets = (await r.json()).items || [];
+
+    if (!secrets.length) {
+      el.innerHTML = `<div class="empty" style="padding:40px 0;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="36" height="36"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <h3>No secrets yet</h3>
+        <p>Create a secret to store credentials and sensitive config safely.</p>
+      </div>`;
+      return;
+    }
+
+    // Fetch deployments to find which secrets are in use
+    let usageMap = {}; // secretName → [deploymentName, ...]
+    try {
+      const dr = await kube(envId, `/apis/apps/v1/namespaces/${ns}/deployments?labelSelector=${encodeURIComponent('managed-by=portainer-run')}`);
+      if (dr.ok) {
+        const deps = (await dr.json()).items || [];
+        for (const dep of deps) {
+          const containers = dep.spec?.template?.spec?.containers || [];
+          for (const ct of containers) {
+            for (const env of (ct.env || [])) {
+              if (env.valueFrom?.secretKeyRef?.name) {
+                const sn = env.valueFrom.secretKeyRef.name;
+                (usageMap[sn] = usageMap[sn] || []).push(dep.metadata.name);
+              }
+            }
+            for (const envFrom of (ct.envFrom || [])) {
+              if (envFrom.secretRef?.name) {
+                const sn = envFrom.secretRef.name;
+                (usageMap[sn] = usageMap[sn] || []).push(dep.metadata.name);
+              }
+            }
+          }
+        }
+      }
+    } catch(_) {}
+
+    let h = '<div style="display:flex;flex-direction:column;gap:10px;">';
+    for (const s of secrets) {
+      const name = s.metadata.name;
+      const keys = Object.keys(s.data || {});
+      const usedBy = [...new Set(usageMap[name] || [])];
+      const created = s.metadata.creationTimestamp;
+
+      h += `<div style="background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:16px 20px;display:flex;align-items:center;gap:16px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-family:var(--mono);font-size:14px;font-weight:600;color:var(--text-bright);margin-bottom:4px;">${esc(name)}</div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--text-dim);">
+            <span>${keys.length} credential${keys.length !== 1 ? 's' : ''}: ${keys.map(k => esc(k)).join(', ')}</span>
+            ${usedBy.length ? `<span style="color:var(--green);">Used by: ${usedBy.map(d => esc(d)).join(', ')}</span>` : '<span>Not used by any app</span>'}
+            <span>Created ${age(created)} ago</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0;">
+          <button class="btn btn-danger btn-xs" onclick="openDeleteSecretModal('${esc(envId)}','${esc(ns)}','${esc(name)}')">Delete</button>
+        </div>
+      </div>`;
+    }
+    h += '</div>';
+    el.innerHTML = h;
+  } catch(e) {
+    el.innerHTML = `<div style="color:var(--red);font-family:var(--mono);font-size:13px;padding:30px 0;text-align:center;">Could not load secrets: ${esc(e.message)}</div>`;
+  }
+}
+
+// ── NEW SECRET MODAL ──────────────────────────────────────────────────────────
+
+function openNewSecretModal() {
+  document.getElementById('newSecretName').value = '';
+  document.getElementById('secretKeyList').innerHTML = '';
+  // Populate modal's own env dropdown — independent of list filter
+  const envSel = document.getElementById('newSecretEnvId');
+  envSel.innerHTML = visibleEnvironments().map(e => `<option value="${e.Id}">${esc(e.Name)}</option>`).join('');
+  document.getElementById('newSecretNsId').innerHTML = '<option value="">Select environment first...</option>';
+  document.getElementById('newSecretNsStatus').textContent = '';
+  if (visibleEnvironments().length) newSecretEnvChanged();
+  addSecretKeyRow(); // start with one row
+  document.getElementById('newSecretModal').classList.add('open');
+}
+
+async function newSecretEnvChanged() {
+  const envId = document.getElementById('newSecretEnvId').value;
+  const nsSel = document.getElementById('newSecretNsId');
+  const status = document.getElementById('newSecretNsStatus');
+  if (!envId) return;
+  nsSel.innerHTML = '<option value="">Loading...</option>';
+  status.textContent = '';
+  try {
+    const r = await kube(envId, '/api/v1/namespaces');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const allNs = (await r.json()).items.map(n => n.metadata.name);
+    const accessible = (await Promise.all(
+      allNs.map(async ns => {
+        try { const pr = await kube(envId, `/apis/apps/v1/namespaces/${ns}/deployments?limit=1`); return pr.ok ? ns : null; }
+        catch(_) { return null; }
+      })
+    )).filter(Boolean);
+    if (!accessible.length) {
+      nsSel.innerHTML = '<option value="">No accessible namespaces</option>';
+      return;
+    }
+    nsSel.innerHTML = accessible.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    const defOpt = [...nsSel.options].find(o => o.value === 'default');
+    if (defOpt) nsSel.value = 'default';
+    status.textContent = accessible.length + ' available';
+  } catch(e) {
+    nsSel.innerHTML = '<option value="">Could not load</option>';
+  }
+}
+
+function closeNewSecretModal() {
+  document.getElementById('newSecretModal').classList.remove('open');
+}
+
+let secretRowId = 0;
+function addSecretKeyRow() {
+  const id = ++secretRowId;
+  const row = document.createElement('div');
+  row.id = `skr-${id}`;
+  row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 32px;gap:8px;align-items:center;';
+  row.innerHTML = `
+    <input type="text" placeholder="Key (e.g. DB_PASSWORD)" data-skr-key="${id}"
+      style="background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text-bright);font-family:var(--mono);font-size:12px;padding:7px 10px;outline:none;width:100%;" />
+    <div style="position:relative;">
+      <input type="password" placeholder="Value" data-skr-val="${id}"
+        style="background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text-bright);font-family:var(--mono);font-size:12px;padding:7px 30px 7px 10px;outline:none;width:100%;" />
+      <button type="button" onclick="toggleSecretVal(${id})" tabindex="-1"
+        style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-dim);padding:0;line-height:1;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+    </div>
+    <button type="button" onclick="document.getElementById('skr-${id}').remove()"
+      style="background:none;border:1px solid var(--border2);border-radius:6px;color:var(--text-dim);cursor:pointer;height:32px;width:32px;display:flex;align-items:center;justify-content:center;font-size:14px;transition:color .15s;">✕</button>`;
+  document.getElementById('secretKeyList').appendChild(row);
+}
+
+function toggleSecretVal(id) {
+  const input = document.querySelector(`[data-skr-val="${id}"]`);
+  if (input) input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+async function saveSecret() {
+  const envId = document.getElementById('newSecretEnvId').value;
+  const ns    = document.getElementById('newSecretNsId').value;
+  if (!envId) { toast('Select an environment', 'err'); return; }
+  if (!ns)    { toast('Select a namespace', 'err'); return; }
+  const name  = document.getElementById('newSecretName').value.trim().toLowerCase();
+  const btn   = document.getElementById('saveSecretBtn');
+
+  if (!name) { toast('Secret name is required', 'err'); return; }
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) { toast('Name must be lowercase letters, numbers, and hyphens', 'err'); return; }
+
+  // Collect key/value pairs
+  const dataObj = {};
+  const rows = document.querySelectorAll('#secretKeyList > div');
+  for (const row of rows) {
+    const keyEl = row.querySelector('[data-skr-key]');
+    const valEl = row.querySelector('[data-skr-val]');
+    if (!keyEl || !valEl) continue;
+    const k = keyEl.value.trim();
+    const v = valEl.value;
+    if (!k) { toast('All credential keys must have a name', 'err'); return; }
+    // Kubernetes requires base64 encoded values
+    dataObj[k] = btoa(unescape(encodeURIComponent(v)));
+  }
+
+  if (!Object.keys(dataObj).length) { toast('Add at least one credential', 'err'); return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner" style="display:inline-block;width:12px;height:12px;margin-right:6px;"></div>Saving...';
+
+  try {
+    const manifest = {
+      apiVersion: 'v1',
+      kind: 'Secret',
+      type: 'Opaque',
+      metadata: {
+        name,
+        namespace: ns,
+        labels: { 'managed-by': 'portainer-run' },
+      },
+      data: dataObj,
+    };
+    const r = await kube(envId, `/api/v1/namespaces/${ns}/secrets`, {
+      method: 'POST',
+      body: JSON.stringify(manifest),
+    });
+    if (r.status === 409) throw new Error(`A secret named "${name}" already exists.`);
+    if (!r.ok) { const j = await r.json().catch(()=>{}); throw new Error(j?.message || 'HTTP ' + r.status); }
+    closeNewSecretModal();
+    toast(`Secret "${name}" saved`, 'ok');
+    loadSecrets();
+  } catch(e) {
+    toast('Failed to save secret: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'Save Secret';
+  }
+}
+
+// ── DELETE SECRET ─────────────────────────────────────────────────────────────
+
+function openDeleteSecretModal(envId, ns, name) {
+  secretDeleteTarget = { envId, ns, name };
+  document.getElementById('deleteSecretTarget').textContent = name;
+  document.getElementById('deleteSecretModal').classList.add('open');
+}
+
+function closeDeleteSecretModal() {
+  document.getElementById('deleteSecretModal').classList.remove('open');
+  secretDeleteTarget = null;
+}
+
+async function confirmDeleteSecret() {
+  if (!secretDeleteTarget) return;
+  const { envId, ns, name } = secretDeleteTarget;
+  const btn = document.getElementById('confirmDeleteSecretBtn');
+  btn.disabled = true;
+  try {
+    const r = await kube(envId, `/api/v1/namespaces/${ns}/secrets/${name}`, { method: 'DELETE' });
+    if (!r.ok && r.status !== 404) { const j = await r.json().catch(()=>{}); throw new Error(j?.message || 'HTTP ' + r.status); }
+    closeDeleteSecretModal();
+    toast(`Secret "${name}" deleted`, 'ok');
+    loadSecrets();
+  } catch(e) {
+    toast('Delete failed: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── ENVIRONMENT DISABLE / ENABLE ─────────────────────────────────────────────
+// Disabled state stored in a ConfigMap "portainer-run-config" in kube-system.
+// Uses the first environment's API to read/write — kube-system is cluster-scoped
+// and accessible from any environment pointed at the same cluster.
+// For multi-cluster setups each cluster has its own ConfigMap.
+
+const DISABLED_CM_NAME = 'portainer-run-config';
+const DISABLED_CM_NS   = 'kube-system';
+
+// Returns the envId to use for ConfigMap operations (first available env)
+function cmEnvId() {
+  return S.environments[0]?.Id;
+}
+
+async function loadDisabledEnvs() {
+  // Try each environment until we find one that can read kube-system
+  for (const env of S.environments) {
+    try {
+      const r = await kube(env.Id, `/api/v1/namespaces/${DISABLED_CM_NS}/configmaps/${DISABLED_CM_NAME}`);
+      if (r.status === 404) { S.disabledEnvs = {}; return; } // CM doesn't exist yet — no disabled envs
+      if (!r.ok) continue; // This env can't read kube-system, try next
+      const cm = await r.json();
+      const raw = cm.data?.disabledEnvs;
+      S.disabledEnvs = raw ? JSON.parse(raw) : {};
+      return;
+    } catch(_) { continue; }
+  }
+  S.disabledEnvs = {};
+}
+
+async function saveDisabledEnvs() {
+  const payload = {
+    apiVersion: 'v1', kind: 'ConfigMap',
+    metadata: { name: DISABLED_CM_NAME, namespace: DISABLED_CM_NS,
+      labels: { 'managed-by': 'portainer-run' } },
+    data: { disabledEnvs: JSON.stringify(S.disabledEnvs) },
+  };
+  // Try each environment until one can write to kube-system
+  for (const env of S.environments) {
+    try {
+      const patch = await kube(env.Id, `/api/v1/namespaces/${DISABLED_CM_NS}/configmaps/${DISABLED_CM_NAME}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/strategic-merge-patch+json' },
+        body: JSON.stringify(payload),
+      });
+      if (patch.status === 404) {
+        await kube(env.Id, `/api/v1/namespaces/${DISABLED_CM_NS}/configmaps`, {
+          method: 'POST', body: JSON.stringify(payload),
+        });
+        return;
+      }
+      if (patch.ok) return;
+    } catch(_) { continue; }
+  }
+}
+
+async function toggleEnvDisabled(envId, envName) {
+  const isDisabled = !!S.disabledEnvs[envId];
+  if (isDisabled) {
+    delete S.disabledEnvs[envId];
+    toast(`"${envName}" re-enabled for deployments`, 'ok');
+  } else {
+    S.disabledEnvs[envId] = {
+      reason: 'Disabled via Cluster Readiness',
+      disabledAt: new Date().toISOString(),
+    };
+    toast(`"${envName}" disabled — no new deployments allowed`, 'ok');
+  }
+  // Update button immediately — don't wait for network save
+  updateDisableBtn(envId);
+  await saveDisabledEnvs();
+}
+
+function updateDisableBtn(envId) {
+  const btn = document.getElementById(`dis-btn-${envId}`);
+  if (!btn) return;
+  const isDisabled = !!S.disabledEnvs[envId];
+  btn.textContent = isDisabled ? '✓ Re-enable' : '⊘ Disable';
+  btn.style.color = isDisabled ? 'var(--green)' : 'var(--red)';
+  btn.style.borderColor = isDisabled ? 'var(--green)' : 'var(--red)';
+}
+
+// Check if env is disabled — used by deploy form and wizard
+function isEnvDisabled(envId) {
+  return !!S.disabledEnvs[String(envId)];
+}
+
+// Non-admins only see environments that are not disabled
+function aiModel() {
+  return S.aiProvider === 'openai' ? 'gpt-4o' : 'claude-sonnet-4-20250514';
+}
+
+function visibleEnvironments() {
+  return S.environments.filter(e => !isEnvDisabled(String(e.Id)));
 }
 
 function disconnect() {
@@ -1750,7 +2897,7 @@ function disconnect() {
     fetch('/cache', { method: 'DELETE', headers: { 'X-API-Key': S.token } }).catch(() => {});
   }
   try { sessionStorage.removeItem('portainer_run_token'); } catch(_) {}
-  S.token = ''; S.environments = []; S.currentDetail = null; S.isAdmin = false; S.isAiAvailable = false;
+  S.token = ''; S.environments = []; S.currentDetail = null; S.isAdmin = false; S.isAiAvailable = false; S.aiProvider = 'anthropic'; S.disabledEnvs = {};
   try { sessionStorage.removeItem('portainer_run_token'); } catch(_) {}
   S.cache = { deployments: [], lastFetch: null, fetching: false, everLoaded: false };
   if (S.refreshTimer) { clearTimeout(S.refreshTimer); S.refreshTimer = null; }
@@ -1822,7 +2969,7 @@ function setCacheStatus(state) {
     lbl.textContent = 'Showing last known state — live data loading...';
   } else if (state === 'fresh') {
     dot.className = 'cache-dot fresh';
-    lbl.textContent = 'Updated just now — auto-refreshes every 1 min';
+    lbl.textContent = 'Updated just now — auto-refreshes every 30s';
   } else if (state === 'stale') {
     dot.className = 'cache-dot stale';
     const mins = S.cache.lastFetch ? Math.round((Date.now() - S.cache.lastFetch) / 60000) : '?';
@@ -1842,11 +2989,11 @@ async function refreshCache(manual = false) {
 
   // Schedule next auto-refresh (do this early so it runs even if we return early)
   if (S.refreshTimer) clearTimeout(S.refreshTimer);
-  S.refreshTimer = setTimeout(() => refreshCache(false), 60 * 1000);
+  S.refreshTimer = setTimeout(() => refreshCache(false), 30 * 1000);
 
   try {
     // Fire all environments in parallel — render progressively as each completes
-    await Promise.all(S.environments.map(async env => {
+    await Promise.all(visibleEnvironments().map(async env => {
       const deps = await fetchEnvDeployments(env);
       if (!deps.length) return;
       // Merge into cache, replacing any previous entries for this env
@@ -1922,10 +3069,21 @@ function renderDashboard() {
     else unavailable++;
   });
   document.getElementById('dashCards').innerHTML = `
-    <div class="dash-card"><div class="dash-card-label">Total Services</div><div class="dash-card-value">${total}</div><div class="dash-card-sub">${S.environments.length} environment(s)</div></div>
+    <div class="dash-card"><div class="dash-card-label">Total Services</div><div class="dash-card-value">${total}</div><div class="dash-card-sub">${visibleEnvironments().length} environment(s)</div></div>
     <div class="dash-card ok"><div class="dash-card-label">Running</div><div class="dash-card-value" style="color:var(--green)">${running}</div><div class="dash-card-sub">All instances ready</div></div>
     <div class="dash-card warn"><div class="dash-card-label">Degraded</div><div class="dash-card-value" style="color:var(--amber)">${degraded}</div><div class="dash-card-sub">Partially available</div></div>
     <div class="dash-card err"><div class="dash-card-label">Unavailable</div><div class="dash-card-value" style="color:var(--red)">${unavailable}</div><div class="dash-card-sub">No instances running</div></div>`;
+  // Show non-admin notice if some envs are hidden
+  const hiddenCount = S.environments.length - visibleEnvironments().length;
+  const noticeEl = document.getElementById('envNotice');
+  if (noticeEl) {
+    if (!S.isAdmin && hiddenCount > 0) {
+      noticeEl.textContent = 'Some environments are not shown. If you expected to see more, contact your administrator.';
+      noticeEl.style.display = 'block';
+    } else {
+      noticeEl.style.display = 'none';
+    }
+  }
 
   // Per-environment health breakdown
   const grid = document.getElementById('envHealthGrid');
@@ -1934,8 +3092,8 @@ function renderDashboard() {
   // If we have cached data (even showing 0s), always render real values.
   if (!deps.length && S.cache.fetching && !S.cache.everLoaded) {
     // Truly nothing yet — first connect, no cache, fetch in progress
-    grid.innerHTML = S.environments.map(e => `
-      <div class="env-health-row" style="opacity:0.4;">
+    grid.innerHTML = visibleEnvironments().map(e => `
+      <div class="env-health-row" style="opacity:0.7;">
         <div class="env-health-name">${esc(e.Name)}</div>
         <div class="env-health-stat"><div class="env-health-stat-val">—</div><div class="env-health-stat-lbl">Total</div></div>
         <div class="env-health-stat"><div class="env-health-stat-val">—</div><div class="env-health-stat-lbl">Running</div></div>
@@ -1945,14 +3103,9 @@ function renderDashboard() {
     return;
   }
 
-  if (!deps.length && !S.cache.fetching) {
-    // Fetch complete, genuinely no portainer-run deployments exist yet
-    grid.innerHTML = '<div class="empty" style="padding:30px 0"><p>No services deployed yet. Use the Deploy page to create your first service.</p></div>';
-    return;
-  }
-
+  // Always render environment rows — show 0s when no deployments yet
   const byEnv = {};
-  S.environments.forEach(e => { byEnv[e.Id] = { name: e.Name, total:0, running:0, degraded:0, unavailable:0, scaledDown:0 }; });
+  visibleEnvironments().forEach(e => { byEnv[e.Id] = { name: e.Name, total:0, running:0, degraded:0, unavailable:0, scaledDown:0 }; });
   deps.forEach(d => {
     const env = byEnv[d._envId];
     if (!env) return;
@@ -2006,84 +3159,240 @@ function renderServices(deps) {
     const conditions = d.status?.conditions || [];
     const progressing = conditions.find(c => c.type === 'Progressing');
     const available = conditions.find(c => c.type === 'Available');
-    let pillClass = 'pill-off', pillLabel = 'Scaled 0';
+    let dotClass = 'status-dot-off', statusLabel = 'Switched off', rowBorder = 'svc-row-off';
     if (desired > 0) {
-      if (ready >= desired) { pillClass = 'pill-run'; pillLabel = `Running ${ready}/${desired}`; }
-      else if (progressing?.status === 'True') { pillClass = 'pill-pend'; pillLabel = `Pending ${ready}/${desired}`; }
-      else { pillClass = 'pill-fail'; pillLabel = `Unavailable ${ready}/${desired}`; }
+      if (ready >= desired)            { dotClass = 'status-dot-run';  statusLabel = 'Running';      rowBorder = 'svc-row-run'; }
+      else if (ready > 0)              { dotClass = 'status-dot-pend'; statusLabel = 'Partially up'; rowBorder = 'svc-row-pend'; }
+      else if (progressing?.status === 'True') { dotClass = 'status-dot-pend'; statusLabel = 'Starting up'; rowBorder = 'svc-row-pend'; }
+      else                             { dotClass = 'status-dot-fail'; statusLabel = 'Not running';  rowBorder = 'svc-row-fail'; }
     }
+    const statusCellId = `svc-status-${esc(envId)}-${esc(ns)}-${esc(name)}`;
     // Container count badge
     const cCount = d.spec?.template?.spec?.containers?.length || 1;
     const cBadge = cCount > 1 ? `<span style="font-family:var(--mono);font-size:10px;color:var(--accent);margin-left:6px;background:var(--accent-glow);padding:1px 6px;border-radius:8px;">${cCount} containers</span>` : '';
-    h += `<div class="svc-row" onclick="openDetail('${esc(envId)}','${esc(ns)}','${esc(name)}')">
+    h += `<div class="svc-row ${rowBorder}" data-svc-env="${esc(envId)}" data-svc-name="${esc(name)}" onclick="openDetail('${esc(envId)}','${esc(ns)}','${esc(name)}')">
       <div class="svc-name">${esc(name)}${cBadge}</div>
       <div class="svc-image" title="${esc(image)}">${esc(image)}</div>
       <div class="svc-ns"><span class="ns-badge">${esc(envName)}</span></div>
-      <div><span class="pill ${pillClass}">${pillLabel}</span></div>
-      <div class="svc-exposure" id="svc-exp-${esc(envId)}-${esc(ns)}-${esc(name)}">
+      <div class="status-cell">
+        <span class="status-light">
+          <span class="status-dot ${dotClass}"></span>
+          ${statusLabel}
+        </span>
+        <span class="status-reason" id="${statusCellId}"></span>
+      </div>
+      <div class="svc-exposure svc-exposure-cell">
         <span style="color:var(--text-dim);font-family:var(--mono);font-size:11px;">...</span>
       </div>
       <div class="svc-age">${age(created)}</div>
       <div class="svc-actions" onclick="event.stopPropagation()">
         <button class="btn btn-ghost btn-xs" onclick="openDetailToLogs('${esc(envId)}','${esc(ns)}','${esc(name)}')">Logs</button>
+        <button class="btn btn-ghost btn-xs" onclick="restartDeployment('${esc(envId)}','${esc(ns)}','${esc(name)}',this)" title="Rolling restart — pods are replaced one by one">Restart</button>
         <button class="btn btn-danger btn-xs" onclick="openDeleteModal('${esc(envId)}','${esc(ns)}','${esc(name)}')">Delete</button>
       </div>
     </div>`;
   }
   h += '</div>';
   el.innerHTML = h;
-  // Fetch exposure info for each service in background
-  deps.forEach(d => {
-    fetchExposure(d._envId, d.metadata.namespace, d.metadata.name);
-  });
+  // Fetch status + exposure via aggregated server endpoint (one call per env)
+  fetchAllEnvStatus(deps);
 }
 
-// Fetch Kubernetes Service + Ingress for a deployment and update the exposure cell
-async function fetchExposure(envId, ns, name) {
-  const cellId = `svc-exp-${envId}-${ns}-${name}`;
+// Plain-English status reason — fetches pod state and surfaces a human-readable cause
+async function fetchStatusReason(envId, ns, name) {
+  const cellId = `svc-status-${envId}-${ns}-${name}`;
   const cell = document.getElementById(cellId);
   if (!cell) return;
   try {
-    const [svcRes, ingRes] = await Promise.all([
-      kube(envId, `/api/v1/namespaces/${ns}/services?labelSelector=${encodeURIComponent('app=' + name)}`),
-      kube(envId, `/apis/networking.k8s.io/v1/namespaces/${ns}/ingresses?labelSelector=${encodeURIComponent('app=' + name)}`),
-    ]);
-    const svcs = svcRes.ok ? ((await svcRes.json()).items || []) : [];
-    const ings = ingRes.ok ? ((await ingRes.json()).items || []) : [];
+    const r = await kube(envId, `/api/v1/namespaces/${ns}/pods?labelSelector=${encodeURIComponent('app=' + name)}`);
+    if (!r.ok) return;
+    const pods = (await r.json()).items || [];
+    if (!pods.length) return;
 
-    const parts = [];
+    let reason = null;
 
-    // NodePort / LoadBalancer services
-    svcs.filter(s => s.spec?.type !== 'ClusterIP').forEach(svc => {
-      const type = svc.spec?.type;
-      if (type === 'LoadBalancer') {
-        const ingress = svc.status?.loadBalancer?.ingress?.[0];
-        const external = ingress?.ip || ingress?.hostname || 'pending';
-        const ports = (svc.spec?.ports || []).map(p => p.port).join(', ');
-        parts.push(`<span class="exp-lb">LB ${esc(external)}:${esc(ports)}</span>`);
-      } else if (type === 'NodePort') {
-        const ports = (svc.spec?.ports || []).map(p => `${p.port}→${p.nodePort}`).join(', ');
-        parts.push(`<span class="exp-nodeport">NodePort ${esc(ports)}</span>`);
+    for (const pod of pods) {
+      if (reason) break;
+      const phase = pod.status?.phase;
+
+      // 1. SCHEDULING BLOCKED — check before container states
+      // If pod never scheduled, containers have no state to inspect
+      const scheduledCond = (pod.status?.conditions || []).find(c => c.type === 'PodScheduled');
+      if (scheduledCond?.status === 'False') {
+        const msg = (scheduledCond.message || '').toLowerCase();
+        if (msg.includes('insufficient cpu') || msg.includes('insufficient memory') || msg.includes('nodes are available')) {
+          reason = 'No node has enough resources';
+        } else if (msg.includes('node selector') || msg.includes('affinity') || msg.includes('taint') || msg.includes("didn't match") || msg.includes('tolerat')) {
+          reason = 'No compatible node found';
+        } else {
+          reason = 'Cannot be scheduled';
+        }
+        break;
       }
-    });
 
-    // Ingress rules
-    ings.forEach(ing => {
-      (ing.spec?.rules || []).forEach(rule => {
-        const host = rule.host || '*';
-        parts.push(`<span class="exp-ingress">↗ ${esc(host)}</span>`);
-      });
-    });
+      // Pod stuck in Pending with no container statuses — pre-scheduling
+      const allContainerStatuses = [
+        ...(pod.status?.containerStatuses || []),
+        ...(pod.status?.initContainerStatuses || []),
+      ];
+      if (phase === 'Pending' && !allContainerStatuses.length) {
+        reason = 'Waiting for a node';
+        break;
+      }
 
-    cell.innerHTML = parts.length
-      ? parts.join('<br>')
-      : '<span class="exp-none">—</span>';
-  } catch(_) {
-    cell.innerHTML = '<span class="exp-none">—</span>';
+      // 2. CONTAINER STATES
+      for (const cs of allContainerStatuses) {
+        const waiting    = cs.state?.waiting;
+        const terminated = cs.state?.terminated;
+        const restarts   = cs.restartCount || 0;
+
+        if (waiting?.reason) {
+          switch (waiting.reason) {
+            case 'ImagePullBackOff':
+            case 'ErrImagePull':              reason = "Can't download the image"; break;
+            case 'InvalidImageName':          reason = 'Image name is invalid'; break;
+            case 'CrashLoopBackOff':          reason = `App keeps crashing (${restarts} restart${restarts !== 1 ? 's' : ''})`; break;
+            case 'CreateContainerError':
+            case 'RunContainerError':         reason = 'Failed to start the container'; break;
+            case 'CreateContainerConfigError':reason = 'Missing config or secret'; break;
+            case 'ContainerCreating':         reason = null; break; // transient — show nothing
+            default:                          reason = waiting.reason;
+          }
+          if (reason !== null) break;
+        }
+
+        if (terminated) {
+          // OOMKilled is transient — scheduler restarts automatically.
+          // Only surface if it keeps happening (3+ restarts = persistent problem).
+          if (terminated.reason === 'OOMKilled' && restarts >= 3) {
+            reason = `Hitting memory limit (${restarts} restart${restarts !== 1 ? 's' : ''})`;
+          } else if (terminated.exitCode > 0 && restarts >= 3) {
+            reason = `Exiting with errors (${restarts} restart${restarts !== 1 ? 's' : ''})`;
+          }
+          if (reason !== null) break;
+        }
+      }
+    }
+
+    if (reason) cell.textContent = reason;
+  } catch(_) {}
+}
+
+// Rolling restart — patches the deployment with a restart annotation
+async function restartDeployment(envId, ns, name, btn) {
+  btn.disabled = true;
+  btn.textContent = '...';
+  try {
+    const patch = {
+      spec: {
+        template: {
+          metadata: {
+            annotations: {
+              'kubectl.kubernetes.io/restartedAt': new Date().toISOString(),
+            },
+          },
+        },
+      },
+    };
+    const r = await kube(envId, `/apis/apps/v1/namespaces/${ns}/deployments/${name}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/strategic-merge-patch+json' },
+      body: JSON.stringify(patch),
+    });
+    if (!r.ok) {
+      const j = await r.json().catch(()=>{});
+      throw new Error(j?.message || 'HTTP ' + r.status);
+    }
+    toast(`"${name}" is restarting — pods will be replaced one by one`, 'ok');
+    setTimeout(() => { S.cache.fetching = false; refreshCache(false); }, 2000);
+  } catch(e) {
+    toast('Restart failed: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Restart';
   }
 }
 
-// ── DETAIL PANEL ──────────────────────────────────────────────────────────────
+// Fetch Kubernetes Service + Ingress for a deployment and update the exposure cell
+// ── ENVIRONMENT STATUS — aggregated fetch ────────────────────────────────────
+// One call to /env-status/:envId per environment (server fans out to kube).
+// Results cached by resourceVersion so re-renders don't re-fetch unchanged data.
+
+// envStatusCache[envId] = { data: { appName: { statusReason, accessUrl, accessLabel } }, rv }
+const envStatusCache = {};
+
+// Concurrency limiter for browser — max 5 env fetches at once
+function makeLimiter(n) {
+  let active = 0;
+  const queue = [];
+  const next = () => {
+    while (active < n && queue.length) {
+      active++;
+      const { fn, resolve, reject } = queue.shift();
+      Promise.resolve().then(fn).then(v => { active--; resolve(v); next(); }).catch(e => { active--; reject(e); next(); });
+    }
+  };
+  return fn => new Promise((resolve, reject) => { queue.push({ fn, resolve, reject }); next(); });
+}
+const envFetchLimit = makeLimiter(5);
+
+// Called after renderServices — groups deployments by env and fires one fetch per env
+function fetchAllEnvStatus(deps) {
+  // Compute a resourceVersion fingerprint per environment
+  const byEnv = {};
+  const visibleEnvIds = new Set(visibleEnvironments().map(e => String(e.Id)));
+  for (const d of deps) {
+    const envId = d._envId;
+    if (!visibleEnvIds.has(String(envId))) continue;
+    if (!byEnv[envId]) byEnv[envId] = [];
+    byEnv[envId].push(d.metadata?.resourceVersion || '');
+  }
+  for (const [envId, rvs] of Object.entries(byEnv)) {
+    const rv = rvs.sort().join(',');
+    const cached = envStatusCache[envId];
+    if (cached && cached.rv === rv) {
+      // Nothing changed — apply cached results to DOM immediately
+      applyEnvStatus(envId, cached.data);
+      continue;
+    }
+    // Fetch from server
+    envFetchLimit(() => fetchEnvStatus(envId, rv));
+  }
+}
+
+async function fetchEnvStatus(envId, rv) {
+  try {
+    const r = await fetch(`/env-status/${envId}`, { headers: { 'X-API-Key': S.token } });
+    if (!r.ok) return;
+    const json = await r.json();
+    const data = json.data || {};
+    envStatusCache[envId] = { data, rv };
+    applyEnvStatus(envId, data);
+  } catch(_) {}
+}
+
+function applyEnvStatus(envId, data) {
+  for (const [appName, info] of Object.entries(data)) {
+    // Status reason — match by data attributes set during renderServices
+    const reasonCell = document.querySelector(`[data-svc-env="${envId}"][data-svc-name="${appName}"] .status-reason`);
+    if (reasonCell && info.statusReason) reasonCell.textContent = info.statusReason;
+
+    // Exposure — match by data attributes
+    const expCell = document.querySelector(`[data-svc-env="${envId}"][data-svc-name="${appName}"] .svc-exposure-cell`);
+
+    if (expCell) {
+      if (info.accessUrl) {
+        expCell.innerHTML = `<a href="${esc(info.accessUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="font-family:var(--mono);font-size:12px;color:var(--accent);text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${esc(info.accessLabel)}</a>`;
+      } else if (info.accessLabel) {
+        expCell.innerHTML = `<span style="font-family:var(--mono);font-size:12px;color:var(--text-dim);">${esc(info.accessLabel)}</span>`;
+      } else {
+        expCell.innerHTML = '<span class="exp-none">—</span>';
+      }
+    }
+  }
+}
+
+// ── DETAIL PANEL ───────────────────────────────────────────────────────────// ── DETAIL PANEL ──────────────────────────────────────────────────────────────
 async function openDetail(envId, ns, name) {
   document.getElementById('dpTitle').textContent = name;
   document.getElementById('dpStatus').textContent = '';
@@ -2343,9 +3652,28 @@ function addContainerCard(primary = false) {
         </div>
       </div>
       <div class="field">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+          <label style="margin:0;">GPU</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-family:var(--mono);font-size:12px;color:var(--text-dim);">
+            <input type="checkbox" data-field="gpuEnabled" onchange="onGpuToggle(${id},this)" style="cursor:pointer;" />
+            Request GPU
+          </label>
+        </div>
+        <div id="gpu-opts-${id}" style="display:none;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <input type="number" data-field="gpuCount" value="1" min="1" max="16" style="width:70px;background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text-bright);font-family:var(--mono);font-size:13px;padding:6px 10px;outline:none;" />
+            <span id="gpu-type-${id}" style="font-family:var(--mono);font-size:11px;color:var(--text-dim);">Detecting GPU type...</span>
+          </div>
+        </div>
+      </div>
+      <div class="field">
         <label>Environment variables</label>
         <div data-envlist="${id}"></div>
-        <button class="add-btn" onclick="addEnvRow(${id})">+ Add variable</button>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;">
+          <button class="add-btn" onclick="addEnvRow(${id})">+ Add variable</button>
+          <button class="add-btn" onclick="addEnvFromSecret(${id})" style="color:var(--accent);">+ Load all from secret</button>
+        </div>
+        <div data-envfromlist="${id}" style="margin-top:6px;display:flex;flex-direction:column;gap:6px;"></div>
       </div>
       <div class="field">
         <label>Storage volume <span style="color:var(--text-dim);font-size:11px;">(RWO — optional)</span></label>
@@ -2432,14 +3760,205 @@ function readContainerVolume(id) {
   return { name, storageClass, size, mountPath };
 }
 
-function addEnvRow(containerId) {
+const inputStyle = 'background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text-bright);font-family:var(--mono);font-size:12px;padding:6px 10px;outline:none;width:100%;';
+const selectStyle = 'background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text-bright);font-family:var(--mono);font-size:12px;padding:6px 8px;outline:none;width:100%;appearance:none;-webkit-appearance:none;';
+
+function addEnvRow(containerId, key='', value='', secretName='', secretKey='') {
   const list = document.querySelector(`[data-envlist="${containerId}"]`);
   const row = document.createElement('div');
-  row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:6px;';
-  row.innerHTML = `<input type="text" placeholder="KEY" style="background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text-bright);font-family:var(--mono);font-size:12px;padding:6px 10px;outline:none;" />
-    <input type="text" placeholder="value" style="background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text-bright);font-family:var(--mono);font-size:12px;padding:6px 10px;outline:none;" />
-    <button class="btn btn-ghost btn-xs" onclick="this.parentElement.remove()" style="flex-shrink:0">✕</button>`;
+  const isSecret = !!secretName;
+  row.dataset.envrowMode = isSecret ? 'secret' : 'plain';
+  row.className = 'env-var-row';
+  // Layout: KEY | VALUE/<hidden> | secret-picker (when secret) | 🔑 | ✕
+  row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr auto auto;gap:6px;margin-bottom:6px;align-items:center;';
+
+  const hiddenPlaceholder = `<div style="background:var(--surface2);border:1px solid var(--border2);border-radius:5px;padding:6px 10px;font-family:var(--mono);font-size:12px;color:var(--text-dim);letter-spacing:2px;">••••••••</div>`;
+  const valuePart = isSecret
+    ? hiddenPlaceholder
+    : `<input type="text" data-env-val placeholder="value" style="${inputStyle}" value="${esc(value)}" />`;
+  const secretPart = isSecret
+    ? buildSecretPicker(containerId, secretName, secretKey)
+    : `<div></div>`; // empty placeholder column
+
+  row.innerHTML = `
+    <input type="text" data-env-key placeholder="KEY" style="${inputStyle}" value="${esc(key)}" />
+    <div data-env-val-wrap>${valuePart}</div>
+    <div data-env-secret-wrap>${secretPart}</div>
+    <button title="${isSecret ? 'Switch to plain value' : 'Use value from secret'}"
+      onclick="toggleEnvRowMode(this,${containerId})"
+      style="background:none;border:1px solid var(--border2);border-radius:5px;cursor:pointer;padding:4px 7px;font-family:var(--mono);font-size:10px;color:${isSecret ? 'var(--accent)' : 'var(--text-dim)'};white-space:nowrap;transition:color .15s,border-color .15s;flex-shrink:0;"
+      data-secret-mode="${isSecret ? '1' : '0'}">🔑</button>
+    <button onclick="this.closest('.env-var-row').remove()" style="background:none;border:1px solid var(--border2);border-radius:5px;cursor:pointer;padding:4px 8px;color:var(--text-dim);font-size:13px;flex-shrink:0;">✕</button>`;
   list.appendChild(row);
+}
+
+// Secret picker: single grouped select showing "secretname / keyname"
+function buildSecretPicker(containerId, selectedSecret='', selectedKey='') {
+  const envId = document.getElementById('dEnvId')?.value;
+  const ns = (() => {
+    const manNs = document.getElementById('manualNs');
+    const manVisible = document.getElementById('manualNsWrap')?.style.display !== 'none';
+    return (manVisible && manNs?.value.trim()) ? manNs.value.trim() : document.getElementById('dNamespace')?.value || 'default';
+  })();
+
+  const uniqueId = 'esr-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
+  setTimeout(() => populateSecretPicker(uniqueId, envId, ns, selectedSecret, selectedKey), 0);
+
+  return `<select id="${uniqueId}" data-env-secret-picker onchange="onSecretPickerChange(this)" style="${selectStyle}">
+    <option value="">Select secret / key...</option>
+  </select>`;
+}
+
+async function populateSecretPicker(uid, envId, ns, selectedSecret='', selectedKey='') {
+  const sel = document.getElementById(uid);
+  if (!sel || !envId || !ns) { if (sel) sel.innerHTML = '<option value="">No environment selected</option>'; return; }
+  try {
+    const r = await kube(envId, `/api/v1/namespaces/${ns}/secrets`);
+    const secrets = r.ok ? ((await r.json()).items || []) : [];
+    if (!secrets.length) { sel.innerHTML = '<option value="">No secrets found</option>'; return; }
+    let html = '<option value="">Select secret / key...</option>';
+    for (const s of secrets) {
+      const sName = s.metadata.name;
+      const keys = Object.keys(s.data || {});
+      if (!keys.length) continue;
+      html += `<optgroup label="${esc(sName)}">`;
+      html += keys.map(k => {
+        const val = JSON.stringify({s: sName, k});
+        const selected = (sName === selectedSecret && k === selectedKey) ? ' selected' : '';
+        return `<option value='${esc(val)}'${selected}>${esc(k)}</option>`;
+      }).join('');
+      html += '</optgroup>';
+    }
+    sel.innerHTML = html;
+    // If pre-selected, sync the key field
+    if (selectedSecret && selectedKey) onSecretPickerChange(sel);
+  } catch(_) { sel.innerHTML = '<option value="">Could not load secrets</option>'; }
+}
+
+function onSecretPickerChange(sel) {
+  if (!sel.value) return;
+  try {
+    const { s, k } = JSON.parse(sel.value);
+    const row = sel.closest('.env-var-row');
+    if (!row) return;
+    // Auto-fill key name from secret key
+    const keyEl = row.querySelector('[data-env-key]');
+    if (keyEl && !keyEl.value) keyEl.value = k;
+    // Store secret name and key as data attrs for readContainerCard
+    sel.dataset.secretName = s;
+    sel.dataset.secretKey = k;
+  } catch(_) {}
+}
+
+async function populateSecretSelects(uid, envId, ns, selectedSecret='', selectedKey='') {
+  const snSel = document.getElementById(`${uid}-sn`);
+  const skSel = document.getElementById(`${uid}-sk`);
+  if (!snSel || !skSel || !envId || !ns) { if (snSel) snSel.innerHTML = '<option value="">No secrets found</option>'; return; }
+  try {
+    const r = await kube(envId, `/api/v1/namespaces/${ns}/secrets`);
+    const secrets = r.ok ? ((await r.json()).items || []) : [];
+    if (!secrets.length) { snSel.innerHTML = '<option value="">No secrets in this namespace</option>'; return; }
+    snSel.innerHTML = '<option value="">Select secret...</option>' + secrets.map(s =>
+      `<option value="${esc(s.metadata.name)}" data-keys="${esc(Object.keys(s.data||{}).join(','))}"${s.metadata.name===selectedSecret?' selected':''}>${esc(s.metadata.name)}</option>`
+    ).join('');
+    if (selectedSecret) {
+      const opt = [...snSel.options].find(o => o.value === selectedSecret);
+      if (opt) {
+        const keys = opt.dataset.keys?.split(',').filter(Boolean) || [];
+        skSel.innerHTML = '<option value="">Select key...</option>' + keys.map(k => `<option value="${esc(k)}"${k===selectedKey?' selected':''}>${esc(k)}</option>`).join('');
+      }
+    }
+  } catch(_) { snSel.innerHTML = '<option value="">Could not load secrets</option>'; }
+}
+
+function populateSecretKeys(uid) {
+  const snSel = document.getElementById(`${uid}-sn`);
+  const skSel = document.getElementById(`${uid}-sk`);
+  if (!snSel || !skSel) return;
+  const opt = snSel.options[snSel.selectedIndex];
+  const keys = opt?.dataset.keys?.split(',').filter(Boolean) || [];
+  skSel.innerHTML = keys.length
+    ? '<option value="">Select key...</option>' + keys.map(k => `<option value="${esc(k)}">${esc(k)}</option>`).join('')
+    : '<option value="">No keys found</option>';
+  // Auto-select first key and populate env var name
+  if (keys.length === 1) {
+    skSel.value = keys[0];
+    syncEnvKeyFromSecret(skSel);
+  }
+}
+
+// When a secret key is selected, auto-fill the env var name field with it
+function syncEnvKeyFromSecret(skSel) {
+  const row = skSel.closest('.env-var-row');
+  if (!row) return;
+  const keyEl = row.querySelector('[data-env-key]');
+  if (keyEl && skSel.value) keyEl.value = skSel.value;
+}
+
+function toggleEnvRowMode(btn, containerId) {
+  const row = btn.closest('.env-var-row');
+  const valWrap = row.querySelector('[data-env-val-wrap]');
+  const secWrap = row.querySelector('[data-env-secret-wrap]');
+  const isSecret = btn.dataset.secretMode === '1';
+  if (isSecret) {
+    // Switch to plain value
+    valWrap.innerHTML = `<input type="text" data-env-val placeholder="value" style="${inputStyle}" />`;
+    secWrap.innerHTML = '';
+    row.style.gridTemplateColumns = '1fr 1fr 1fr auto auto';
+    btn.dataset.secretMode = '0';
+    btn.style.color = 'var(--text-dim)';
+    btn.style.borderColor = 'var(--border2)';
+    btn.title = 'Use value from secret';
+    row.dataset.envrowMode = 'plain';
+  } else {
+    // Switch to secret picker
+    valWrap.innerHTML = `<div style="background:var(--surface2);border:1px solid var(--border2);border-radius:5px;padding:6px 10px;font-family:var(--mono);font-size:12px;color:var(--text-dim);letter-spacing:2px;">••••••••</div>`;
+    secWrap.innerHTML = buildSecretPicker(containerId);
+    row.style.gridTemplateColumns = '1fr 1fr 1fr auto auto';
+    btn.dataset.secretMode = '1';
+    btn.style.color = 'var(--accent)';
+    btn.style.borderColor = 'var(--accent)';
+    btn.title = 'Switch to plain value';
+    row.dataset.envrowMode = 'secret';
+  }
+}
+
+// "Load all from secret" — adds an envFrom row
+function addEnvFromSecret(containerId) {
+  const list = document.querySelector(`[data-envfromlist="${containerId}"]`);
+  if (!list) return;
+  const envId = document.getElementById('dEnvId')?.value;
+  const ns = (() => {
+    const manNs = document.getElementById('manualNs');
+    const manVisible = document.getElementById('manualNsWrap')?.style.display !== 'none';
+    return (manVisible && manNs?.value.trim()) ? manNs.value.trim() : document.getElementById('dNamespace')?.value || 'default';
+  })();
+
+  const uid = 'efr-' + Date.now();
+  const row = document.createElement('div');
+  row.dataset.envfromRow = '1';
+  row.className = 'env-from-row';
+  row.style.cssText = 'display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;';
+  row.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;padding:6px 10px;">
+      <span style="font-family:var(--mono);font-size:11px;color:var(--accent);flex-shrink:0;">ALL KEYS FROM</span>
+      <select id="${uid}" data-envfrom-secret style="${selectStyle}padding:0;border:none;background:transparent;"><option value="">Loading...</option></select>
+    </div>
+    <button onclick="this.closest('.env-from-row').remove()" style="background:none;border:1px solid var(--border2);border-radius:5px;cursor:pointer;padding:4px 8px;color:var(--text-dim);font-size:13px;">✕</button>`;
+  list.appendChild(row);
+
+  // Populate
+  (async () => {
+    const sel = document.getElementById(uid);
+    if (!sel || !envId || !ns) { if(sel) sel.innerHTML='<option value="">No environment selected</option>'; return; }
+    try {
+      const r = await kube(envId, `/api/v1/namespaces/${ns}/secrets`);
+      const secrets = r.ok ? ((await r.json()).items || []) : [];
+      sel.innerHTML = secrets.length
+        ? '<option value="">Select secret...</option>' + secrets.map(s => `<option value="${esc(s.metadata.name)}">${esc(s.metadata.name)}</option>`).join('')
+        : '<option value="">No secrets in this namespace</option>';
+    } catch(_) { sel.innerHTML = '<option value="">Could not load</option>'; }
+  })();
 }
 
 function readContainerCard(id) {
@@ -2461,14 +3980,47 @@ function readContainerCard(id) {
   if (memReq) res.requests.memory = memReq;
   if (cpuLim) res.limits.cpu = cpuLim;
   if (memLim) res.limits.memory = memLim;
+  // GPU
+  const gpuEnabled = card.querySelector(`[data-field="gpuEnabled"]`)?.checked;
+  if (gpuEnabled) {
+    const gpuCount = parseInt(card.querySelector(`[data-field="gpuCount"]`)?.value || '1') || 1;
+    const gpuType = card.querySelector(`[id^="gpu-type-"]`)?.dataset.gpuKey || 'nvidia.com/gpu';
+    if (!res.limits) res.limits = {};
+    if (!res.requests) res.requests = {};
+    res.limits[gpuType] = String(gpuCount);
+    res.requests[gpuType] = String(gpuCount);
+  }
   if (Object.keys(res).length) c.resources = res;
   const envVars = [];
   card.querySelectorAll(`[data-envlist="${id}"] > div`).forEach(row => {
-    const ins = row.querySelectorAll('input');
-    const k = ins[0]?.value?.trim(), v = ins[1]?.value?.trim();
-    if (k) envVars.push({ name: k, value: v || '' });
+    const keyEl = row.querySelector('[data-env-key]');
+    const k = keyEl?.value?.trim();
+    if (!k) return;
+    const mode = row.dataset.envrowMode;
+    if (mode === 'secret') {
+      const picker = row.querySelector('[data-env-secret-picker]');
+      const sn = picker?.dataset.secretName;
+      const sk = picker?.dataset.secretKey;
+      if (sn && sk) {
+        envVars.push({ name: k, valueFrom: { secretKeyRef: { name: sn, key: sk } } });
+      }
+    } else {
+      const valEl = row.querySelector('[data-env-val]');
+      const v = valEl?.value?.trim();
+      if (k) envVars.push({ name: k, value: v || '' });
+    }
   });
   if (envVars.length) c.env = envVars;
+
+  // envFrom — "load all keys from secret"
+  const envFromRefs = [];
+  card.querySelectorAll(`[data-envfromlist="${id}"] .env-from-row`).forEach(row => {
+    const sel = row.querySelector('[data-envfrom-secret]');
+    const sn = sel?.value?.trim();
+    if (sn) envFromRefs.push({ secretRef: { name: sn } });
+  });
+  if (envFromRefs.length) c.envFrom = envFromRefs;
+
   return c;
 }
 
@@ -2605,6 +4157,7 @@ async function deployService() {
   if (!name) { toast('Service name is required', 'err'); return; }
   if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) { toast('Name must be lowercase alphanumeric and hyphens', 'err'); return; }
   if (!envId) { toast('Select a deployment target', 'err'); return; }
+  if (isEnvDisabled(envId)) { toast('This environment has been disabled by an administrator — no new deployments allowed', 'err'); return; }
   if (!ns) { toast('Select a namespace', 'err'); return; }
 
   const containerSpecs = containers.map(c => readContainerCard(c.id)).filter(Boolean);
@@ -3129,7 +4682,7 @@ ${text || '[No log output]'}`;
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: aiModel(),
         max_tokens: 2000,
         stream: true,
         messages: [{ role: 'user', content: `You are an operations assistant helping a user diagnose a containerised application. Use plain English — avoid Kubernetes jargon where possible, and explain technical terms when you must use them.
@@ -3509,7 +5062,7 @@ function toggleMetricsPolling() {
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && document.getElementById('apiToken') === document.activeElement) connect();
-  if (e.key === 'Escape') { closeDetail(); closeDeleteModal(); }
+  if (e.key === 'Escape') { closeDetail(); closeDeleteModal(); closeWizard(); closeNewSecretModal(); closeDeleteSecretModal(); }
 });
 
 
