@@ -1,0 +1,77 @@
+# Portainer Run — Docker Compose deployment
+#
+# Required: set PORTAINER_URL before starting.
+# Optional components are commented out with instructions below.
+#
+# Quick start:
+#   docker compose up -d
+#
+# With environment file:
+#   cp .env.example .env && docker compose --env-file .env up -d
+
+services:
+  portainer-run:
+    image: portainer/portainer-run:latest
+    # Alternatively, build from source:
+    # build:
+    #   context: ..
+    #   dockerfile: Dockerfile
+    container_name: portainer-run
+    restart: unless-stopped
+    ports:
+      - "443:443"   # HTTPS
+      - "80:80"     # HTTP → HTTPS redirect
+    environment:
+      # ── Required ──────────────────────────────────────────────────────────
+      - PORTAINER_URL=https://portainer.example.com:9443
+
+      # ── AI provider (choose one) ───────────────────────────────────────────
+      # Anthropic (Claude):
+      - ANTHROPIC_API_KEY=
+      # OpenAI (GPT-4o):
+      # - OPENAI_API_KEY=
+      # Explicit provider override (auto-detected from key if not set):
+      # - AI_PROVIDER=anthropic
+
+      # ── Template catalogue ────────────────────────────────────────────────
+      # URL of a custom templates.json file. Defaults to the repo file.
+      # - TEMPLATE_URL=https://your-server.com/templates.json
+
+      # ── Ingress base domain ───────────────────────────────────────────────
+      # If set, Ingress templates default to appname.BASE_DOMAIN as the host.
+      # - BASE_DOMAIN=apps.example.com
+
+      # ── Custom ports ──────────────────────────────────────────────────────
+      # Change if 443/80 conflict with other services on the host.
+      # - PORT=443
+      # - HTTP_PORT=80
+
+    volumes:
+      # ── Persistent session cache ──────────────────────────────────────────
+      # Without this, the cache is lost on container restart.
+      # Uncomment and ensure the host path exists before starting.
+      # - /data/portainer-run:/app/data
+
+      # ── Real TLS certificates ─────────────────────────────────────────────
+      # Mount your cert directory and set SSL_CERT / SSL_KEY below.
+      # Without this, a self-signed certificate is generated on first start.
+      # - /etc/letsencrypt/live/portainer-run.example.com:/certs:ro
+
+    # Uncomment if using real TLS certificates (requires the volume above):
+    # environment:
+    #   - SSL_CERT=/certs/fullchain.pem
+    #   - SSL_KEY=/certs/privkey.pem
+    #   - SSL_CERT_DIR=/certs
+
+    # ── DNS ────────────────────────────────────────────────────────────────
+    # If the container cannot resolve your Portainer hostname, uncomment:
+    # dns:
+    #   - 8.8.8.8
+    #   - 1.1.1.1
+
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "--no-check-certificate", "https://localhost/config"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
