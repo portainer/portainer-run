@@ -1,15 +1,23 @@
 # Portainer Run
-
-A Google Cloud Run-style interface for Kubernetes, backed by the Portainer API. Built as a proof-of-concept for the Internal Platform Operations Portal (IPOP) — a self-service container operations portal for internal teams.
-
+ 
+A simplified self-service operations portal for Kubernetes, backed by the Portainer API. The proof-of-concept for IPOP — Internal Platform Operations Portal.
+ 
 ## Why this exists
-
-Portainer is an operator control plane. It is built for the people who manage infrastructure, not for the developers and app owners who deploy and operate applications on top of it. That distinction matters in practice: a developer who needs to ship a container, check its logs, or roll back a bad image does not need the full surface area of Portainer's UI. They need something that gets out of their way.
-
-Portainer Run is that interface. It presents a service-centric view of your Kubernetes environments — deploy a container, see it running, stream its logs, inspect its revisions, and get AI-assisted diagnostics when something goes wrong. The underlying platform is still Portainer, with all the RBAC and access controls that implies. Portainer Run removes the distance between the user and the outcome.
-
-It is intentionally narrow in scope. It does not replace Portainer. It surfaces a specific workflow (deploy and operate a containerised workload) in the simplest UI we could build for it.
-
+ 
+AI has made everyone a developer. Not a software engineer, not a full-stack engineer... a developer. Someone who can take a business problem, describe it to an AI coding tool, and get a working application out the other side. The barrier to creation has effectively gone.
+ 
+The best AI-assisted development tools know this. It's why they push hosting onto their own SaaS or PaaS — it's the only way to keep the experience seamless end to end. And it works, right up until the app needs to talk to something inside your network. An internal database. An on-prem API. A system that lives behind the firewall and isn't going anywhere. At that point the experience collapses, and the only path forward is a ticket to the platform team.
+ 
+That platform team is already stretched. The influx of deployment requests coming from people who have never touched infrastructure — app owners, business developers, support staff, people who vibe-coded their first container last Tuesday — is a real and growing problem with no clean answer today. Buying an IDP that takes a year to configure before anyone can use it is not the answer.
+ 
+Portainer Run sits in that gap. The container image is already an artefact AI coding tools can produce. Portainer Run is the "now run it, inside your environment" layer — with the platform team's guardrails baked in via Portainer's existing RBAC and policy controls. The platform team's role shifts from processing every deployment ticket to setting the rules once.
+ 
+The embedded AI fits this persona specifically. When a business developer asks "why isn't my app connecting to the database," they don't need two months of metrics and autoscaling policy work. They need the right answer, fast, without filing a ticket. That's what the AI triage layer is for.
+ 
+Portainer is the secure, policy-enforced gateway between the people doing the work and the infrastructure they're working on. Portainer Run is the interface on top of that gateway, designed for the people who have no idea what a Pod is and shouldn't need to.
+ 
+It is intentionally narrow in scope. It does not replace Portainer. It does not try to serve the engineer who has full cluster access and wants a powerful agent with deep API reach — that's a different product for a different persona. Portainer Run surfaces one workflow (deploy, run, and operate a containerised workload) in the simplest interface we could build for it.
+ 
 Optimised for desktop and laptop screen sizes.
 
 ## What it does
@@ -187,8 +195,6 @@ At scale (dozens of clusters, hundreds of workloads) the naive approach of firin
 
 The server exposes a `/env-status/:envId` endpoint that accepts the user's token and fans out to Kubernetes in parallel for a single environment — one call each for pods, services, ingresses, and nodes — then aggregates the results into a per-deployment status map (status reason and access URL) and caches the response for 20 seconds keyed by a hash of the token and environment ID. The browser fires one request per environment rather than one per deployment, with a client-side concurrency limit of 5 simultaneous environment fetches. A resourceVersion fingerprint per environment means that if nothing has changed since the last render, the cached result is applied to the DOM immediately with no network call.
 
-At 50 environments and 200 deployments, the old approach would fire roughly 600 concurrent requests per render. The current approach fires at most 50, most of which return from cache in milliseconds.
-
 ## Architecture
 
 ```
@@ -350,7 +356,7 @@ The Assistant is scoped to container operations only and will decline unrelated 
 
 ## Notes on scope
 
-Portainer Run only surfaces deployments it created. It tags every Deployment, Service, PVC, and Ingress with `managed-by=portainer-run` and filters all views to that label. Workloads deployed through Portainer's own UI or `kubectl` will not appear. Secrets are an exception — the Secrets page and the secret picker in the Deploy form show all secrets in the namespace regardless of origin, because referencing externally-managed secrets is a normal operational requirement.
+BY design, Portainer Run only surfaces deployments it created. It tags every Deployment, Service, PVC, and Ingress with `managed-by=portainer-run` and filters all views to that label. Workloads deployed through Portainer's own UI or `kubectl` will not appear. Secrets are an exception — the Secrets page and the secret picker in the Deploy form show all secrets in the namespace regardless of origin, because referencing externally-managed secrets is a normal operational requirement.
 
 Persistent storage volumes cannot be modified after deployment. PVCs are created at deploy time and are not touched by the Edit tab.
 
