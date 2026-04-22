@@ -495,7 +495,7 @@ nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25
               </div>
               <div class="field">
                 <label>Namespace</label>
-                <select id="dNamespace"><option value="">Select target first...</option></select>
+                <select id="dNamespace" onchange="loadNsQuota()"><option value="">Select target first...</option></select>
                 <div class="hint">Pick an existing namespace.</div>
               </div>
             </div>
@@ -512,6 +512,7 @@ nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25
             </div>
             <div style="justify-content:flex-end;">
                 <div id="nsLoadStatus" style="font-family:var(--mono);font-size:12px;color:var(--text-dim);margin-top:4px;"></div>
+                <div id="dNsQuota" style="font-family:var(--mono);font-size:12px;color:var(--text-dim);margin-top:2px;"></div>
             </div>
           </div>
         </div>
@@ -4098,6 +4099,149 @@ async function fetchNonSystemNamespaces(envId) {
   return { names, source: 'kubernetes' };
 }
 
+// ── NAMESPACE RESOURCE QUOTA ─────────────────────────────────────────────────
+// Kubernetes CPU quantity → cores (float). "500m" → 0.5, "1.5" → 1.5, "2" → 2.
+function parseK8sCpu(s) {
+  if (s == null || s === '') return 0;
+  s = String(s).trim();
+  if (s.endsWith('m')) return parseFloat(s) / 1000;
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// Kubernetes memory quantity → bytes. Handles "1Gi", "512Mi", "1000M", plain bytes.
+function parseK8sMemory(s) {
+  if (s == null || s === '') return 0;
+  s = String(s).trim();
+  const m = s.match(/^([\d.]+)\s*([KMGTP]i?)?$/);
+  if (!m) { const n = parseFloat(s); return Number.isFinite(n) ? n : 0; }
+  const n = parseFloat(m[1]);
+  const mul = {
+    '':   1,
+    'K':  1e3,  'M': 1e6,  'G': 1e9,  'T': 1e12, 'P': 1e15,
+    'Ki': 1024, 'Mi': 1024**2, 'Gi': 1024**3, 'Ti': 1024**4, 'Pi': 1024**5,
+  }[m[2] || ''];
+  return n * (mul || 1);
+}
+
+function fmtCpuCores(c) {
+  if (c < 1) return Math.round(c * 1000) + 'm';
+  return (Math.round(c * 100) / 100).toString();
+}
+function fmtBytes(b) {
+  if (b >= 1024**3) return (b / 1024**3).toFixed(1).replace(/\.0$/, '') + 'Gi';
+  if (b >= 1024**2) return Math.round(b / 1024**2) + 'Mi';
+  if (b >= 1024)    return Math.round(b / 1024) + 'Ki';
+  return b + 'B';
+}
+
+// Fetch ResourceQuotas for the currently selected namespace and render a
+// single-line usage summary under the dropdown. Silent on permission errors
+// or empty state — this is a decorative hint, not a blocking control.
+async function loadNsQuota() {
+  const el = document.getElementById('dNsQuota');
+  if (!el) return;
+  const envId = document.getElementById('dEnvId').value;
+  const ns    = document.getElementById('dNamespace').value;
+  if (!envId || !ns) { el.innerHTML = ''; return; }
+
+  el.innerHTML = '<span style="color:var(--text-dim);">Loading quota…</span>';
+  try {
+    const r = await kube(envId, `/api/v1/namespaces/${ns}/resourcequotas`);
+    if (!r.ok) { el.innerHTML = ''; return; }
+    const items = (await r.json()).items || [];
+    if (!items.length) {
+      el.innerHTML = '<span style="color:var(--text-dim);">No quota configured for this namespace.</span>';
+      return;
+    }
+
+    // When a namespace has multiple ResourceQuotas, admission requires the
+    // request to satisfy every one of them. Show the *binding* view: min(hard)
+    // and max(used) across RQs is the conservative estimate.
+    let hasCpu = false, hasMem = false, hasStore = false, hasPods = false, hasPvc = false;
+    let cpuUsed   = 0, cpuHard   = Infinity;
+    let memUsed   = 0, memHard   = Infinity;
+    let storeUsed = 0, storeHard = Infinity;
+    let podsUsed  = 0, podsHard  = Infinity;
+    let pvcUsed   = 0, pvcHard   = Infinity;
+
+    for (const rq of items) {
+      const used = rq.status?.used || {};
+      const hard = rq.status?.hard || {};
+      const cpuH = hard['requests.cpu']    ?? hard.cpu;
+      const cpuU = used['requests.cpu']    ?? used.cpu;
+      if (cpuH != null) {
+        hasCpu = true;
+        cpuHard = Math.min(cpuHard, parseK8sCpu(cpuH));
+        cpuUsed = Math.max(cpuUsed, parseK8sCpu(cpuU));
+      }
+      const memH = hard['requests.memory'] ?? hard.memory;
+      const memU = used['requests.memory'] ?? used.memory;
+      if (memH != null) {
+        hasMem = true;
+        memHard = Math.min(memHard, parseK8sMemory(memH));
+        memUsed = Math.max(memUsed, parseK8sMemory(memU));
+      }
+      // Storage can be quota'd two ways: namespace-wide ("requests.storage")
+      // or per-storage-class ("<class>.storageclass.storage.k8s.io/requests.storage").
+      // Portainer's namespace UI typically emits the per-class form. Sum all
+      // per-class bytes into a single Storage figure for display.
+      const storageKeys = Object.keys(hard).filter(k =>
+        k === 'requests.storage' || k.endsWith('.storageclass.storage.k8s.io/requests.storage'));
+      if (storageKeys.length) {
+        hasStore = true;
+        let rqHard = 0, rqUsed = 0;
+        for (const k of storageKeys) {
+          rqHard += parseK8sMemory(hard[k]);
+          rqUsed += parseK8sMemory(used[k]);
+        }
+        storeHard = Math.min(storeHard, rqHard);
+        storeUsed = Math.max(storeUsed, rqUsed);
+      }
+      const podH = hard.pods;
+      const podU = used.pods;
+      if (podH != null) {
+        hasPods = true;
+        podsHard = Math.min(podsHard, parseInt(podH) || 0);
+        podsUsed = Math.max(podsUsed, parseInt(podU) || 0);
+      }
+      // PVC count follows the same namespace-wide / per-class split as storage.
+      const pvcKeys = Object.keys(hard).filter(k =>
+        k === 'persistentvolumeclaims' || k.endsWith('.storageclass.storage.k8s.io/persistentvolumeclaims'));
+      if (pvcKeys.length) {
+        hasPvc = true;
+        let rqHard = 0, rqUsed = 0;
+        for (const k of pvcKeys) {
+          rqHard += parseInt(hard[k]) || 0;
+          rqUsed += parseInt(used[k]) || 0;
+        }
+        pvcHard = Math.min(pvcHard, rqHard);
+        pvcUsed = Math.max(pvcUsed, rqUsed);
+      }
+    }
+
+    const parts = [];
+    if (hasCpu)   parts.push(`CPU ${fmtCpuCores(cpuUsed)} / ${fmtCpuCores(cpuHard)}`);
+    if (hasMem)   parts.push(`Mem ${fmtBytes(memUsed)} / ${fmtBytes(memHard)}`);
+    if (hasStore) parts.push(`Storage ${fmtBytes(storeUsed)} / ${fmtBytes(storeHard)}`);
+    if (hasPods)  parts.push(`Pods ${podsUsed} / ${podsHard}`);
+    if (hasPvc)   parts.push(`PVCs ${pvcUsed} / ${pvcHard}`);
+    if (!parts.length) { el.innerHTML = ''; return; }
+
+    // Amber when any dimension is past 80% of its binding limit.
+    const over = (u, h) => h > 0 && u / h > 0.8;
+    const near = (hasCpu   && over(cpuUsed,   cpuHard))
+              || (hasMem   && over(memUsed,   memHard))
+              || (hasStore && over(storeUsed, storeHard))
+              || (hasPods  && over(podsUsed,  podsHard))
+              || (hasPvc   && over(pvcUsed,   pvcHard));
+    const color = near ? 'var(--amber)' : 'var(--text-dim)';
+    el.innerHTML = `<span style="color:${color};">Quota: ${parts.join(' · ')}</span>`;
+  } catch(_) {
+    el.innerHTML = '';  // silent failure — this is decorative
+  }
+}
+
 async function onEnvChange() {
   const envId = document.getElementById('dEnvId').value;
   const nsSel = document.getElementById('dNamespace');
@@ -4105,6 +4249,7 @@ async function onEnvChange() {
   if (!envId) {
     nsSel.innerHTML = '<option value="">Select target first...</option>';
     showManualNsInput(false);
+    const q = document.getElementById('dNsQuota'); if (q) q.innerHTML = '';
     return;
   }
   // Remember the current pick so silent refreshes don't wipe the user's
@@ -4153,6 +4298,7 @@ async function onEnvChange() {
     status.textContent = accessible.length + ' accessible namespace(s)';
     status.style.color = 'var(--green)';
     showManualNsInput(false);
+    loadNsQuota();
     // Refresh storage type dropdowns for any open volume sections
     containers.forEach(ct => {
       const wrap = document.getElementById('vol-enabled-' + ct.id);
