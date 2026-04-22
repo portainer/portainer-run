@@ -48,6 +48,11 @@ const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || '';
 const OPENAI_KEY    = process.env.OPENAI_API_KEY    || '';
 const AI_PROVIDER   = process.env.AI_PROVIDER       || (ANTHROPIC_KEY ? 'anthropic' : OPENAI_KEY ? 'openai' : '');
 const OPENAI_MODEL  = process.env.OPENAI_MODEL      || 'gpt-4o';
+// OPENAI_BASE_URL lets users point at any OpenAI-compatible endpoint:
+// Ollama (http://host.docker.internal:11434/v1), vLLM, OpenRouter,
+// LM Studio, Azure OpenAI, etc. Defaults to OpenAI Cloud.
+const OPENAI_BASE_URL = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+const OPENAI_ORIGIN   = new url.URL(OPENAI_BASE_URL);
 const PORT          = parseInt(process.env.PORT      || '443');
 const HTTP_PORT     = parseInt(process.env.HTTP_PORT || '80');
 const SSL_CERT_PATH = process.env.SSL_CERT     || '';
@@ -609,8 +614,12 @@ function proxyToOpenAI(req, res, body) {
     'Content-Length': outBody.length,
   };
 
-  const upstream = https.request(
-    { hostname: 'api.openai.com', port: 443, path: '/v1/chat/completions', method: 'POST', headers },
+  const oaiIsHttps = OPENAI_ORIGIN.protocol === 'https:';
+  const oaiPort    = OPENAI_ORIGIN.port ? parseInt(OPENAI_ORIGIN.port) : (oaiIsHttps ? 443 : 80);
+  const oaiPath    = OPENAI_ORIGIN.pathname.replace(/\/$/, '') + '/chat/completions';
+  const oaiTransport = oaiIsHttps ? https : http;
+  const upstream = oaiTransport.request(
+    { hostname: OPENAI_ORIGIN.hostname, port: oaiPort, path: oaiPath, method: 'POST', headers },
     upRes => {
       if (!openaiPayload.stream) {
         // Non-streaming: translate OpenAI response to Anthropic format
@@ -801,7 +810,10 @@ httpsServer.listen(PORT, () => {
   console.log('\n✅  Portainer Run started');
   console.log(`    UI:        https://localhost${PORT !== 443 ? ':' + PORT : ''}`);
   console.log(`    Portainer: ${PORTAINER_URL}`);
-  console.log(`    AI triage: ${AI_PROVIDER ? AI_PROVIDER + ' ✓' : '✗ not set (set ANTHROPIC_API_KEY or OPENAI_API_KEY)'}`);
+  let aiLine = '✗ not set (set ANTHROPIC_API_KEY or OPENAI_API_KEY)';
+  if (AI_PROVIDER === 'anthropic') aiLine = 'anthropic ✓';
+  if (AI_PROVIDER === 'openai')    aiLine = `openai ✓ (${OPENAI_MODEL} @ ${OPENAI_BASE_URL})`;
+  console.log(`    AI triage: ${aiLine}`);
   console.log(`    TLS:       ${SSL_CERT_PATH ? 'provided certs' : 'self-signed (portainer-run.crt)'}`);
   console.log(`    Cache:     ${CACHE_FILE}`);
   console.log(`    Templates: ${TEMPLATE_URL}`);
