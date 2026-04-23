@@ -120,6 +120,12 @@ export function visibleEnvironments(s) {
   return s.environments.filter((e) => !s.disabledEnvs?.[String(e.Id)])
 }
 
+/** Deployments in visible environments only (mirrors old app: workloads respect disabled / hidden envs). */
+export function visibleDeployments(s) {
+  const vis = new Set(visibleEnvironments(s).map((e) => String(e.Id)))
+  return s.cache.deployments.filter((d) => vis.has(String(d._envId)))
+}
+
 export function isEnvDisabled(s, envId) {
   return Boolean(s.disabledEnvs?.[String(envId)])
 }

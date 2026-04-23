@@ -1,5 +1,5 @@
 import { apiFetch, portainerUrlHeaders } from '../lib/api.js'
-import { useAppStore } from '../store/useAppStore.js'
+import { useAppStore, visibleDeployments } from '../store/useAppStore.js'
 import { loadServerConfig } from './config.js'
 import { loadDisabledEnvs } from './disabledEnvs.js'
 import { cancelRefreshTimer, refreshCache } from './refreshDeployments.js'
@@ -53,8 +53,14 @@ export async function connectWithToken(token) {
       return false
     }
     const eps = await r.json()
-    const kubeEps = eps.filter((e) => [4, 5, 6, 7].includes(e.Type))
-    st().setEnvironments(kubeEps.length ? kubeEps : eps)
+    /**
+     * Portainer `EndpointType` (see portainer `api/portainer.go`): 1=Docker, 2=Agent-on-Docker,
+     * 3=Azure, 4=Edge-agent-on-Docker, 5=Kubernetes (local), 6=agent-on-Kubernetes, 7=Edge-on-Kubernetes.
+     * This app is Kubernetes-only — use 5–7 only (exclude 4 = Edge Docker).
+     */
+    const K8S_TYPES = [5, 6, 7]
+    const kubeEps = (Array.isArray(eps) ? eps : []).filter((e) => K8S_TYPES.includes(e.Type))
+    st().setEnvironments(kubeEps)
 
     let isAdmin = false
     try {
@@ -107,15 +113,24 @@ export async function connectWithToken(token) {
       // ignore
     }
 
+    const nK8s = st().environments.length
+    const nOther = (Array.isArray(eps) ? eps.length : 0) - nK8s
+    const otherHint =
+      nOther > 0
+        ? ` — ${nOther} non-Kubernetes endpoint(s) in Portainer are not listed (this app is Kubernetes only).`
+        : ''
     st().pushToast(
-      `Connected — ${st().environments.length} environment(s)` + (isAdmin ? ' (admin)' : ''),
+      `Connected — ${nK8s} Kubernetes environment(s)${otherHint}` + (isAdmin ? ' (admin)' : ''),
       'ok',
     )
     st().setConnected(true)
     st().closeDetail()
 
     await loadDisabledEnvs(tok, st().environments)
-    st().setCache((c) => ({ ...c, fetching: false }))
+    st().setCache((c) => {
+      const pruned = visibleDeployments(useAppStore.getState())
+      return { ...c, fetching: false, deployments: pruned }
+    })
     await refreshCache(false)
     return true
   } catch (e) {

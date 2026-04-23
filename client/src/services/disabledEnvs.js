@@ -16,7 +16,16 @@ export async function loadDisabledEnvs(token, environments) {
       if (!r.ok) continue
       const cm = await r.json()
       const raw = cm.data?.disabledEnvs
-      st().setDisabledEnvs(raw ? JSON.parse(raw) : {})
+      if (!raw) {
+        st().setDisabledEnvs({})
+        return
+      }
+      const parsed = JSON.parse(raw)
+      const normalized = {}
+      for (const [k, v] of Object.entries(parsed && typeof parsed === 'object' ? parsed : {})) {
+        normalized[String(k)] = v
+      }
+      st().setDisabledEnvs(normalized)
       return
     } catch {
       continue

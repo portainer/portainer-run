@@ -1,5 +1,6 @@
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAppStore } from '../store/useAppStore.js'
+import { useAppStore, visibleDeployments } from '../store/useAppStore.js'
 import { ROUTES } from '../lib/routes.js'
 import { useEnvStatusOnDeployments, getExtraForApp } from '../hooks/useEnvStatus.js'
 import { age } from '../lib/utils.js'
@@ -21,12 +22,17 @@ function rowClasses(d) {
 export function ServicesPage() {
   const navigate = useNavigate()
   const token = useAppStore((s) => s.token)
+  const environments = useAppStore((s) => s.environments)
+  const disabledEnvs = useAppStore((s) => s.disabledEnvs)
   const cache = useAppStore((s) => s.cache)
   const envStatusClientCache = useAppStore((s) => s.envStatusClientCache)
   const openDetail = useAppStore((s) => s.openDetail)
   const setDeleteTarget = useAppStore((s) => s.setDeleteTarget)
 
-  const deps = cache.deployments
+  const deps = useMemo(
+    () => visibleDeployments(useAppStore.getState()),
+    [environments, disabledEnvs, cache.deployments],
+  )
   useEnvStatusOnDeployments(deps, token)
 
   return (
