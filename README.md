@@ -219,10 +219,10 @@ Administrators can disable environments from the Cluster Readiness page. Disable
 
 ## Files
 
-`server.js` — Node.js proxy, static file server, env-status aggregator, and session cache.
-`portainer-run.html` — entire frontend (single file).
-`templates.json` — default application catalogue.
-`Dockerfile` — builds from `node:20-alpine` with `openssl` for certificate generation.
+`server/` — Node.js (or Bun) HTTPS proxy, static UI, env-status aggregator, and session cache. Entry: `server/server.js`.
+`client/` — Vite + React application (current UI).
+`old-implementation/` — archived monolith: `portainer-run.html` (original single-file frontend) and `templates.json` (sample application catalogue). The server can still fall back to the HTML if `client/dist` is not present.
+`Dockerfile` — multi-stage build: Bun builds the client, `node:20-alpine` runs the API; includes `openssl` for certificate generation.
 `.env.example` — environment variable reference.
 
 ## Deployment

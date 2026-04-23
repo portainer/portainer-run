@@ -1,15 +1,20 @@
+# Build the Vite client
+FROM oven/bun:1 AS build-ui
+WORKDIR /build
+COPY client/package.json client/bun.lock ./
+RUN bun install --frozen-lockfile
+COPY client/ ./
+RUN bun run build
+
 FROM node:20-alpine
-
-# Install openssl for self-signed cert generation
 RUN apk add --no-cache openssl
-
 WORKDIR /app
+COPY --from=build-ui /build/dist ./client/dist
+COPY server/ ./server/
 
-COPY server.js .
-COPY portainer-run.html .
-
-# Expose HTTPS and HTTP redirect ports
 EXPOSE 443
 EXPOSE 80
 
-CMD ["node", "server.js"]
+ENV NODE_ENV=production
+
+CMD ["node", "server/server.js"]
