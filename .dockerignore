@@ -1,0 +1,7 @@
+# Host deps conflict with `bun install` inside the image (COPY client/ ./).
+client/node_modules
+server/node_modules
+node_modules
+.git
+.env
+data

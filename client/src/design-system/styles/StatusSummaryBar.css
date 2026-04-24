@@ -1,0 +1,439 @@
+/* ============================================================
+   StatusSummaryBar – shared styles for Vue and React components
+   ============================================================ */
+
+.status-summary-card {
+  display: flex;
+  align-items: stretch;
+  background: var(--content-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--list-shadow);
+  overflow: hidden;
+  position: relative;
+}
+
+.summary-segment {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 24px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+  min-width: 100px;
+}
+
+.summary-segment:hover {
+  background: var(--card-hover);
+}
+
+.summary-segment.active {
+  background: var(--accent-hover);
+}
+
+.summary-segment.active .segment-bar {
+  opacity: 1;
+}
+
+.summary-segment.total {
+  padding-left: 28px;
+  padding-right: 28px;
+}
+
+.summary-segment.total .segment-content {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.summary-segment.total .segment-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.25px;
+  line-height: 1;
+}
+
+.summary-segment.total .segment-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.35px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.summary-segment.total.active .segment-bar {
+  background: var(--accent);
+}
+
+.segment-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.summary-divider {
+  width: 1px;
+  background: var(--border);
+  align-self: stretch;
+  margin: 12px 0;
+}
+
+.segment-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.segment-icon svg,
+.segment-icon img {
+  display: block;
+  opacity: 0.85;
+}
+
+.segment-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.segment-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+}
+
+.segment-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.status-dot.up {
+  background: var(--status-success);
+  box-shadow: var(--shadow-glow-success);
+}
+
+.status-dot.down {
+  background: var(--status-danger);
+  box-shadow: var(--shadow-glow-danger);
+}
+
+.status-dot.outdated {
+  background: var(--status-warning);
+  box-shadow: var(--shadow-glow-warning);
+}
+
+.summary-segment.status-up .segment-value {
+  color: var(--badge-green-text);
+}
+
+.summary-segment.status-up.active .segment-bar {
+  background: var(--status-success);
+}
+
+.summary-segment.status-down .segment-value {
+  color: var(--badge-red-text);
+}
+
+.summary-segment.status-down.active .segment-bar {
+  background: var(--status-danger);
+}
+
+.summary-segment.status-outdated .segment-value {
+  color: var(--badge-amber-text);
+}
+
+.summary-segment.status-outdated.active .segment-bar {
+  background: var(--status-warning);
+}
+
+.summary-segment.platform-k8s .segment-value {
+  color: var(--platform-k8s);
+}
+
+.summary-segment.platform-k8s.active .segment-bar {
+  background: var(--platform-k8s);
+}
+
+.summary-segment.platform-docker .segment-value {
+  color: var(--platform-docker);
+}
+
+.summary-segment.platform-docker.active .segment-bar {
+  background: var(--platform-docker);
+}
+
+.summary-segment.platform-azure .segment-value {
+  color: var(--platform-azure);
+}
+
+.summary-segment.platform-azure.active .segment-bar {
+  background: var(--platform-azure);
+}
+
+.summary-segment.status-error .segment-value {
+  color: var(--badge-red-text);
+}
+
+.summary-segment.status-error.active .segment-bar {
+  background: var(--status-danger);
+}
+
+.summary-segment.status-syncing .segment-value {
+  color: var(--badge-amber-text);
+}
+
+.summary-segment.status-syncing.active .segment-bar {
+  background: var(--status-warning);
+}
+
+.summary-segment.status-healthy .segment-value {
+  color: var(--badge-green-text);
+}
+
+.summary-segment.status-healthy.active .segment-bar {
+  background: var(--status-success);
+}
+
+.summary-segment.status-paused .segment-value {
+  color: var(--badge-yellow-text);
+}
+
+.summary-segment.status-paused.active .segment-bar {
+  background: var(--status-warning);
+}
+
+.summary-segment.status-synced .segment-value {
+  color: var(--badge-green-text);
+}
+
+.summary-segment.status-synced.active .segment-bar {
+  background: var(--status-success);
+}
+
+.summary-segment.status-skipped .segment-value {
+  color: var(--muted);
+}
+
+.summary-segment.status-skipped.active .segment-bar {
+  background: var(--muted);
+}
+
+.status-dot.error {
+  background: var(--status-danger);
+  box-shadow: var(--shadow-glow-danger);
+}
+
+.status-dot.syncing {
+  background: var(--status-warning);
+  box-shadow: var(--shadow-glow-warning);
+  animation: ssb-status-pulse 2s ease-in-out infinite;
+}
+
+.status-dot.healthy {
+  background: var(--status-success);
+  box-shadow: var(--shadow-glow-success);
+}
+
+.status-dot.paused {
+  background: var(--status-warning);
+  box-shadow: var(--shadow-glow-warning);
+}
+
+.status-dot.synced {
+  background: var(--status-success);
+  box-shadow: var(--shadow-glow-success);
+}
+
+.status-dot.skipped {
+  background: var(--muted);
+  opacity: 0.55;
+}
+
+@keyframes ssb-status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* Optional trailing region (e.g. spacer + search) inside the card */
+.ssb-trailing {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  min-width: 0;
+}
+
+.summary-spacer {
+  flex: 1;
+  min-width: 0;
+}
+
+.summary-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-left: 1px solid var(--border);
+  min-width: 200px;
+  max-width: 280px;
+}
+
+.summary-search-icon {
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.summary-search-icon svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.summary-search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text);
+  outline: none;
+  min-width: 0;
+}
+
+.summary-search-input::placeholder {
+  color: var(--muted);
+}
+
+.summary-search-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 4px;
+  background: var(--badge-bg);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.summary-search-clear:hover {
+  background: var(--toggle-hover);
+  color: var(--text);
+}
+
+.summary-search-clear svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* ── Active filter indicator ── */
+
+.ssb-active-filter-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  padding: 8px 16px;
+  background: var(--accent-hover);
+  border-left: 1px solid var(--border);
+}
+
+.ssb-filter-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ssb-filter-label strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.ssb-clear-filter-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 4px;
+  background: var(--badge-bg);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ssb-clear-filter-btn:hover {
+  background: var(--toggle-hover);
+  color: var(--text);
+}
+
+.ssb-clear-filter-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+@media (max-width: 900px) {
+  .status-summary-card {
+    flex-wrap: wrap;
+  }
+
+  .summary-segment {
+    padding: 12px 16px;
+    min-width: 80px;
+  }
+
+  .summary-segment.total {
+    width: 100%;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .summary-divider {
+    display: none;
+  }
+
+  .ssb-trailing {
+    width: 100%;
+    flex-basis: 100%;
+  }
+
+  .ssb-trailing .summary-spacer {
+    display: none;
+  }
+
+  .summary-search {
+    width: 100%;
+    max-width: none;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    padding: 12px 16px;
+  }
+}
