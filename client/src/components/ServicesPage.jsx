@@ -2,13 +2,10 @@ import { useCallback, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SortableList from '../design-system/react/SortableList.jsx'
 import StatusSummaryBar from '../design-system/react/StatusSummaryBar.jsx'
-import ActionBar from '../design-system/react/ActionBar.jsx'
-import { icons } from '../design-system/icons.js'
 import { useAppStore, visibleDeployments } from '../store/useAppStore.js'
 import { ROUTES, serviceDetailPath } from '../lib/routes.js'
 import { useEnvStatusOnDeployments, getExtraForApp } from '../hooks/useEnvStatus.js'
 import { age } from '../lib/utils.js'
-import { patchDeploymentReplicas } from '../lib/patchDeploymentReplicas.js'
 import { manualRefresh } from '../services/refreshDeployments.js'
 
 const SERVICE_LIST_SORT = [
@@ -94,8 +91,6 @@ function ServiceRowContent({
   envStatusClientCache,
   navigate,
   setDeleteTarget,
-  rowSelected,
-  onToggleRow,
   role = undefined,
   tabIndex = undefined,
   onClick = undefined,
@@ -105,10 +100,11 @@ function ServiceRowContent({
   const ns = d.metadata.namespace
   const envId = d._envId
   const envName = d._envName || '—'
-  const image = d.spec?.template?.spec?.containers?.[0]?.image || '—'
+  const images = (d.spec?.template?.spec?.containers || [])
+    .map((c) => c.image)
+    .filter(Boolean)
   const created = d.metadata?.creationTimestamp
   const { border, dot, label } = rowClasses(d)
-  const cCount = d.spec?.template?.spec?.containers?.length || 1
   const extra = getExtraForApp(envStatusClientCache, envId, name)
 
   return (
@@ -122,39 +118,24 @@ function ServiceRowContent({
       onKeyDown={onKeyDown}
     >
       <div className="svc-name">
-        <label className="svc-cb-label" onClick={(e) => e.stopPropagation()}>
-          <input
-            type="checkbox"
-            checked={rowSelected}
-            onChange={onToggleRow}
-            onClick={(e) => e.stopPropagation()}
-            aria-label={`Select ${name}`}
-          />
-        </label>
         <div className="svc-name-body">
         {name}
-        {cCount > 1 ? (
-          <span
-            style={{
-              fontFamily: 'var(--mono)',
-              fontSize: 10,
-              color: 'var(--accent)',
-              marginLeft: 6,
-              background: 'var(--accent-glow)',
-              padding: '1px 6px',
-              borderRadius: 8,
-            }}
-          >
-            {cCount} containers
-          </span>
-        ) : null}
         </div>
       </div>
-      <div className="svc-image" title={image}>
-        {image}
+      <div className="svc-image" title={images.join('\n') || '—'}>
+        {images.length ? (
+          images.map((img, i) => (
+            <div key={`${name}-img-${i}`} className="svc-image-line">{img}</div>
+          ))
+        ) : (
+          '—'
+        )}
+      </div>
+      <div className="svc-env" title={envName}>
+        <span className="ns-badge">{envName}</span>
       </div>
       <div className="svc-ns">
-        <span className="ns-badge">{envName}</span>
+        <span className="ns-badge">{ns}</span>
       </div>
       <div className="status-cell">
         <span className="status-light">
@@ -216,8 +197,6 @@ export function ServicesPage() {
 
   const [listSort, setListSort] = useState('name')
   const [listSubFilter, setListSubFilter] = useState(/** @type {string | null} */ (null))
-  const [selectedRowIds, setSelectedRowIds] = useState(/** @type {string[]} */ ([]))
-  const [scalePending, setScalePending] = useState(false)
 
   const deps = useMemo(
     () => visibleDeployments(useAppStore.getState()),
@@ -293,75 +272,6 @@ export function ServicesPage() {
     else if (segmentId === 'u') setListSubFilter('workloads_down')
   }
 
-  const selectedDeployments = useMemo(
-    () =>
-      selectedRowIds
-        .map((id) => deps.find((d) => serviceRowId(d) === id))
-        .filter(Boolean),
-    [selectedRowIds, deps],
-  )
-
-  const canStart = selectedDeployments.some((d) => (d.spec?.replicas || 0) === 0)
-  const canStop = selectedDeployments.some((d) => (d.spec?.replicas || 0) > 0)
-
-  const runStart = useCallback(async () => {
-    if (!token || scalePending) return
-    const targets = selectedDeployments.filter((d) => (d.spec?.replicas || 0) === 0)
-    if (!targets.length) {
-      pushToast('No selected services are at zero replicas. Stop a service first, or pick different rows.', 'err')
-      return
-    }
-    setScalePending(true)
-    try {
-      await Promise.all(
-        targets.map((d) =>
-          patchDeploymentReplicas(token, String(d._envId), d.metadata.namespace, d.metadata.name, 1),
-        ),
-      )
-      pushToast(
-        targets.length === 1
-          ? `“${targets[0].metadata.name}” is starting (1 replica).`
-          : `${targets.length} services are starting (1 replica each).`,
-        'ok',
-      )
-      setSelectedRowIds([])
-      void manualRefresh()
-    } catch (e) {
-      pushToast('Start failed: ' + (e?.message || String(e)), 'err')
-    } finally {
-      setScalePending(false)
-    }
-  }, [token, scalePending, selectedDeployments, pushToast])
-
-  const runStop = useCallback(async () => {
-    if (!token || scalePending) return
-    const targets = selectedDeployments.filter((d) => (d.spec?.replicas || 0) > 0)
-    if (!targets.length) {
-      pushToast('No selected services are running (all are already at zero replicas).', 'err')
-      return
-    }
-    setScalePending(true)
-    try {
-      await Promise.all(
-        targets.map((d) =>
-          patchDeploymentReplicas(token, String(d._envId), d.metadata.namespace, d.metadata.name, 0),
-        ),
-      )
-      pushToast(
-        targets.length === 1
-          ? `“${targets[0].metadata.name}” is stopped (0 replicas).`
-          : `${targets.length} services are stopped (0 replicas).`,
-        'ok',
-      )
-      setSelectedRowIds([])
-      void manualRefresh()
-    } catch (e) {
-      pushToast('Stop failed: ' + (e?.message || String(e)), 'err')
-    } finally {
-      setScalePending(false)
-    }
-  }, [token, scalePending, selectedDeployments, pushToast])
-
   const initialLoading = !cache.deployments.length && cache.fetching && !cache.everLoaded
   const showEmpty = !initialLoading && !deps.length
 
@@ -436,74 +346,6 @@ export function ServicesPage() {
         />
       </div>
 
-      {!initialLoading && deps.length > 0 ? (
-        <div className="services-page-scale-bar">
-          <ActionBar
-            bulkActionPending={scalePending}
-            bulkActionLabel="Scaling…"
-            summary={
-              <div
-                className="service-detail-header-actions"
-                style={{ flexWrap: 'wrap', rowGap: 6, columnGap: 8, alignItems: 'center' }}
-              >
-                {selectedRowIds.length > 0 ? (
-                  <span
-                    className="services-page-scale-hint"
-                    style={{ fontSize: 12, color: 'var(--text-dim)' }}
-                  >
-                    {selectedRowIds.length} selected
-                  </span>
-                ) : (
-                  <span
-                    className="services-page-scale-hint"
-                    style={{ fontSize: 12, color: 'var(--text-dim)' }}
-                  >
-                    Select services, then start or stop.
-                  </span>
-                )}
-                <button
-                  type="button"
-                  className="action-bar-btn"
-                  title="Set replicas to 1 for each selected service that is scaled to zero"
-                  disabled={!token || scalePending || !canStart}
-                  onClick={() => void runStart()}
-                >
-                  <span
-                    className="action-bar-btn-icon"
-                    dangerouslySetInnerHTML={{ __html: icons.play }}
-                  />
-                  <span className="action-bar-btn-label">Start</span>
-                </button>
-                <button
-                  type="button"
-                  className="action-bar-btn"
-                  title="Scale to zero replicas (workloads off)"
-                  disabled={!token || scalePending || !canStop}
-                  onClick={() => void runStop()}
-                >
-                  <span
-                    className="action-bar-btn-icon"
-                    dangerouslySetInnerHTML={{ __html: icons.pause }}
-                  />
-                  <span className="action-bar-btn-label">Stop</span>
-                </button>
-              </div>
-            }
-            right={
-              selectedRowIds.length > 0 && !scalePending ? (
-                <button
-                  type="button"
-                  className="action-bar-btn"
-                  onClick={() => setSelectedRowIds([])}
-                >
-                  <span className="action-bar-btn-label">Clear selection</span>
-                </button>
-              ) : null
-            }
-          />
-        </div>
-      ) : null}
-
       <div id="servicesContainer">
         {showEmpty ? (
           <div className="empty">
@@ -527,12 +369,10 @@ export function ServicesPage() {
               <div className="list-group">
                 <div className="list-column-headers">
                   <div className="svc-l-header">
-                    <span className="svc-l-header-name">
-                      <span className="svc-cb-spacer" aria-hidden />
-                      <span>Name</span>
-                    </span>
+                    <span className="svc-l-header-name"><span>Name</span></span>
                     <span>Image</span>
-                    <span>Env</span>
+                    <span>Environment</span>
+                    <span>Namespace</span>
                     <span>Status</span>
                     <span>Exposure</span>
                     <span>Age</span>
@@ -543,7 +383,6 @@ export function ServicesPage() {
                   {[0, 1, 2, 3, 4].map((i) => (
                     <div key={i} className="svc-l-row svc-skeleton-row">
                       <div className="svc-skeleton-name-cell">
-                        <span className="svc-cb-spacer" aria-hidden />
                         <div className="svc-skeleton-pill" />
                       </div>
                       <div className="svc-skeleton-line" style={{ maxWidth: '100%' }} />
@@ -592,12 +431,10 @@ export function ServicesPage() {
               }}
               renderColumnHeaders={() => (
                 <div className="svc-l-header">
-                  <span className="svc-l-header-name">
-                    <span className="svc-cb-spacer" aria-hidden />
-                    <span>Name</span>
-                  </span>
+                  <span className="svc-l-header-name"><span>Name</span></span>
                   <span>Image</span>
-                  <span>Env</span>
+                  <span>Environment</span>
+                  <span>Namespace</span>
                   <span>Status</span>
                   <span>Exposure</span>
                   <span>Age</span>
@@ -605,19 +442,12 @@ export function ServicesPage() {
                 </div>
               )}
               renderItem={(item) => {
-                const rowId = serviceRowId(item.d)
                 return (
                 <ServiceRowContent
                   d={item.d}
                   envStatusClientCache={envStatusClientCache}
                   navigate={navigate}
                   setDeleteTarget={setDeleteTarget}
-                  rowSelected={selectedRowIds.includes(rowId)}
-                  onToggleRow={() => {
-                    setSelectedRowIds((prev) =>
-                      prev.includes(rowId) ? prev.filter((x) => x !== rowId) : [...prev, rowId],
-                    )
-                  }}
                   role="button"
                   tabIndex={0}
                   onClick={() =>

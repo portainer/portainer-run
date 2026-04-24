@@ -4,12 +4,20 @@ import ResourceDetailHeader from '../design-system/react/ResourceDetailHeader.js
 import ResourceDetailTabs from '../design-system/react/ResourceDetailTabs.jsx'
 import ActionBar from '../design-system/react/ActionBar.jsx'
 import { icons } from '../design-system/icons.js'
-import { useAppStore } from '../store/useAppStore.js'
+import { useAppStore, visibleEnvironments } from '../store/useAppStore.js'
 import { serviceDetailPath } from '../lib/routes.js'
 import { kubeFetch } from '../lib/api.js'
 import { age } from '../lib/utils.js'
 import { patchDeploymentReplicas } from '../lib/patchDeploymentReplicas.js'
 import { refreshCache } from '../services/refreshDeployments.js'
+import { loadDeployFormFromCluster } from '../lib/deployFormLoadFromCluster.js'
+import {
+  buildK8sContainer,
+  executeDeploy,
+  fetchNamespaceOptions,
+  readVolumeDefForDeploy,
+} from '../lib/deployK8s.js'
+import { withDefaultCnames } from '../lib/deployFormModel.js'
 import ServiceTabPanel from './serviceDetail/ServiceTabPanel.jsx'
 import { fetchExposureDetail } from './serviceDetail/fetchExposureDetail.js'
 import ServiceDetailLogsTab from './serviceDetail/ServiceDetailLogsTab.jsx'
@@ -178,11 +186,21 @@ export function ServiceDetailPage() {
   const navigate = useNavigate()
   const token = useAppStore((s) => s.token)
   const environments = useAppStore((s) => s.environments)
+  const disabledEnvs = useAppStore((s) => s.disabledEnvs)
   const setDeleteTarget = useAppStore((s) => s.setDeleteTarget)
   const pushToast = useAppStore((s) => s.pushToast)
 
   const [d, setD] = useState(/** @type {object | null} */ (null))
   const [err, setErr] = useState('')
+  const [migrateOpen, setMigrateOpen] = useState(false)
+  const [migrateEnvId, setMigrateEnvId] = useState(String(envId || ''))
+  const [migrateNamespace, setMigrateNamespace] = useState('')
+  const [migrateManualNs, setMigrateManualNs] = useState(false)
+  const [migrateManualNsValue, setMigrateManualNsValue] = useState(namespace || '')
+  const [migrateNsList, setMigrateNsList] = useState([])
+  const [migrateNsLoading, setMigrateNsLoading] = useState(false)
+  const [migrateNsStatus, setMigrateNsStatus] = useState({ text: '', tone: 'dim' })
+  const [migratePending, setMigratePending] = useState(false)
   const [refreshPending, setRefreshPending] = useState(false)
   const [restartPending, setRestartPending] = useState(false)
   const [scalePending, setScalePending] = useState(false)
@@ -197,6 +215,10 @@ export function ServiceDetailPage() {
     const e = environments.find((x) => String(x.Id) === id)
     return e?.Name || id
   }, [environments, envId])
+  const visEnvs = useMemo(
+    () => visibleEnvironments({ environments, disabledEnvs }),
+    [environments, disabledEnvs],
+  )
 
   const basePath = useMemo(
     () => serviceDetailPath(envId, namespace, name, 'overview').replace(/\/overview$/, ''),
@@ -289,6 +311,157 @@ export function ServiceDetailPage() {
       setRefreshPending(false)
     }
   }, [load])
+
+  const openMigrateDialog = useCallback(() => {
+    setMigrateEnvId(String(envId || ''))
+    setMigrateNamespace('')
+    setMigrateManualNs(false)
+    setMigrateManualNsValue(namespace || '')
+    setMigrateNsList([])
+    setMigrateNsStatus({ text: '', tone: 'dim' })
+    setMigrateOpen(true)
+  }, [envId, namespace])
+
+  const loadMigrateNamespaces = useCallback(
+    async (targetEnv) => {
+      if (!targetEnv || !token) {
+        setMigrateNsLoading(false)
+        setMigrateNsList([])
+        setMigrateManualNs(false)
+        setMigrateNamespace('')
+        setMigrateNsStatus({ text: '', tone: 'dim' })
+        return
+      }
+      setMigrateNsLoading(true)
+      setMigrateNsStatus({ text: 'Loading…', tone: 'dim' })
+      try {
+        const r = await fetchNamespaceOptions(token, targetEnv)
+        if (r.ok && r.manual) {
+          setMigrateNsList([])
+          setMigrateManualNs(true)
+          setMigrateNamespace('')
+          setMigrateNsStatus({
+            text: r.message || 'Token is namespace-scoped — enter manually.',
+            tone: 'amber',
+          })
+        } else if (r.ok) {
+          const list = r.namespaces || []
+          setMigrateNsList(list)
+          setMigrateManualNs(false)
+          setMigrateNamespace(list[0] || '')
+          setMigrateNsStatus({ text: r.message || `${list.length} namespace(s)`, tone: 'green' })
+        } else {
+          setMigrateNsList([])
+          setMigrateManualNs(true)
+          setMigrateNamespace('')
+          setMigrateNsStatus({ text: r.error || 'Failed to fetch namespaces', tone: 'red' })
+        }
+      } catch (e) {
+        setMigrateNsList([])
+        setMigrateManualNs(true)
+        setMigrateNamespace('')
+        setMigrateNsStatus({ text: e?.message || 'Error loading namespaces', tone: 'red' })
+      } finally {
+        setMigrateNsLoading(false)
+      }
+    },
+    [token],
+  )
+
+  useEffect(() => {
+    if (!migrateOpen) return
+    void loadMigrateNamespaces(migrateEnvId)
+  }, [migrateOpen, migrateEnvId, loadMigrateNamespaces])
+
+  const runMigrate = useCallback(async (mode) => {
+    if (!token || !envId || !namespace || !name) return
+    const targetEnv = String(migrateEnvId || '').trim()
+    const targetNs = String(
+      migrateManualNs ? migrateManualNsValue : migrateNamespace || '',
+    ).trim()
+    if (!targetEnv) {
+      pushToast('Pick a target environment', 'err')
+      return
+    }
+    if (!targetNs) {
+      pushToast('Enter a target namespace', 'err')
+      return
+    }
+    if (targetEnv === String(envId) && targetNs === namespace) {
+      pushToast('Pick a different environment and/or namespace', 'err')
+      return
+    }
+    setMigratePending(true)
+    try {
+      const loaded = await loadDeployFormFromCluster(token, String(envId), namespace, name)
+      const forBuild = withDefaultCnames(loaded.containers || [])
+      const pairs = forBuild
+        .map((c) => {
+          const spec = buildK8sContainer(c)
+          return spec ? { id: c.id, spec } : null
+        })
+        .filter(Boolean)
+      if (!pairs.length) throw new Error('No containers found to migrate')
+      const volDefs = forBuild.map((c) => readVolumeDefForDeploy(c)).filter(Boolean)
+      const servicePorts = (loaded.svcPorts || [])
+        .map((p) => parseInt(String(p), 10))
+        .filter((n) => n > 0)
+      await executeDeploy(token, {
+        envId: targetEnv,
+        ns: targetNs,
+        appName: name,
+        instances: Math.max(0, Math.min(100, parseInt(String(loaded.instances), 10) || 1)),
+        containerSpecs: pairs.map((p) => p.spec),
+        containerRowIds: pairs.map((p) => p.id),
+        volumeDefs: volDefs,
+        exposeType: loaded.exposeType || 'none',
+        servicePorts,
+        ingress: {
+          host: (loaded.ingHost || '').trim(),
+          path: (loaded.ingPath || '/').trim() || '/',
+          port: loaded.ingPort || 80,
+          ingressClass: (loaded.ingClass || '').trim(),
+        },
+      })
+      if (mode === 'move') {
+        const del = await kubeFetch(
+          token,
+          String(envId),
+          `/apis/apps/v1/namespaces/${namespace}/deployments/${name}`,
+          { method: 'DELETE' },
+        )
+        if (!del.ok && del.status !== 404) {
+          throw new Error('Cloned successfully, but delete failed (HTTP ' + del.status + ')')
+        }
+      }
+      setMigrateOpen(false)
+      await refreshCache(false)
+      pushToast(
+        mode === 'move'
+          ? `Moved “${name}” to ${targetNs} on ${targetEnv}`
+          : `Cloned “${name}” to ${targetNs} on ${targetEnv}`,
+        'ok',
+      )
+      if (mode === 'move') {
+        navigate(serviceDetailPath(targetEnv, targetNs, name, 'overview'), { replace: true })
+      }
+    } catch (e) {
+      pushToast((mode === 'move' ? 'Move' : 'Clone') + ' failed: ' + (e?.message || String(e)), 'err')
+    } finally {
+      setMigratePending(false)
+    }
+  }, [
+    token,
+    envId,
+    namespace,
+    name,
+    migrateEnvId,
+    migrateNamespace,
+    migrateManualNs,
+    migrateManualNsValue,
+    pushToast,
+    navigate,
+  ])
 
   const runStart = useCallback(async () => {
     if (!token || !envId || !namespace || !name || scaleInFlight.current) return
@@ -490,23 +663,32 @@ export function ServiceDetailPage() {
               }
               right={
                 actionBarBusy ? null : (
-                  <button
-                    type="button"
-                    className="action-bar-btn action-bar-btn-danger"
-                    onClick={() =>
-                      setDeleteTarget({
-                        envId: String(envId),
-                        ns: namespace,
-                        name,
-                      })
-                    }
-                  >
-                    <span
-                      className="action-bar-btn-icon"
-                      dangerouslySetInnerHTML={{ __html: icons.trash }}
-                    />
-                    <span className="action-bar-btn-label">Delete</span>
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button
+                      type="button"
+                      className="action-bar-btn"
+                      onClick={openMigrateDialog}
+                    >
+                      <span className="action-bar-btn-label">Migrate</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="action-bar-btn action-bar-btn-danger"
+                      onClick={() =>
+                        setDeleteTarget({
+                          envId: String(envId),
+                          ns: namespace,
+                          name,
+                        })
+                      }
+                    >
+                      <span
+                        className="action-bar-btn-icon"
+                        dangerouslySetInnerHTML={{ __html: icons.trash }}
+                      />
+                      <span className="action-bar-btn-label">Delete</span>
+                    </button>
+                  </div>
                 )
               }
             />
@@ -707,6 +889,115 @@ export function ServiceDetailPage() {
           )}
         </div>
       </div>
+      {migrateOpen ? (
+        <div className="modal-overlay open" role="dialog" aria-modal="true" aria-labelledby="migrate-title">
+          <div className="modal">
+            <div className="modal-head">
+              <h3 id="migrate-title">Migrate stack</h3>
+            </div>
+            <div className="modal-body" style={{ display: 'grid', gap: 12 }}>
+              <div style={{ color: 'var(--text-dim)' }}>
+                You can <strong>clone</strong> this stack to a new location, or <strong>move</strong> it.
+                Moving may have downtime because the source deployment is removed after the target is created.
+              </div>
+              <div className="field">
+                <label>Target environment</label>
+                <select
+                  value={migrateEnvId}
+                  onChange={(e) => {
+                    setMigrateEnvId(e.target.value)
+                    setMigrateNamespace('')
+                    setMigrateNsList([])
+                    setMigrateNsStatus({ text: '', tone: 'dim' })
+                  }}
+                  disabled={migratePending}
+                >
+                  <option value="">— Select —</option>
+                  {visEnvs.map((e) => (
+                    <option key={e.Id} value={String(e.Id)}>
+                      {e.Name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>Target namespace</label>
+                {migrateManualNs ? (
+                  <input
+                    type="text"
+                    value={migrateManualNsValue}
+                    onChange={(e) => setMigrateManualNsValue(e.target.value)}
+                    placeholder="production"
+                    disabled={migratePending || migrateNsLoading}
+                  />
+                ) : (
+                  <select
+                    value={migrateNamespace}
+                    onChange={(e) => setMigrateNamespace(e.target.value)}
+                    disabled={!migrateEnvId || migratePending || migrateNsLoading}
+                  >
+                    <option value="">
+                      {!migrateEnvId
+                        ? 'Select target first...'
+                        : migrateNsLoading
+                          ? 'Loading namespaces...'
+                          : '— Select —'}
+                    </option>
+                    {migrateNsList.map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <div
+                  style={{
+                    fontFamily: 'var(--mono)',
+                    fontSize: 12,
+                    color:
+                      migrateNsStatus.tone === 'amber'
+                        ? 'var(--amber)'
+                        : migrateNsStatus.tone === 'green'
+                          ? 'var(--green)'
+                          : migrateNsStatus.tone === 'red'
+                            ? 'var(--red)'
+                            : 'var(--text-dim)',
+                    marginTop: 4,
+                  }}
+                >
+                  {migrateNsStatus.text}
+                </div>
+              </div>
+            </div>
+            <div className="modal-foot">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setMigrateOpen(false)}
+                disabled={migratePending}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => void runMigrate('clone')}
+                disabled={migratePending}
+              >
+                {migratePending ? 'Working…' : 'Clone'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger btn-sm"
+                onClick={() => void runMigrate('move')}
+                disabled={migratePending}
+              >
+                {migratePending ? 'Working…' : 'Move'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
