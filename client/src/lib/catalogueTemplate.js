@@ -1,6 +1,6 @@
 /**
- * Port template catalogue: Knative-style manifests in templates.json and deploy form state.
- * Ported from old-implementation/portainer-run.html (parseKnativeManifest).
+ * Port template catalogue: Knative-style manifests in repo-root `templates.json` and deploy form state.
+ * Parsing logic ported from `old-implementation/portainer-run.html` (parseKnativeManifest).
  */
 
 const GPU_KEYS = [

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { fetchTemplatesJson } from '../lib/fetchTemplatesJson.js'
 import { inflightDedupe } from '../lib/inflightDedupe.js'
 import { useNavigate } from 'react-router-dom'
 import { ROUTES } from '../lib/routes.js'
@@ -31,13 +32,9 @@ export function CataloguePage() {
     setLoading(true)
     setError('')
     try {
-      const data = await inflightDedupe('catalogue:templates-json', async () => {
-        const r = await fetch('/templates')
-        if (!r.ok) throw new Error('HTTP ' + r.status)
-        const j = await r.json()
-        if (j.error) throw new Error(j.message || j.error)
-        return j
-      })
+      const data = await inflightDedupe('catalogue:templates-json', () =>
+        fetchTemplatesJson(),
+      )
       setTemplates(data.templates || [])
     } catch (e) {
       const err = e instanceof Error ? e : new Error(String(e))
@@ -97,8 +94,10 @@ export function CataloguePage() {
         >
           Could not load catalogue: {error}
           <div style={{ color: 'var(--text-dim)', fontSize: 11, marginTop: 8 }}>
-            Check TEMPLATE_URL in server configuration. The app loads templates from <code style={{ color: 'var(--accent)' }}>/templates</code>
-            .
+            Set <code style={{ color: 'var(--accent)' }}>TEMPLATE_URL</code> in{' '}
+            <code style={{ color: 'var(--accent)' }}>.env</code> to a full <code style={{ color: 'var(--accent)' }}>https://…</code> URL
+            of the catalogue JSON (same idea as the old UI: e.g. raw GitHub). Not{' '}
+            <code style={{ color: 'var(--accent)' }}>/templates</code> — that path is only this app’s proxy.
           </div>
         </div>
       ) : null}
@@ -176,7 +175,9 @@ export function CataloguePage() {
                         border: '1px solid ' + color + '44',
                       }}
                     >
-                      {t.category ? CATALOGUE_CATEGORY_LABELS[t.category] || catLabel : '—'}
+                      {t.category
+                        ? CATALOGUE_CATEGORY_LABELS[t.category] || t.category
+                        : '—'}
                     </span>
                   </div>
                   <div className="cat-card-desc">{t.description || '—'}</div>

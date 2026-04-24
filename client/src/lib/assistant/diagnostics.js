@@ -3,9 +3,11 @@ import { kubeFetch } from '../api.js'
 /**
  * @param {string} token
  * @param {object} dep — deployment from cache (has _envId, metadata, status, spec)
+ * @param {{ logTailLines?: number }} [opts]
  * @returns {Promise<string>}
  */
-export async function gatherServiceDiagnostics(token, dep) {
+export async function gatherServiceDiagnostics(token, dep, opts = {}) {
+  const logTail = typeof opts.logTailLines === 'number' ? opts.logTailLines : 100
   const dName = dep.metadata.name
   const dNs = dep.metadata.namespace
   const dEnvId = dep._envId
@@ -40,7 +42,7 @@ export async function gatherServiceDiagnostics(token, dep) {
             const r = await kubeFetch(
               token,
               dEnvId,
-              `/api/v1/namespaces/${dNs}/pods/${pod.metadata.name}/log?tailLines=100&container=${encodeURIComponent(ct.name)}`,
+              `/api/v1/namespaces/${dNs}/pods/${pod.metadata.name}/log?tailLines=${logTail}&container=${encodeURIComponent(ct.name)}`,
             )
             return `=== Logs: ${pod.metadata.name}/${ct.name} ===\n${
               r.ok ? (await r.text()) || '[no output]' : '[unavailable]'

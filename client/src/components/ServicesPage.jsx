@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import { restartDeployment } from '../lib/restartDeployment.js'
 import { useNavigate } from 'react-router-dom'
 import SortableList from '../design-system/react/SortableList.jsx'
 import StatusSummaryBar from '../design-system/react/StatusSummaryBar.jsx'
@@ -96,6 +97,9 @@ function ServiceRowContent({
   onClick = undefined,
   onKeyDown = undefined,
 }) {
+  const token = useAppStore((s) => s.token)
+  const pushToast = useAppStore((s) => s.pushToast)
+  const [restarting, setRestarting] = useState(false)
   const name = d.metadata.name
   const ns = d.metadata.namespace
   const envId = d._envId
@@ -106,6 +110,21 @@ function ServiceRowContent({
   const created = d.metadata?.creationTimestamp
   const { border, dot, label } = rowClasses(d)
   const extra = getExtraForApp(envStatusClientCache, envId, name)
+
+  const onRestart = async (e) => {
+    e.stopPropagation()
+    if (!token || restarting) return
+    setRestarting(true)
+    try {
+      await restartDeployment(token, String(envId), ns, name)
+      pushToast(`“${name}” is restarting — pods will be replaced one by one`, 'ok')
+      void manualRefresh(false)
+    } catch (err) {
+      pushToast('Restart failed: ' + (err?.message || String(err)), 'err')
+    } finally {
+      setRestarting(false)
+    }
+  }
 
   return (
     <div
@@ -171,6 +190,14 @@ function ServiceRowContent({
           onClick={() => navigate(serviceDetailPath(String(envId), ns, name, 'logs'))}
         >
           Logs
+        </button>
+        <button
+          type="button"
+          className="btn btn-ghost btn-xs"
+          onClick={onRestart}
+          disabled={restarting}
+        >
+          {restarting ? '…' : 'Restart'}
         </button>
         <button
           type="button"
