@@ -225,6 +225,17 @@ Administrators can disable environments from the Cluster Readiness page. Disable
 `Dockerfile` — multi-stage build: Bun builds the client, `node:20-alpine` runs the API; includes `openssl` for certificate generation.
 `.env.example` — environment variable reference.
 
+## Local development
+
+The repo uses [Bun](https://bun.sh) for installs, scripts, and the Vite build (not npm).
+
+```bash
+bun install
+bun run dev
+```
+
+Build the UI only: `bun run build:client` (or `cd client && bun run build`).
+
 ## Deployment
 
 ### Build

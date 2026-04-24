@@ -31,6 +31,7 @@ export function DeployPage() {
   const disabledEnvs = useAppStore((s) => s.disabledEnvs)
   const pushToast = useAppStore((s) => s.pushToast)
   const cataloguePrefillDone = useRef(false)
+  const lastAssistantDeployKey = useRef('')
 
   const [serviceName, setServiceName] = useState('')
   const [envId, setEnvId] = useState('')
@@ -54,6 +55,42 @@ export function DeployPage() {
 
   const templateQueryId = searchParams.get('template')
   const catalogueFromNav = location.state?.catalogueTemplate
+
+  useEffect(() => {
+    const deployCfg = location.state?.deployConfigFromAssistant
+    if (!deployCfg) {
+      lastAssistantDeployKey.current = ''
+      return
+    }
+    const key = JSON.stringify(deployCfg)
+    if (key === lastAssistantDeployKey.current) {
+      return
+    }
+    lastAssistantDeployKey.current = key
+    try {
+      const v = mapDeployConfigToFormValues(deployCfg)
+      setServiceName(v.serviceName)
+      setInstances(v.instances)
+      setExposeType(v.exposeType)
+      setSvcPorts(v.svcPorts)
+      setIngHost(v.ingHost)
+      setIngPath(v.ingPath)
+      setIngPort(v.ingPort)
+      setIngClass(v.ingClass)
+      if (v.containers?.length) {
+        setContainers(v.containers)
+      } else {
+        setContainers([createContainer(true)])
+      }
+      pushToast(
+        'Deploy form populated from Assistant — review and select a target environment if needed',
+        'info',
+      )
+    } catch (e) {
+      pushToast('Could not apply deploy config: ' + (e && e.message ? e.message : 'Unknown'), 'err')
+    }
+    navigate({ pathname: ROUTES.deploy, search: '' }, { replace: true, state: {} })
+  }, [location.state, navigate, pushToast])
 
   useEffect(() => {
     if (cataloguePrefillDone.current) return

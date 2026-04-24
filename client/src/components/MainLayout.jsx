@@ -4,6 +4,7 @@ import { useAppStore, visibleEnvironments } from '../store/useAppStore.js'
 import { disconnect } from '../services/session.js'
 import { ROUTES } from '../lib/routes.js'
 import { AppBreadcrumbs } from './AppBreadcrumbs.jsx'
+import { AssistantPanel } from './AssistantPanel.jsx'
 
 function navClass({ isActive }) {
   return `nav-item${isActive ? ' active' : ''}`
@@ -31,6 +32,9 @@ export function MainLayout() {
 
   return (
     <>
+      {isAiAvailable ? (
+        <AssistantPanel open={chatOpen} onClose={() => setChatOpen(false)} />
+      ) : null}
       <header className="app-top-header">
         <div className="app-header-brand">
           <Link to={ROUTES.dashboard} className="app-header-brand-link" title="Portainer Run — Dashboard">

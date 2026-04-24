@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   applyDeploymentFormUpdate,
   buildK8sContainer,
@@ -26,6 +27,8 @@ import {
  * @param {() => Promise<void> | void} props.onSaved
  */
 export default function ServiceDetailEditTab({ d, envId, namespace, name, onSaved }) {
+  const location = useLocation()
+  const navigate = useNavigate()
   const token = useAppStore((s) => s.token)
   const pushToast = useAppStore((s) => s.pushToast)
 
@@ -42,6 +45,7 @@ export default function ServiceDetailEditTab({ d, envId, namespace, name, onSave
   const [containers, setContainers] = useState(() => [createContainer(true)])
   const [namespaceSecrets, setNamespaceSecrets] = useState([])
   const [scItems, setScItems] = useState([])
+  const assistantPrefillDone = useRef(/** @type {null | number} */ (null))
 
   const resourceKey = d?.metadata?.uid + '@' + (d?.metadata?.resourceVersion || '')
 
@@ -76,6 +80,22 @@ export default function ServiceDetailEditTab({ d, envId, namespace, name, onSave
       cancel = true
     }
   }, [token, envId, namespace, name, resourceKey])
+
+  useEffect(() => {
+    if (formLoading) return
+    const n = location.state?.assistantPrefillInstances
+    if (typeof n !== 'number' || n < 0 || n > 100) {
+      assistantPrefillDone.current = null
+      return
+    }
+    if (assistantPrefillDone.current === n) return
+    assistantPrefillDone.current = n
+    setInstances(n)
+    navigate(
+      { pathname: location.pathname, search: location.search, hash: location.hash },
+      { replace: true, state: { ...location.state, assistantPrefillInstances: undefined } },
+    )
+  }, [formLoading, location.hash, location.pathname, location.search, location.state, navigate])
 
   useEffect(() => {
     if (!envId || !token || !namespace) {

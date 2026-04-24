@@ -95,7 +95,8 @@ a.app-breadcrumbs-home:hover{
 .dot.on{background:var(--green);box-shadow:0 0 6px var(--green);}
 
 /* ── LAYOUT ── */
-.main{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - var(--app-header-h));}
+body.chat-open .main{margin-right:360px;}
+.main{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - var(--app-header-h));transition:margin-right .2s ease;}
 /* Sidebar only — do not use bare `nav` (breadcrumbs also use <nav>) */
 .main > nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25,.6);}
 .nav-label{font-family:var(--mono);font-size:10px;font-weight:500;color:#b8c8d8;letter-spacing:.12em;text-transform:uppercase;padding:10px 12px 6px;}
@@ -119,7 +120,7 @@ a.nav-item{color:inherit;}
 .cat-deploy-btn{width:100%;justify-content:center;margin-top:4px;}
 .chat-toggle-btn{display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text-dim);font-family:var(--mono);font-size:12px;padding:6px 12px;cursor:pointer;transition:all 0.15s;}
 .chat-toggle-btn:hover,.chat-toggle-btn.active{background:var(--accent);border-color:var(--accent);color:#000;}
-.chat-panel{display:none;flex-direction:column;border-left:1px solid var(--border);background:var(--bg);position:fixed;top:var(--app-header-h);right:0;width:360px;height:calc(100vh - var(--app-header-h));z-index:9999;box-shadow:-4px 0 20px rgba(0,0,0,0.5);overflow:hidden;transition:margin-right 0.2s;}.chat-panel.open{display:flex;}
+.chat-panel{display:none;flex-direction:column;border-left:1px solid var(--border);border-top:1px solid var(--border);background:var(--bg);position:fixed;top:var(--app-header-h);right:0;width:360px;height:calc(100vh - var(--app-header-h));z-index:9999;box-shadow:-4px 0 20px rgba(0,0,0,0.5);overflow:hidden;transition:margin-right 0.2s;}.chat-panel.open{display:flex;}
 
 .chat-header{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0;}
 .chat-title{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text-bright);}

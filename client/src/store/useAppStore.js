@@ -35,7 +35,6 @@ export const useAppStore = create((set, get) => ({
   deleteTarget: null,
 
   chatOpen: false,
-  chatMessages: [],
   toasts: [],
 
   // Deploy wizard / catalogue — minimal global flags
@@ -73,9 +72,6 @@ export const useAppStore = create((set, get) => ({
     }
     return set({ chatOpen })
   },
-  pushChatMessage: (m) => set((s) => ({ chatMessages: [...s.chatMessages, m] })),
-  setChatMessages: (chatMessages) => set({ chatMessages }),
-
   pushToast: (msg, type = 'info', id) => {
     const tid = id ?? `t-${Date.now()}-${Math.random().toString(16).slice(2)}`
     set((s) => ({ toasts: [...s.toasts, { id: tid, msg, type }] }))
@@ -101,7 +97,6 @@ export const useAppStore = create((set, get) => ({
       connectError: '',
       deleteTarget: null,
       chatOpen: false,
-      chatMessages: [],
       envStatusClientCache: {},
       toasts: [],
     })),

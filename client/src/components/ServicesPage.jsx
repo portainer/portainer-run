@@ -463,7 +463,7 @@ export function ServicesPage() {
                 )}
                 <button
                   type="button"
-                  className="action-bar-btn action-bar-btn-primary"
+                  className="action-bar-btn"
                   title="Set replicas to 1 for each selected service that is scaled to zero"
                   disabled={!token || scalePending || !canStart}
                   onClick={() => void runStart()}

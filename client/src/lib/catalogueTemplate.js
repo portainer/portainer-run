@@ -162,7 +162,7 @@ export function buildContainersStateFromConfig(cfg) {
       gpuLabel: '',
       gpuWarn: undefined,
       volumeOn: hasStorage,
-      volName: hasStorage ? volName : isPrimary(i) ? 'app-data' : 'sidecar-data',
+      volName: hasStorage ? volName : i === 0 ? 'app-data' : 'sidecar-data',
       volClass: '',
       volSizeNum: sm ? sm[1] : '1',
       volSizeUnit: sm ? sm[2] : 'Gi',

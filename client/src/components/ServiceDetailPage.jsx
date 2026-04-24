@@ -8,6 +8,7 @@ import { useAppStore } from '../store/useAppStore.js'
 import { serviceDetailPath } from '../lib/routes.js'
 import { kubeFetch } from '../lib/api.js'
 import { age } from '../lib/utils.js'
+import { patchDeploymentReplicas } from '../lib/patchDeploymentReplicas.js'
 import { refreshCache } from '../services/refreshDeployments.js'
 import ServiceTabPanel from './serviceDetail/ServiceTabPanel.jsx'
 import { fetchExposureDetail } from './serviceDetail/fetchExposureDetail.js'
@@ -170,7 +171,9 @@ export function ServiceDetailPage() {
   const [d, setD] = useState(/** @type {object | null} */ (null))
   const [err, setErr] = useState('')
   const [restartPending, setRestartPending] = useState(false)
+  const [scalePending, setScalePending] = useState(false)
   const restartInFlight = useRef(false)
+  const scaleInFlight = useRef(false)
 
   const tab = tabParam || 'overview'
 
@@ -259,6 +262,51 @@ export function ServiceDetailPage() {
     }
   }, [token, envId, namespace, name, load, pushToast])
 
+  const runStart = useCallback(async () => {
+    if (!token || !envId || !namespace || !name || scaleInFlight.current) return
+    if ((d?.spec?.replicas || 0) > 0) return
+    scaleInFlight.current = true
+    setScalePending(true)
+    try {
+      await patchDeploymentReplicas(token, String(envId), namespace, name, 1)
+      pushToast(`“${name}” is starting (1 replica).`, 'ok')
+      void load()
+      setTimeout(() => {
+        void refreshCache(false)
+        void load()
+      }, 2000)
+    } catch (e) {
+      pushToast('Start failed: ' + (e?.message || String(e)), 'err')
+    } finally {
+      scaleInFlight.current = false
+      setScalePending(false)
+    }
+  }, [token, envId, namespace, name, d, load, pushToast])
+
+  const runStop = useCallback(async () => {
+    if (!token || !envId || !namespace || !name || scaleInFlight.current) return
+    if ((d?.spec?.replicas || 0) === 0) return
+    scaleInFlight.current = true
+    setScalePending(true)
+    try {
+      await patchDeploymentReplicas(token, String(envId), namespace, name, 0)
+      pushToast(`“${name}” is stopped (0 replicas).`, 'ok')
+      void load()
+      setTimeout(() => {
+        void refreshCache(false)
+        void load()
+      }, 2000)
+    } catch (e) {
+      pushToast('Stop failed: ' + (e?.message || String(e)), 'err')
+    } finally {
+      scaleInFlight.current = false
+      setScalePending(false)
+    }
+  }, [token, envId, namespace, name, d, load, pushToast])
+
+  const actionBarBusy = restartPending || scalePending
+  const actionBarPendingLabel = scalePending ? 'Scaling…' : 'Restarting…'
+
   useEffect(() => {
     void load()
   }, [load])
@@ -340,16 +388,19 @@ export function ServiceDetailPage() {
           }
           actionBar={
             <ActionBar
-              bulkActionPending={restartPending}
-              bulkActionLabel="Restarting…"
+              bulkActionPending={actionBarBusy}
+              bulkActionLabel={actionBarPendingLabel}
               summary={
-                <div className="service-detail-header-actions">
+                <div
+                  className="service-detail-header-actions"
+                  style={{ flexWrap: 'wrap', rowGap: 6, columnGap: 8, alignItems: 'center' }}
+                >
                   <button
                     type="button"
                     className="action-bar-btn"
                     title="Rolling restart — pods are replaced one by one"
                     onClick={() => void runRestart()}
-                    disabled={!d || restartPending}
+                    disabled={!d || actionBarBusy}
                   >
                     <span
                       className="action-bar-btn-icon"
@@ -357,10 +408,36 @@ export function ServiceDetailPage() {
                     />
                     <span className="action-bar-btn-label">Restart</span>
                   </button>
+                  <button
+                    type="button"
+                    className="action-bar-btn"
+                    title="Set replicas to 1 (when scaled to zero)"
+                    onClick={() => void runStart()}
+                    disabled={!d || actionBarBusy || (desired > 0)}
+                  >
+                    <span
+                      className="action-bar-btn-icon"
+                      dangerouslySetInnerHTML={{ __html: icons.play }}
+                    />
+                    <span className="action-bar-btn-label">Start</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="action-bar-btn"
+                    title="Scale to zero replicas (workloads off)"
+                    onClick={() => void runStop()}
+                    disabled={!d || actionBarBusy || desired === 0}
+                  >
+                    <span
+                      className="action-bar-btn-icon"
+                      dangerouslySetInnerHTML={{ __html: icons.pause }}
+                    />
+                    <span className="action-bar-btn-label">Stop</span>
+                  </button>
                 </div>
               }
               right={
-                restartPending ? null : (
+                actionBarBusy ? null : (
                   <button
                     type="button"
                     className="action-bar-btn action-bar-btn-danger"
