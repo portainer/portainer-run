@@ -87,7 +87,9 @@ export default function ResourceDetailHeader({
             </div>
           )}
           <div className="header-info">
-            <span className="resource-type-label">{resourceTypeLabel}</span>
+            {resourceTypeLabel ? (
+              <span className="resource-type-label">{resourceTypeLabel}</span>
+            ) : null}
             <div className="header-title-row">
               <h1 className="header-name">{title}</h1>
               {statusSlot ?? (

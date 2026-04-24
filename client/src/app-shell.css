@@ -8,7 +8,7 @@
   --app-header-h:56px;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;min-height:100vh;line-height:1.6;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;min-height:100vh;line-height:1.6;overflow:hidden;}
 body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:40px 40px;opacity:.3;pointer-events:none;z-index:0;}
 .app{position:relative;z-index:1;}
 
@@ -96,7 +96,7 @@ a.app-breadcrumbs-home:hover{
 
 /* ── LAYOUT ── */
 body.chat-open .main{margin-right:360px;}
-.main{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - var(--app-header-h));transition:margin-right .2s ease;}
+.main{display:grid;grid-template-columns:220px 1fr;height:calc(100vh - var(--app-header-h));min-height:0;transition:margin-right .2s ease;}
 /* Sidebar only — do not use bare `nav` (breadcrumbs also use <nav>) */
 .main > nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25,.6);}
 .nav-label{font-family:var(--mono);font-size:10px;font-weight:500;color:#b8c8d8;letter-spacing:.12em;text-transform:uppercase;padding:10px 12px 6px;}
@@ -182,6 +182,7 @@ a.nav-item{color:inherit;}
 /* Tab strip: no full-bleed wrapper — only .detail-tabs (DS) has the pill background */
 .service-detail-header-slot .resource-detail-header-wrap{border-radius:var(--radius);}
 .service-detail-header-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.service-detail-status-tools{display:inline-flex;align-items:center;gap:8px;}
 .service-detail-tabs-panel{
   margin-top:16px;
   padding:0;

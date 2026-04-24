@@ -150,6 +150,19 @@ function headerStatusFromDeployment(d) {
   return { status: 'error', statusLabel: 'Not available', statusColor: 'danger' }
 }
 
+function headerStatusClass(status, statusColor) {
+  if (status === 'running') return 'status-running'
+  if (status === 'error') return 'status-error'
+  if (status === 'partial') return 'status-partial'
+  if (status === 'pending') return 'status-pending'
+  if (status === 'stopped') return 'status-stopped'
+  if (statusColor === 'success') return 'status-running'
+  if (statusColor === 'danger') return 'status-error'
+  if (statusColor === 'warning') return 'status-partial'
+  if (statusColor === 'pending') return 'status-pending'
+  return 'status-stopped'
+}
+
 export function ServiceDetailIndexRedirect() {
   const { envId, namespace, name } = useParams()
   return (
@@ -170,8 +183,10 @@ export function ServiceDetailPage() {
 
   const [d, setD] = useState(/** @type {object | null} */ (null))
   const [err, setErr] = useState('')
+  const [refreshPending, setRefreshPending] = useState(false)
   const [restartPending, setRestartPending] = useState(false)
   const [scalePending, setScalePending] = useState(false)
+  const refreshInFlight = useRef(false)
   const restartInFlight = useRef(false)
   const scaleInFlight = useRef(false)
 
@@ -262,6 +277,19 @@ export function ServiceDetailPage() {
     }
   }, [token, envId, namespace, name, load, pushToast])
 
+  const runRefresh = useCallback(async () => {
+    if (refreshInFlight.current) return
+    refreshInFlight.current = true
+    setRefreshPending(true)
+    try {
+      await refreshCache(false)
+      await load()
+    } finally {
+      refreshInFlight.current = false
+      setRefreshPending(false)
+    }
+  }, [load])
+
   const runStart = useCallback(async () => {
     if (!token || !envId || !namespace || !name || scaleInFlight.current) return
     if ((d?.spec?.replicas || 0) > 0) return
@@ -304,8 +332,12 @@ export function ServiceDetailPage() {
     }
   }, [token, envId, namespace, name, d, load, pushToast])
 
-  const actionBarBusy = restartPending || scalePending
-  const actionBarPendingLabel = scalePending ? 'Scaling…' : 'Restarting…'
+  const actionBarBusy = refreshPending || restartPending || scalePending
+  const actionBarPendingLabel = refreshPending
+    ? 'Refreshing…'
+    : scalePending
+      ? 'Scaling…'
+      : 'Restarting…'
 
   useEffect(() => {
     void load()
@@ -358,26 +390,46 @@ export function ServiceDetailPage() {
   }, [d, cCount, desired, ready])
 
   const image = d?.spec?.template?.spec?.containers?.[0]?.image
-  const metaItems = useMemo(
-    () => [
-      { text: envName, icon: icons.environments, class: '' },
-      { text: `ns/${namespace}` },
-    ],
-    [envName, namespace],
-  )
-
   return (
     <div className="page active service-detail-page">
       <div className="service-detail-column">
         <div className="service-detail-header-slot">
         <ResourceDetailHeader
-          resourceTypeLabel="Kubernetes deployment"
+          resourceTypeLabel=""
           title={name || '—'}
           status={status}
           statusLabel={statusLabel}
           statusColor={statusColor || 'muted'}
+          statusSlot={
+            <span className="service-detail-status-tools">
+              <span className={`status-badge ${headerStatusClass(status, statusColor || 'muted')}`}>
+                {statusLabel}
+              </span>
+              <button
+                type="button"
+                className="btn btn-ghost btn-xs"
+                title="Refresh service details"
+                onClick={() => void runRefresh()}
+                disabled={actionBarBusy}
+              >
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  aria-hidden
+                >
+                  <path d="M23 4v6h-6M1 20v-6h6" />
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                </svg>
+                Refresh
+              </button>
+            </span>
+          }
           icon={icons.service}
-          metaItems={metaItems}
+          metaItems={[]}
           statBlocks={statBlocks}
           subtitleSlot={
             image ? (

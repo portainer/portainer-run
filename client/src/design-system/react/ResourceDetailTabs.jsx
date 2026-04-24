@@ -119,8 +119,13 @@ export default function ResourceDetailTabs({
                     toggleDropdown(tab)
                   }}
                 >
-                  {tab.icon && <span dangerouslySetInnerHTML={{ __html: tab.icon }} />}
-                  {tab.label}
+                  {tab.icon && (
+                    <span
+                      className="detail-tab-icon"
+                      dangerouslySetInnerHTML={{ __html: tab.icon }}
+                    />
+                  )}
+                  <span className="detail-tab-label">{tab.label}</span>
                   <span
                     className="detail-tab-dropdown-chevron"
                     dangerouslySetInnerHTML={{ __html: icons.chevronDown }}
@@ -189,8 +194,13 @@ export default function ResourceDetailTabs({
                 onTabChange(tab.id)
               }}
             >
-              {tab.icon && <span dangerouslySetInnerHTML={{ __html: tab.icon }} />}
-              {tab.label}
+              {tab.icon && (
+                <span
+                  className="detail-tab-icon"
+                  dangerouslySetInnerHTML={{ __html: tab.icon }}
+                />
+              )}
+              <span className="detail-tab-label">{tab.label}</span>
               {tab.badge != null && tab.badge !== '' && (
                 <span className={badgeClassName(tab)}>{tab.badge}</span>
               )}
@@ -202,8 +212,13 @@ export default function ResourceDetailTabs({
               className={tabClassName(tab)}
               onClick={() => onTabChange?.(tab.id)}
             >
-              {tab.icon && <span dangerouslySetInnerHTML={{ __html: tab.icon }} />}
-              {tab.label}
+              {tab.icon && (
+                <span
+                  className="detail-tab-icon"
+                  dangerouslySetInnerHTML={{ __html: tab.icon }}
+                />
+              )}
+              <span className="detail-tab-label">{tab.label}</span>
               {tab.badge != null && tab.badge !== '' && (
                 <span className={badgeClassName(tab)}>{tab.badge}</span>
               )}

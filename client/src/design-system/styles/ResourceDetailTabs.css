@@ -35,6 +35,26 @@
   box-sizing: border-box;
 }
 
+.detail-tab-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.detail-tab-icon svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.detail-tab-label {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
 a.detail-tab {
   /* Routable React tabs: match button chrome */
   -webkit-tap-highlight-color: transparent;
@@ -53,8 +73,6 @@ a.detail-tab {
 
 .detail-tab svg {
   opacity: 0.7;
-  width: 16px;
-  height: 16px;
 }
 
 .detail-tab.active svg {
