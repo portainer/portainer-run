@@ -1,0 +1,10 @@
+{
+  "name": "portainer-run-server",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "bun run server.js",
+    "start:node": "node server.js"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "portainer-run",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.1.0",
+  "workspaces": ["client", "server"],
+  "scripts": {
+    "dev": "bun run scripts/dev.mjs",
+    "start": "bun run server/server.js",
+    "start:node": "node server/server.js",
+    "build:client": "cd client && bun run build",
+    "docker:run": "bash scripts/docker-run.sh"
+  }
+}

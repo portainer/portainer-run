@@ -1,0 +1,207 @@
+/* ============================================================
+   StatusHealthTree – aggregate status + contributor tree (stack list pattern)
+   ============================================================ */
+
+.status-health-tree {
+  --sht-connector: var(--border);
+  --sht-root-dot-size: 10px;
+  --sht-child-dot-size: 7px;
+  --sht-root-dot-col-width: 24px;
+  --sht-branch-col-width: 20px;
+  --sht-child-dot-col-width: 18px;
+  /* Center the 1px trunk under the root dot (column-centered indicator) */
+  --sht-tree-margin-inline-start: calc(var(--sht-root-dot-col-width) / 2 - 0.5px);
+  min-width: 0;
+}
+
+.status-health-tree.sht-dense {
+  --sht-root-dot-size: 9px;
+  --sht-child-dot-size: 6px;
+}
+
+.sht-root-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-width: 0;
+}
+
+.sht-root-dot-col {
+  flex: 0 0 var(--sht-root-dot-col-width);
+  width: var(--sht-root-dot-col-width);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sht-root-main {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Contributor table + connectors */
+.sht-tree-wrap {
+  margin-inline-start: var(--sht-tree-margin-inline-start);
+  width: max-content;
+  max-width: 100%;
+}
+
+.sht-table {
+  width: auto;
+  max-width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+/* Label columns: shrink to content; do not stretch to fill parent */
+.sht-table.sht-table-labeled {
+  width: max-content;
+  table-layout: auto;
+}
+
+/* Dim contributor content only; tree connectors stay full strength */
+.sht-branch-row .sht-dot-col,
+.sht-branch-row .sht-label-col,
+.sht-branch-row .sht-body-col {
+  transition: opacity 0.15s ease;
+}
+
+.sht-branch-row.sht-branch-dimmed .sht-dot-col,
+.sht-branch-row.sht-branch-dimmed .sht-label-col,
+.sht-branch-row.sht-branch-dimmed .sht-body-col {
+  opacity: 0.55;
+}
+
+.sht-cell {
+  padding: 2.5px 0;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* Tree branch column */
+.sht-cell.sht-branch-line {
+  width: var(--sht-branch-col-width);
+  position: relative;
+  padding: 0;
+}
+
+.sht-cell.sht-branch-line::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--sht-connector);
+}
+
+.sht-branch-last .sht-cell.sht-branch-line::before {
+  bottom: 50%;
+}
+
+.sht-cell.sht-branch-line::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 14px;
+  height: 1px;
+  background: var(--sht-connector);
+}
+
+.sht-cell.sht-dot-col {
+  width: var(--sht-child-dot-col-width);
+  text-align: center;
+  padding-right: 0;
+}
+
+.sht-cell.sht-body-col {
+  min-width: 0;
+  max-width: 48rem;
+}
+
+.sht-table.sht-table-labeled .sht-label-col {
+  padding: 2px 0;
+  vertical-align: middle;
+  min-width: 0;
+  max-width: 14rem;
+  overflow: hidden;
+}
+
+.sht-table.sht-table-labeled .sht-dot-col + .sht-label-col {
+  padding-left: 6px;
+}
+
+.sht-table.sht-table-labeled .sht-label-col + .sht-label-col {
+  padding-left: 10px;
+}
+
+.sht-label-text {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sht-label-text-mono {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 10.5px;
+}
+
+.sht-default-label {
+  font-weight: 500;
+  color: var(--text);
+  font-size: 11px;
+}
+
+/* Health dots (standalone; matches mockup stack / container list) */
+.status-health-tree .status-indicator {
+  display: inline-block;
+  border-radius: 50%;
+  flex-shrink: 0;
+  width: var(--sht-root-dot-size);
+  height: var(--sht-root-dot-size);
+}
+
+.status-health-tree .sht-child-dot {
+  width: var(--sht-child-dot-size);
+  height: var(--sht-child-dot-size);
+}
+
+.status-health-tree .status-indicator.status-running {
+  background: var(--status-success);
+}
+
+.status-health-tree .status-indicator.status-partial {
+  background: var(--status-warning);
+}
+
+.status-health-tree .status-indicator.status-pending {
+  background: var(--status-warning);
+  animation: sht-pulse 2s ease-in-out infinite;
+}
+
+.status-health-tree .status-indicator.status-stopped {
+  background: var(--muted);
+}
+
+.status-health-tree .status-indicator.status-error {
+  background: var(--status-danger);
+}
+
+.status-health-tree .status-indicator.status-exited {
+  background: var(--muted);
+}
+
+@keyframes sht-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}

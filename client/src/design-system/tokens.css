@@ -1,0 +1,226 @@
+/* Design system – shared variables from main app (light theme default) */
+:root {
+  --bg: #f6f7f9;
+  --content-bg: #ffffff;
+  --border: rgba(17,24,39,.08);
+  --border-strong: rgba(17,24,39,.14);
+  --text: rgba(17,24,39,.92);
+  --muted: rgba(17,24,39,.55);
+  --subtle: rgba(17,24,39,.38);
+  --accent: #0ea5e9;
+  --accent-hover: rgba(14,165,233,.08);
+  --accent-active: rgba(14,165,233,.12);
+  --on-accent: #ffffff;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --dropdown-hover: rgba(17,24,39,.04);
+  --list-shadow: 0 1px 2px rgba(16,24,40,.06), 0 6px 16px rgba(16,24,40,.08);
+  --toggle-bar-bg: #f8f9fa;
+  --toggle-bg: rgba(17,24,39,.05);
+  --toggle-hover: rgba(17,24,39,.08);
+  --toggle-active-shadow: 0 1px 2px rgba(16,24,40,.08);
+  --badge-bg: rgba(17,24,39,.08);
+  --subfilter-bg: linear-gradient(to bottom, rgba(17,24,39,.02), transparent);
+  --group-header-bg: rgba(17,24,39,.02);
+  --card-hover: rgba(17,24,39,.02);
+  --icon-container-bg: rgba(17,24,39,.04);
+  --text-semi: rgba(17,24,39,.7);
+  --text-faint: rgba(17,24,39,.45);
+
+  /* Status colors (for StatusSummaryBar, badges, etc.) */
+  --status-success: #22c55e;
+  --status-warning: #f59e0b;
+  --status-danger: #ef4444;
+  --status-info: #3b82f6;
+  --badge-green-text: #16a34a;
+  --badge-green-bg: rgba(22,163,74,.1);
+  --badge-red-text: #dc2626;
+  --badge-amber-text: #d97706;
+  --badge-blue-bg: rgba(37,99,235,.1);
+  --badge-blue-text: #2563eb;
+  --badge-purple-bg: rgba(139,92,246,.1);
+  --badge-purple-text: #7c3aed;
+  --badge-yellow-bg: rgba(251,191,36,.1);
+  --badge-yellow-text: #d97706;
+  --platform-k8s: #326ce5;
+  --platform-docker: #0088cc;
+  --platform-azure: #0078d4;
+  --brand: #c080ff;
+  --brand-bg: #f7f6f3;
+  --focus-ring: color-mix(in srgb, var(--accent) 22%, transparent);
+  --shadow-popover: 0 4px 16px rgba(16,24,40,.12);
+  --shadow-overlay: 0 -4px 20px rgba(16,24,40,.08);
+
+  /* App shell – MultiStepWizard fixed footer; use 0 for full-width (design-system site demos) */
+  --sidebar-width: 0;
+  --sidebar-collapsed-width: 0;
+  --shadow-glow-success: 0 0 8px color-mix(in srgb, var(--status-success) 45%, transparent);
+  --shadow-glow-warning: 0 0 8px color-mix(in srgb, var(--status-warning) 45%, transparent);
+  --shadow-glow-danger: 0 0 8px color-mix(in srgb, var(--status-danger) 45%, transparent);
+  --shadow-glow-accent: 0 0 8px color-mix(in srgb, var(--accent) 45%, transparent);
+  --tooltip-bg: color-mix(in srgb, var(--text) 94%, transparent);
+  --tooltip-text: #ffffff;
+
+  /* Code block syntax highlight (light) – GitHub-style */
+  --hljs-bg: #ffffff;
+  --hljs-fg: #24292e;
+  --hljs-keyword: #d73a49;
+  --hljs-entity: #6f42c1;
+  --hljs-constant: #005cc5;
+  --hljs-string: #032f62;
+  --hljs-variable: #e36209;
+  --hljs-comment: #6a737d;
+  --hljs-tag: #22863a;
+  --hljs-subst: #24292e;
+  --hljs-section: #005cc5;
+  --hljs-bullet: #735c0f;
+  --hljs-addition-fg: #22863a;
+  --hljs-addition-bg: #f0fff4;
+  --hljs-deletion-fg: #b31d28;
+  --hljs-deletion-bg: #ffeef0;
+}
+
+/* Dark theme */
+[data-theme="dark"] {
+  --bg: #0f1117;
+  --content-bg: #1c1f26;
+  --border: rgba(255,255,255,.08);
+  --border-strong: rgba(255,255,255,.14);
+  --text: rgba(255,255,255,.92);
+  --muted: rgba(255,255,255,.55);
+  --subtle: rgba(255,255,255,.38);
+  --accent: #38bdf8;
+  --accent-hover: rgba(56,189,248,.12);
+  --accent-active: rgba(56,189,248,.18);
+  --on-accent: #ffffff;
+  --dropdown-hover: rgba(255,255,255,.06);
+  --list-shadow: 0 1px 2px rgba(0,0,0,.2), 0 6px 16px rgba(0,0,0,.25);
+  --toggle-bar-bg: rgba(255,255,255,.03);
+  --toggle-bg: rgba(0,0,0,.25);
+  --toggle-hover: rgba(255,255,255,.08);
+  --toggle-active-shadow: 0 1px 3px rgba(0,0,0,.4);
+  --badge-bg: rgba(255,255,255,.1);
+  --subfilter-bg: linear-gradient(to bottom, rgba(255,255,255,.015), transparent);
+  --group-header-bg: rgba(255,255,255,.025);
+  --card-hover: rgba(255,255,255,.03);
+  --icon-container-bg: rgba(255,255,255,.08);
+  --text-semi: rgba(255,255,255,.7);
+  --text-faint: rgba(255,255,255,.45);
+
+  --status-success: #4ade80;
+  --status-warning: #fbbf24;
+  --status-danger: #f87171;
+  --status-info: #60a5fa;
+  --badge-green-text: #4ade80;
+  --badge-green-bg: rgba(34,197,94,.15);
+  --badge-red-text: #f87171;
+  --badge-amber-text: #fbbf24;
+  --badge-blue-bg: rgba(59,130,246,.15);
+  --badge-blue-text: #60a5fa;
+  --badge-purple-bg: rgba(139,92,246,.15);
+  --badge-purple-text: #a78bfa;
+  --badge-yellow-bg: rgba(251,191,36,.15);
+  --badge-yellow-text: #fbbf24;
+  --platform-k8s: #5b8def;
+  --platform-docker: #2ba8e6;
+  --platform-azure: #3aa0f3;
+  --brand: #c080ff;
+  --brand-bg: #f7f6f3;
+  --focus-ring: color-mix(in srgb, var(--accent) 30%, transparent);
+  --shadow-popover: 0 4px 16px rgba(0,0,0,.32);
+  --shadow-overlay: 0 -4px 20px rgba(0,0,0,.35);
+  --shadow-glow-success: 0 0 8px color-mix(in srgb, var(--status-success) 48%, transparent);
+  --shadow-glow-warning: 0 0 8px color-mix(in srgb, var(--status-warning) 48%, transparent);
+  --shadow-glow-danger: 0 0 8px color-mix(in srgb, var(--status-danger) 48%, transparent);
+  --shadow-glow-accent: 0 0 8px color-mix(in srgb, var(--accent) 48%, transparent);
+  --tooltip-bg: color-mix(in srgb, var(--content-bg) 92%, black);
+  --tooltip-text: var(--text);
+
+  /* Code block syntax highlight (dark) – GitHub Dark */
+  --hljs-bg: #0d1117;
+  --hljs-fg: #c9d1d9;
+  --hljs-keyword: #ff7b72;
+  --hljs-entity: #d2a8ff;
+  --hljs-constant: #79c0ff;
+  --hljs-string: #a5d6ff;
+  --hljs-variable: #ffa657;
+  --hljs-comment: #8b949e;
+  --hljs-tag: #7ee787;
+  --hljs-subst: #c9d1d9;
+  --hljs-section: #1f6feb;
+  --hljs-bullet: #f2cc60;
+  --hljs-addition-fg: #aff5b4;
+  --hljs-addition-bg: #033a16;
+  --hljs-deletion-fg: #ffdcd7;
+  --hljs-deletion-bg: #67060c;
+}
+
+/* System preference (when theme is "system") */
+@media (prefers-color-scheme: dark) {
+  [data-theme="system"] {
+    --bg: #0f1117;
+    --content-bg: #1c1f26;
+    --border: rgba(255,255,255,.08);
+    --border-strong: rgba(255,255,255,.14);
+    --text: rgba(255,255,255,.92);
+    --muted: rgba(255,255,255,.55);
+    --subtle: rgba(255,255,255,.38);
+    --accent: #38bdf8;
+    --accent-hover: rgba(56,189,248,.12);
+    --accent-active: rgba(56,189,248,.18);
+    --on-accent: #ffffff;
+    --dropdown-hover: rgba(255,255,255,.06);
+    --list-shadow: 0 1px 2px rgba(0,0,0,.2), 0 6px 16px rgba(0,0,0,.25);
+    --toggle-bar-bg: rgba(255,255,255,.03);
+    --toggle-bg: rgba(0,0,0,.25);
+    --toggle-hover: rgba(255,255,255,.08);
+    --toggle-active-shadow: 0 1px 3px rgba(0,0,0,.4);
+    --badge-bg: rgba(255,255,255,.1);
+    --subfilter-bg: linear-gradient(to bottom, rgba(255,255,255,.015), transparent);
+    --group-header-bg: rgba(255,255,255,.025);
+    --card-hover: rgba(255,255,255,.03);
+    --icon-container-bg: rgba(255,255,255,.08);
+    --text-semi: rgba(255,255,255,.7);
+    --text-faint: rgba(255,255,255,.45);
+
+    --status-success: #4ade80;
+    --status-warning: #fbbf24;
+    --status-danger: #f87171;
+    --status-info: #60a5fa;
+    --badge-green-text: #4ade80;
+    --badge-red-text: #f87171;
+    --badge-amber-text: #fbbf24;
+    --platform-k8s: #5b8def;
+    --platform-docker: #2ba8e6;
+    --platform-azure: #3aa0f3;
+    --brand: #c080ff;
+    --brand-bg: #f7f6f3;
+    --focus-ring: color-mix(in srgb, var(--accent) 30%, transparent);
+    --shadow-popover: 0 4px 16px rgba(0,0,0,.32);
+    --shadow-overlay: 0 -4px 20px rgba(0,0,0,.35);
+    --shadow-glow-success: 0 0 8px color-mix(in srgb, var(--status-success) 48%, transparent);
+    --shadow-glow-warning: 0 0 8px color-mix(in srgb, var(--status-warning) 48%, transparent);
+    --shadow-glow-danger: 0 0 8px color-mix(in srgb, var(--status-danger) 48%, transparent);
+    --shadow-glow-accent: 0 0 8px color-mix(in srgb, var(--accent) 48%, transparent);
+    --tooltip-bg: color-mix(in srgb, var(--content-bg) 92%, black);
+    --tooltip-text: var(--text);
+
+    /* Code block syntax highlight (dark) – same as [data-theme="dark"] */
+    --hljs-bg: #0d1117;
+    --hljs-fg: #c9d1d9;
+    --hljs-keyword: #ff7b72;
+    --hljs-entity: #d2a8ff;
+    --hljs-constant: #79c0ff;
+    --hljs-string: #a5d6ff;
+    --hljs-variable: #ffa657;
+    --hljs-comment: #8b949e;
+    --hljs-tag: #7ee787;
+    --hljs-subst: #c9d1d9;
+    --hljs-section: #1f6feb;
+    --hljs-bullet: #f2cc60;
+    --hljs-addition-fg: #aff5b4;
+    --hljs-addition-bg: #033a16;
+    --hljs-deletion-fg: #ffdcd7;
+    --hljs-deletion-bg: #67060c;
+  }
+}

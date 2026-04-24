@@ -1055,8 +1055,8 @@ async function connect() {
     if (r.status === 502) { errEl.innerHTML = '<strong>Proxy cannot reach Portainer.</strong> Check PORTAINER_URL in server .env.'; errEl.style.display='block'; return; }
     if (!r.ok) { const j = await r.json().catch(()=>{}); errEl.innerHTML = '<strong>HTTP '+r.status+'.</strong> '+(j?.message||r.statusText); errEl.style.display='block'; return; }
     const eps = await r.json();
-    // Accept all Kubernetes endpoint types (4=KubeAgent, 5=Edge, 6=EdgeAsync, 7=KubeEdge)
-    const kubeEps = eps.filter(e => [4,5,6,7].includes(e.Type));
+    // Portainer API: types 5–7 are Kubernetes; 4 is Edge agent on Docker (excluded)
+    const kubeEps = eps.filter(e => [5,6,7].includes(e.Type));
     S.environments = kubeEps.length ? kubeEps : eps;
     document.getElementById('connectScreen').style.display = 'none';
     document.getElementById('mainApp').style.display = 'grid';
