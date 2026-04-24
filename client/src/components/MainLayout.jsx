@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAppStore, visibleEnvironments } from '../store/useAppStore.js'
 import { disconnect } from '../services/session.js'
 import { ROUTES } from '../lib/routes.js'
+import { AppBreadcrumbs } from './AppBreadcrumbs.jsx'
 
 function navClass({ isActive }) {
   return `nav-item${isActive ? ' active' : ''}`
@@ -30,40 +31,48 @@ export function MainLayout() {
 
   return (
     <>
-      <header>
-        <div className="logo">
-          <div className="logo-icon">
-            <svg viewBox="0 0 24 24" aria-hidden>
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-            </svg>
+      <header className="app-top-header">
+        <div className="app-header-brand">
+          <Link to={ROUTES.dashboard} className="app-header-brand-link" title="Portainer Run — Dashboard">
+            <div className="logo">
+              <div className="logo-icon">
+                <svg viewBox="0 0 24 24" aria-hidden>
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                </svg>
+              </div>
+              Portainer Run
+            </div>
+          </Link>
+        </div>
+        <div className="app-header-breadcrumb">
+          <AppBreadcrumbs />
+        </div>
+        <div className="app-header-trailing">
+          <div className="conn-badge" title="Connected — use Disconnect in the nav to sign out">
+            <div className="dot on" />
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{statusText}</span>
           </div>
-          Portainer Run
-        </div>
-        <div className="header-sep" />
-        <div className="conn-badge" title="Connected — use Disconnect in the nav to sign out">
-          <div className="dot on" />
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{statusText}</span>
-        </div>
-        {isAiAvailable ? (
-          <button
-            type="button"
-            className={`chat-toggle-btn ${chatOpen ? 'active' : ''}`}
-            onClick={() => setChatOpen(!chatOpen)}
-            title="Assistant"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
+          {isAiAvailable ? (
+            <button
+              type="button"
+              className={`chat-toggle-btn ${chatOpen ? 'active' : ''}`}
+              onClick={() => setChatOpen(!chatOpen)}
+              title="Assistant"
             >
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-            <span>Assistant</span>
-          </button>
-        ) : null}
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              >
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              <span>Assistant</span>
+            </button>
+          ) : null}
+        </div>
       </header>
 
       <div id="mainApp" className="main" style={{ display: 'grid' }}>

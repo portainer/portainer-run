@@ -1,11 +1,7 @@
 import { kubeFetch } from './api.js'
+import { GPU_RESOURCE_KEYS } from './deployFormModel.js'
 
-export const GPU_RESOURCE_KEYS = [
-  'nvidia.com/gpu',
-  'amd.com/gpu',
-  'gpu.intel.com/i915',
-  'habana.ai/gaudi',
-]
+export { GPU_RESOURCE_KEYS } from './deployFormModel.js'
 
 /**
  * @param {string} token
@@ -80,6 +76,106 @@ export async function fetchSecretsInNamespace(token, envId, ns) {
   return (await r.json()).items || []
 }
 
+const MANAGED_BY_LABEL = 'managed-by=portainer-run'
+
+/**
+ * For each secret name, lists unique portainer-run deployment names that reference it (env + envFrom).
+ * @param {string} token
+ * @param {string} envId
+ * @param {string} ns
+ * @returns {Promise<Record<string, string[]>>}
+ */
+export async function fetchSecretUsageFromManagedDeployments(token, envId, ns) {
+  if (!ns) return {}
+  const r = await kubeFetch(
+    token,
+    envId,
+    `/apis/apps/v1/namespaces/${ns}/deployments?labelSelector=${encodeURIComponent(MANAGED_BY_LABEL)}`,
+  )
+  if (!r.ok) return {}
+  const deps = (await r.json()).items || []
+  /** @type {Record<string, string[]>} */
+  const usage = {}
+  for (const dep of deps) {
+    const dname = dep.metadata?.name
+    if (!dname) continue
+    const containers = dep.spec?.template?.spec?.containers || []
+    for (const ct of containers) {
+      for (const env of ct.env || []) {
+        if (env.valueFrom?.secretKeyRef?.name) {
+          const sn = env.valueFrom.secretKeyRef.name
+          if (!usage[sn]) usage[sn] = []
+          if (!usage[sn].includes(dname)) usage[sn].push(dname)
+        }
+      }
+      for (const envFrom of ct.envFrom || []) {
+        if (envFrom.secretRef?.name) {
+          const sn = envFrom.secretRef.name
+          if (!usage[sn]) usage[sn] = []
+          if (!usage[sn].includes(dname)) usage[sn].push(dname)
+        }
+      }
+    }
+  }
+  return usage
+}
+
+/**
+ * @param {string} value
+ * @returns {string} base64 (Kubernetes `data` field)
+ */
+export function secretValueToK8sDataB64(value) {
+  return btoa(unescape(encodeURIComponent(value)))
+}
+
+/**
+ * @param {string} token
+ * @param {string} envId
+ * @param {string} ns
+ * @param {string} name
+ * @param {Record<string, string>} dataPlain key → raw value (not base64)
+ */
+export async function createOpaquePortainerSecret(token, envId, ns, name, dataPlain) {
+  const data = {}
+  for (const [k, v] of Object.entries(dataPlain)) {
+    data[k] = secretValueToK8sDataB64(v)
+  }
+  const manifest = {
+    apiVersion: 'v1',
+    kind: 'Secret',
+    type: 'Opaque',
+    metadata: {
+      name,
+      namespace: ns,
+      labels: { 'managed-by': 'portainer-run' },
+    },
+    data,
+  }
+  const r = await kubeFetch(token, envId, `/api/v1/namespaces/${ns}/secrets`, {
+    method: 'POST',
+    body: JSON.stringify(manifest),
+  })
+  if (r.status === 409) {
+    const err = new Error(`A secret named "${name}" already exists.`)
+    throw err
+  }
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}))
+    throw new Error(j?.message || 'HTTP ' + r.status)
+  }
+}
+
+/**
+ * @param {string} token
+ * @param {string} envId
+ * @param {string} ns
+ * @param {string} name
+ * @returns {Promise<Response>}
+ */
+export function deleteNamespacedSecret(token, envId, ns, name) {
+  return kubeFetch(token, envId, `/api/v1/namespaces/${ns}/secrets/${name}`, { method: 'DELETE' })
+}
+
 /**
  * @param {string} token
  * @param {string} envId
@@ -116,48 +212,15 @@ export async function detectClusterGpuType(token, envId) {
   }
 }
 
+/** Alias for older imports — same as `detectClusterGpuType` */
+export { detectClusterGpuType as detectClusterGpu }
+
 /**
  * @param {string} token
- * @param {object} p
- * @param {string} p.envId
- * @param {string} p.ns
- * @param {string} p.appName
- * @param {number} p.instances
- * @param {object[]} p.containerSpecs — Kubernetes container objects (ordered)
- * @param {{ containerId: string, name: string, storageClass?: string, size: string, mountPath: string }[]} p.volumeDefs
- * @param {string} p.exposeType
- * @param {number[]} p.servicePorts
- * @param {{ host: string, path: string, port: number, ingressClass: string }} p.ingress
- * @param {string[]} p.containerRowIds — same length as `containerSpecs`; `volumeDefs[].containerId` must match
+ * @param {object} p2
+ * @param {{ name: string, size: string, storageClass?: string, mountPath: string, containerId: string }[]} p2.volumeDefs
  */
-export async function executeDeploy(
-  token,
-  {
-    envId,
-    ns,
-    appName,
-    instances,
-    containerSpecs,
-    volumeDefs,
-    exposeType,
-    servicePorts,
-    ingress,
-    containerRowIds,
-  },
-) {
-  const idToSpec = new Map(containerRowIds.map((id, i) => [id, containerSpecs[i]]))
-  for (const v of volumeDefs) {
-    const spec = idToSpec.get(v.containerId)
-    if (spec) {
-      spec.volumeMounts = [{ name: v.name, mountPath: v.mountPath }]
-    }
-  }
-
-  const podVolumes = volumeDefs.map((v) => ({
-    name: v.name,
-    persistentVolumeClaim: { claimName: v.name },
-  }))
-
+export async function ensureVolumePvcs(token, envId, ns, appName, volumeDefs) {
   for (const { name: volName, size, storageClass } of volumeDefs) {
     const pvcManifest = {
       apiVersion: 'v1',
@@ -182,39 +245,16 @@ export async function executeDeploy(
       throw new Error(`Volume "${volName}" failed: ` + (j?.message || 'HTTP ' + pr.status))
     }
   }
+}
 
-  const depManifest = {
-    apiVersion: 'apps/v1',
-    kind: 'Deployment',
-    metadata: {
-      name: appName,
-      namespace: ns,
-      labels: { app: appName, 'managed-by': 'portainer-run' },
-    },
-    spec: {
-      replicas: instances,
-      selector: { matchLabels: { app: appName } },
-      template: {
-        metadata: { labels: { app: appName, 'managed-by': 'portainer-run' } },
-        spec: {
-          containers: containerSpecs,
-          ...(podVolumes.length ? { volumes: podVolumes } : {}),
-        },
-      },
-    },
-  }
-
-  const r = await kubeFetch(token, envId, `/apis/apps/v1/namespaces/${ns}/deployments`, {
-    method: 'POST',
-    body: JSON.stringify(depManifest),
-  })
-  if (r.status === 409) {
-    throw new Error('A deployment with this name already exists in namespace "' + ns + '".')
-  }
-  if (!r.ok) {
-    const j = await r.json().catch(() => ({}))
-    throw new Error(j?.message || 'HTTP ' + r.status)
-  }
+/**
+ * Create Service + optional Ingress to match the deploy form (idempotent: 409 OK on create).
+ */
+export async function createExposureForApp(
+  token,
+  { envId, ns, appName, exposeType, servicePorts, ingress },
+) {
+  if (exposeType === 'none' || !exposeType) return
 
   if (exposeType === 'NodePort' || exposeType === 'LoadBalancer') {
     const ports = servicePorts.length ? servicePorts : [80]
@@ -245,6 +285,7 @@ export async function executeDeploy(
       const j = await sr.json().catch(() => ({}))
       throw new Error('Deployment created but Service failed: ' + (j?.message || 'HTTP ' + sr.status))
     }
+    return
   }
 
   if (exposeType === 'Ingress') {
@@ -320,6 +361,77 @@ export async function executeDeploy(
 }
 
 /**
+ * @param {string} token
+ * @param {object} p0
+ * @param {string[]} p0.containerRowIds — same length as `containerSpecs`; `volumeDefs[].containerId` must match
+ */
+export async function executeDeploy(
+  token,
+  {
+    envId,
+    ns,
+    appName,
+    instances,
+    containerSpecs,
+    volumeDefs,
+    exposeType,
+    servicePorts,
+    ingress,
+    containerRowIds,
+  },
+) {
+  const idToSpec = new Map(containerRowIds.map((id, i) => [id, containerSpecs[i]]))
+  for (const v of volumeDefs) {
+    const spec = idToSpec.get(v.containerId)
+    if (spec) {
+      spec.volumeMounts = [{ name: v.name, mountPath: v.mountPath }]
+    }
+  }
+
+  const podVolumes = volumeDefs.map((v) => ({
+    name: v.name,
+    persistentVolumeClaim: { claimName: v.name },
+  }))
+
+  await ensureVolumePvcs(token, envId, ns, appName, volumeDefs)
+
+  const depManifest = {
+    apiVersion: 'apps/v1',
+    kind: 'Deployment',
+    metadata: {
+      name: appName,
+      namespace: ns,
+      labels: { app: appName, 'managed-by': 'portainer-run' },
+    },
+    spec: {
+      replicas: instances,
+      selector: { matchLabels: { app: appName } },
+      template: {
+        metadata: { labels: { app: appName, 'managed-by': 'portainer-run' } },
+        spec: {
+          containers: containerSpecs,
+          ...(podVolumes.length ? { volumes: podVolumes } : {}),
+        },
+      },
+    },
+  }
+
+  const r = await kubeFetch(token, envId, `/apis/apps/v1/namespaces/${ns}/deployments`, {
+    method: 'POST',
+    body: JSON.stringify(depManifest),
+  })
+  if (r.status === 409) {
+    throw new Error('A deployment with this name already exists in namespace "' + ns + '".')
+  }
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}))
+    throw new Error(j?.message || 'HTTP ' + r.status)
+  }
+
+  await createExposureForApp(token, { envId, ns, appName, exposeType, servicePorts, ingress })
+}
+
+/**
  * @param {object} c
  * @returns {object | null} Kubernetes container spec, or null if no image
  */
@@ -386,4 +498,115 @@ export function readVolumeDefForDeploy(c) {
     storageClass: c.volClass?.trim() || undefined,
     mountPath,
   }
+}
+
+async function deleteK8sIfExists(token, envId, path) {
+  const r = await kubeFetch(token, envId, path, { method: 'DELETE' })
+  return r.ok || r.status === 404
+}
+
+/**
+ * Remove the portainer-run Service and Ingress (same name as the app) so exposure can be recreated.
+ */
+export async function replacePortainerRunExposure(token, envId, ns, appName) {
+  await deleteK8sIfExists(
+    token,
+    envId,
+    `/apis/networking.k8s.io/v1/namespaces/${ns}/ingresses/${encodeURIComponent(appName)}`,
+  )
+  await deleteK8sIfExists(
+    token,
+    envId,
+    `/api/v1/namespaces/${ns}/services/${encodeURIComponent(appName)}`,
+  )
+}
+
+/**
+ * Build container specs, ensure PVCs, update the Deployment, then re-apply Service/Ingress to match the deploy form.
+ * Expects the same pre-built `containerSpecs` / `containerRowIds` as `executeDeploy`, but applies via PUT.
+ */
+export async function applyDeploymentFormUpdate(
+  token,
+  {
+    envId,
+    ns,
+    appName,
+    instances,
+    containerSpecs,
+    volumeDefs,
+    containerRowIds,
+    exposeType,
+    servicePorts,
+    ingress,
+  },
+) {
+  const idToSpec = new Map(containerRowIds.map((id, i) => [id, containerSpecs[i]]))
+  for (const v of volumeDefs) {
+    const spec = idToSpec.get(v.containerId)
+    if (spec) {
+      spec.volumeMounts = [{ name: v.name, mountPath: v.mountPath }]
+    }
+  }
+
+  const podVolumes = volumeDefs.map((v) => ({
+    name: v.name,
+    persistentVolumeClaim: { claimName: v.name },
+  }))
+
+  await ensureVolumePvcs(token, envId, ns, appName, volumeDefs)
+
+  const getR = await kubeFetch(
+    token,
+    envId,
+    `/apis/apps/v1/namespaces/${ns}/deployments/${encodeURIComponent(appName)}`,
+  )
+  if (!getR.ok) {
+    const j = await getR.json().catch(() => ({}))
+    throw new Error(j?.message || 'HTTP ' + getR.status)
+  }
+  const current = await getR.json()
+  const tplMeta = current.spec?.template?.metadata || {}
+  const labels = { ...(tplMeta.labels || {}), app: appName, 'managed-by': 'portainer-run' }
+  const mergedTplMeta = { ...tplMeta, labels }
+  const oldPod = current.spec?.template?.spec || {}
+  const nextPod = { ...oldPod, containers: containerSpecs }
+  if (podVolumes.length) {
+    nextPod.volumes = podVolumes
+  } else {
+    delete nextPod.volumes
+  }
+  const next = { ...current }
+  if (next.status) delete next.status
+  next.spec = {
+    ...current.spec,
+    replicas: Math.max(0, Math.min(100, parseInt(String(instances), 10) || 0)),
+    template: {
+      metadata: mergedTplMeta,
+      spec: nextPod,
+    },
+  }
+  if (next.status) delete next.status
+  const putR = await kubeFetch(
+    token,
+    envId,
+    `/apis/apps/v1/namespaces/${ns}/deployments/${encodeURIComponent(appName)}`,
+    { method: 'PUT', body: JSON.stringify(next) },
+  )
+  if (!putR.ok) {
+    const j = await putR.json().catch(() => ({}))
+    throw new Error(j?.message || 'HTTP ' + putR.status)
+  }
+
+  await replacePortainerRunExposure(token, envId, ns, appName)
+  const portsNum = (servicePorts || [])
+    .map((p) => (typeof p === 'number' ? p : parseInt(String(p), 10)))
+    .filter((n) => n > 0)
+  await createExposureForApp(token, {
+    envId,
+    ns,
+    appName,
+    exposeType,
+    servicePorts: portsNum,
+    ingress,
+  })
 }

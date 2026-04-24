@@ -1,13 +1,17 @@
 import { useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAppStore } from '../store/useAppStore.js'
 import { kubeFetch } from '../lib/api.js'
 import { refreshCache } from '../services/refreshDeployments.js'
+import { ROUTES } from '../lib/routes.js'
 
 export function DeleteModal() {
   const deleteTarget = useAppStore((s) => s.deleteTarget)
   const setDeleteTarget = useAppStore((s) => s.setDeleteTarget)
   const token = useAppStore((s) => s.token)
   const [deleting, setDeleting] = useState(false)
+  const navigate = useNavigate()
+  const loc = useLocation()
 
   if (!deleteTarget) return null
   const { envId, ns, name } = deleteTarget
@@ -21,6 +25,12 @@ export function DeleteModal() {
       if (!r.ok && r.status !== 404) throw new Error('HTTP ' + r.status)
       useAppStore.getState().pushToast(`Deployment “${name}” deleted`, 'ok')
       setDeleteTarget(null)
+      if (
+        loc.pathname.startsWith(`${ROUTES.services}/`) &&
+        loc.pathname !== ROUTES.services
+      ) {
+        navigate(ROUTES.services, { replace: true })
+      }
       await refreshCache(false)
     } catch (e) {
       useAppStore.getState().pushToast('Delete failed: ' + (e?.message || e), 'err')

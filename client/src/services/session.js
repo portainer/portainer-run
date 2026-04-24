@@ -124,7 +124,6 @@ export async function connectWithToken(token) {
       'ok',
     )
     st().setConnected(true)
-    st().closeDetail()
 
     await loadDisabledEnvs(tok, st().environments)
     st().setCache((c) => {

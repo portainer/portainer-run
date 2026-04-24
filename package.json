@@ -2,6 +2,7 @@
   "name": "portainer-run",
   "private": true,
   "type": "module",
+  "workspaces": ["client", "server"],
   "scripts": {
     "dev": "bun run scripts/dev.mjs",
     "start": "bun run server/server.js",

@@ -27,7 +27,7 @@ export async function refreshCache(manual = false) {
   if (!token) return
   if (cache.fetching && !manual) return
 
-  setCache((c) => ({ ...c, fetching: true, deployments: [] }))
+  setCache((c) => ({ ...c, fetching: true }))
   setCacheStatus('loading')
   if (!manual) {
     if (refreshTimer) clearTimeout(refreshTimer)

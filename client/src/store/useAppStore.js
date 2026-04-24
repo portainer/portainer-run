@@ -31,8 +31,6 @@ export const useAppStore = create((set, get) => ({
   /** @type {Record<string, { rv: string, data: Record<string, { statusReason?: string, accessUrl?: string|null, accessLabel?: string|null }> }>} */
   envStatusClientCache: {},
 
-  /** @type {null | { envId: string, ns: string, name: string, deployment?: object }} */
-  detail: null,
   /** @type {null | { envId: string, ns: string, name: string }} */
   deleteTarget: null,
 
@@ -68,12 +66,6 @@ export const useAppStore = create((set, get) => ({
       },
     })),
 
-  openDetail: (envId, ns, name, initialTab = 'overview') =>
-    set({ detail: { envId, ns, name, initialTab } }),
-  closeDetail: () => set({ detail: null }),
-  setDetailDeployment: (deployment) =>
-    set((s) => (s.detail ? { detail: { ...s.detail, deployment } } : {})),
-
   setDeleteTarget: (deleteTarget) => set({ deleteTarget }),
   setChatOpen: (chatOpen) => {
     if (typeof document !== 'undefined') {
@@ -107,7 +99,6 @@ export const useAppStore = create((set, get) => ({
       cacheStatus: 'loading',
       connected: false,
       connectError: '',
-      detail: null,
       deleteTarget: null,
       chatOpen: false,
       chatMessages: [],
