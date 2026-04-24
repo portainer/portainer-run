@@ -222,7 +222,7 @@ Administrators can disable environments from the Cluster Readiness page. Disable
 `server/` — Node.js (or Bun) HTTPS proxy, static UI, env-status aggregator, and session cache. Entry: `server/server.js`.
 `client/` — Vite + React application (current UI).
 `old-implementation/` — archived monolith: `portainer-run.html` (original single-file frontend) and `templates.json` (sample application catalogue). The server can still fall back to the HTML if `client/dist` is not present.
-`Dockerfile` — multi-stage build: Bun builds the client, `node:20-alpine` runs the API; includes `openssl` for certificate generation.
+`Dockerfile` — multi-stage build: `oven/bun:1-alpine` builds the client and runs the API; includes `openssl` for certificate generation.
 `.env.example` — environment variable reference.
 
 ## Local development
@@ -242,6 +242,27 @@ Build the UI only: `bun run build:client` (or `cd client && bun run build`).
 
 ```bash
 DOCKER_BUILDKIT=0 docker build -t portainer-run .
+```
+
+### Build and run (local container)
+
+From the repo root, builds the image and starts a detached container (default host ports **9443** → HTTPS, **9080** → HTTP redirect):
+
+```bash
+./scripts/docker-run.sh
+# or: bun run docker:run
+```
+
+Override ports or image name if needed:
+
+```bash
+HOST_HTTPS=443 HOST_HTTP=80 IMAGE=portainer-run:local ./scripts/docker-run.sh
+```
+
+Pass extra `docker run` flags (e.g. env vars) via `DOCKER_RUN_EXTRA`:
+
+```bash
+DOCKER_RUN_EXTRA='-e PORTAINER_URL=https://portainer.example.com:9443' ./scripts/docker-run.sh
 ```
 
 ### Run (Anthropic, self-signed certificate)
