@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { kubeFetch, portainerUrlHeaders } from '../../lib/api.js'
 import { inflightDedupe } from '../../lib/inflightDedupe.js'
 import { useAppStore } from '../../store/useAppStore.js'
+import { getAssistantModel } from '../../lib/assistant/aiModel.js'
+import { mdToHtml } from '../../lib/assistant/markdown.js'
+import { readTriageSseStream } from '../../lib/assistant/parseStream.js'
+import { gatherServiceDiagnostics } from '../../lib/assistant/diagnostics.js'
 
 function lineClass(text) {
   if (/error|fatal|panic/i.test(text)) return 'log-err'
@@ -15,8 +19,22 @@ function lineClass(text) {
  * @param {string} props.namespace
  * @param {string} props.name deployment name (app label)
  */
+const LOGS_TRIAGE_SYSTEM = `You are an operations assistant helping a user diagnose a containerised application. Use plain English — avoid Kubernetes jargon where possible, and explain technical terms when you must use them.
+
+Diagnostic data may include pod status and conditions, Kubernetes events, and application logs from all instances. Events and pod conditions matter especially when logs are empty or the app failed to start.
+
+Provide a concise diagnostic report covering:
+1. Current state of the application in plain terms
+2. Any problems identified — cite specific events, conditions, or log lines as evidence
+3. Most likely root cause
+4. Recommended actions in priority order
+
+If the application is healthy, say so briefly. If logs are empty but events show a problem, focus on the events and container state.`
+
 export default function ServiceDetailLogsTab({ envId, namespace, name }) {
   const token = useAppStore((s) => s.token)
+  const isAiAvailable = useAppStore((s) => s.isAiAvailable)
+  const aiProvider = useAppStore((s) => s.aiProvider)
   const [pods, setPods] = useState(/** @type {{ name: string, containers: string[] }[]} */ ([]))
   const [pod, setPod] = useState('')
   const [container, setContainer] = useState('')
@@ -30,6 +48,12 @@ export default function ServiceDetailLogsTab({ envId, namespace, name }) {
   const logLinesRef = useRef(/** @type {{ text: string, cls: string }[]} */ ([]))
   const streamCtrl = useRef(/** @type {AbortController | null} */ (null))
   const outRef = useRef(/** @type {HTMLDivElement | null} */ (null))
+  const aiBodyRef = useRef(/** @type {HTMLDivElement | null} */ (null))
+  const aiTriageInFlight = useRef(false)
+
+  const [aiPanelOpen, setAiPanelOpen] = useState(false)
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiHtml, setAiHtml] = useState('')
 
   const stopStream = useCallback(() => {
     if (streamCtrl.current) {
@@ -123,6 +147,77 @@ export default function ServiceDetailLogsTab({ envId, namespace, name }) {
   useEffect(() => {
     return () => stopStream()
   }, [stopStream])
+
+  useEffect(() => {
+    setAiPanelOpen(false)
+    setAiHtml('')
+    setAiBusy(false)
+    aiTriageInFlight.current = false
+  }, [envId, namespace, name])
+
+  const runLogsTriage = useCallback(async () => {
+    if (!token || !envId || !namespace || !name || !isAiAvailable) return
+    if (aiTriageInFlight.current) return
+    aiTriageInFlight.current = true
+    const dep = { _envId: envId, metadata: { name, namespace } }
+    setAiBusy(true)
+    setAiPanelOpen(true)
+    setAiHtml('<span style="color:var(--text-dim)">Gathering diagnostics from all instances…</span>')
+    try {
+      const diag = await gatherServiceDiagnostics(token, dep, { logTailLines: 300 })
+      const podCount = pods.length
+      const block =
+        diag.trim() ||
+        '[No diagnostic data could be collected — check that instances exist and the token can read pods, logs, and events.]'
+      const truncated = block.length > 90000 ? '[Earlier content omitted]\n…\n' + block.slice(-90000) : block
+      const userContent = `Application: ${name}
+Namespace: ${namespace}
+Instance count: ${podCount}
+
+The following diagnostic data has been gathered from all instances. It includes pod status and conditions, Kubernetes events, and application logs.
+
+${truncated}
+
+Analyse this data and follow the instructions in your system prompt.`
+
+      setAiHtml('<span style="color:var(--text-dim)">Running analysis…</span>')
+      const response = await fetch('/ai/triage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: getAssistantModel(),
+          max_tokens: 2000,
+          stream: true,
+          system: LOGS_TRIAGE_SYSTEM,
+          messages: [{ role: 'user', content: userContent }],
+        }),
+      })
+      if (!response.ok) {
+        let eb = {}
+        try {
+          eb = await response.json()
+        } catch {
+          /* ignore */
+        }
+        const err = eb?.error
+        const emsg = typeof err === 'string' ? err : err?.message || 'HTTP ' + response.status
+        throw new Error(emsg)
+      }
+      const full = await readTriageSseStream(response.body, (acc) => {
+        setAiHtml(mdToHtml(acc) + '<span class="ai-cursor"></span>')
+        const el = aiBodyRef.current
+        if (el) el.scrollTop = el.scrollHeight
+      })
+      setAiHtml(mdToHtml(full))
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      const safe = msg.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      setAiHtml(`<p style="color:var(--red)"><strong>Analysis failed:</strong> ${safe}</p>`)
+    } finally {
+      aiTriageInFlight.current = false
+      setAiBusy(false)
+    }
+  }, [token, envId, namespace, name, isAiAvailable, pods.length])
 
   const onPodChange = (v) => {
     setPod(v)
@@ -220,8 +315,61 @@ export default function ServiceDetailLogsTab({ envId, namespace, name }) {
     return p?.containers || []
   }, [pods, pod])
 
+  const aiBadge = aiProvider === 'openai' ? 'OpenAI' : 'Claude'
+
   return (
-    <div className="log-terminal">
+    <div>
+      {isAiAvailable ? (
+        <div
+          style={{
+            marginBottom: 12,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            flexWrap: 'wrap',
+            gap: 8,
+          }}
+        >
+          <span className="ai-badge">{aiBadge}</span>
+          <button
+            type="button"
+            className="btn btn-primary btn-xs"
+            onClick={() => void runLogsTriage()}
+            disabled={aiBusy || !!loadErr}
+          >
+            {aiBusy ? 'Analysing…' : 'Analyse with AI'}
+          </button>
+        </div>
+      ) : null}
+
+      {aiPanelOpen ? (
+        <div className="ai-panel" style={{ marginBottom: 12 }}>
+          <div className="ai-panel-head">
+            <span className="ai-panel-title">Analysis — {name}</span>
+            <span className="ai-badge">{aiBadge}</span>
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs"
+              onClick={() => {
+                setAiPanelOpen(false)
+                setAiHtml('')
+              }}
+            >
+              ✕
+            </button>
+          </div>
+          <div
+            ref={aiBodyRef}
+            className="ai-body"
+            style={{ maxHeight: 360, overflowY: 'auto' }}
+            dangerouslySetInnerHTML={{
+              __html: aiHtml || '<span style="color:var(--text-dim)">…</span>',
+            }}
+          />
+        </div>
+      ) : null}
+
+      <div className="log-terminal">
       <div className="log-toolbar">
         <select
           value={pod}
@@ -326,6 +474,7 @@ export default function ServiceDetailLogsTab({ envId, namespace, name }) {
           )}
         </div>
       )}
+      </div>
     </div>
   )
 }

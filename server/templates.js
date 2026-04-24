@@ -1,5 +1,3 @@
-import http from 'node:http'
-import https from 'node:https'
 import { TEMPLATE_URL } from './config.js'
 import { CORS } from './lib/cors.js'
 
@@ -7,36 +5,35 @@ let templateCache = null
 let templateCacheTime = 0
 const TEMPLATE_CACHE_TTL = 5 * 60 * 1000
 
+async function loadTemplatesFromSource() {
+  const res = await fetch(TEMPLATE_URL, {
+    headers: { 'User-Agent': 'portainer-run/1.0' },
+    redirect: 'follow',
+  })
+  const body = await res.text()
+  if (!res.ok) {
+    const preview = body.slice(0, 200).replace(/\s+/g, ' ')
+    throw new Error(
+      `Catalogue URL returned HTTP ${res.status} ${res.statusText}${preview ? `: ${preview}` : ''}`,
+    )
+  }
+  try {
+    return JSON.parse(body)
+  } catch (e) {
+    const err = e instanceof Error ? e : new Error(String(e))
+    throw new Error('Failed to parse templates JSON: ' + err.message)
+  }
+}
+
 function fetchTemplates() {
   const now = Date.now()
   if (templateCache && now - templateCacheTime < TEMPLATE_CACHE_TTL) {
     return Promise.resolve(templateCache)
   }
-  return new Promise((resolve, reject) => {
-    const parsed = new URL(TEMPLATE_URL)
-    const transport = parsed.protocol === 'https:' ? https : http
-    const req = transport.get(
-      TEMPLATE_URL,
-      { headers: { 'User-Agent': 'portainer-run/1.0' } },
-      (res) => {
-        const chunks = []
-        res.on('data', (c) => chunks.push(c))
-        res.on('end', () => {
-          try {
-            const body = Buffer.concat(chunks).toString('utf8')
-            const data = JSON.parse(body)
-            templateCache = data
-            templateCacheTime = Date.now()
-            resolve(data)
-          } catch (e) {
-            const err = e instanceof Error ? e : new Error(String(e))
-            reject(new Error('Failed to parse templates: ' + err.message))
-          }
-        })
-      }
-    )
-    req.on('error', reject)
-    req.end()
+  return loadTemplatesFromSource().then((data) => {
+    templateCache = data
+    templateCacheTime = Date.now()
+    return data
   })
 }
 

@@ -9,6 +9,7 @@ import { serviceDetailPath } from '../lib/routes.js'
 import { kubeFetch } from '../lib/api.js'
 import { age } from '../lib/utils.js'
 import { patchDeploymentReplicas } from '../lib/patchDeploymentReplicas.js'
+import { restartDeployment } from '../lib/restartDeployment.js'
 import { refreshCache } from '../services/refreshDeployments.js'
 import { loadDeployFormFromCluster } from '../lib/deployFormLoadFromCluster.js'
 import {
@@ -259,39 +260,8 @@ export function ServiceDetailPage() {
     if (!token || !envId || !namespace || !name || restartInFlight.current) return
     restartInFlight.current = true
     setRestartPending(true)
-    const patch = {
-      spec: {
-        template: {
-          metadata: {
-            annotations: {
-              'kubectl.kubernetes.io/restartedAt': new Date().toISOString(),
-            },
-          },
-        },
-      },
-    }
     try {
-      const r = await kubeFetch(
-        token,
-        envId,
-        `/apis/apps/v1/namespaces/${namespace}/deployments/${name}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/strategic-merge-patch+json' },
-          body: JSON.stringify(patch),
-        },
-      )
-      if (!r.ok) {
-        let message = 'HTTP ' + r.status
-        try {
-          const j = await r.json()
-          message = j?.message || message
-        } catch {
-          /* ignore */
-        }
-        throw new Error(message)
-      }
-      const updated = await r.json().catch(() => null)
+      const updated = await restartDeployment(token, String(envId), namespace, name)
       if (updated) setD(updated)
       else void load()
       pushToast(`“${name}” is restarting — pods will be replaced one by one`, 'ok')

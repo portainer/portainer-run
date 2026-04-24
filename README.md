@@ -62,7 +62,7 @@ The Catalogue provides a library of pre-configured application stacks that can b
 
 Step 1 selects the target environment and namespace. Namespaces are fetched live from the cluster and filtered to those the token can reach. Step 2 shows a confirmation summary: template name, environment, namespace, containers, exposure type, and a GPU REQUIRED notice if the template requests GPU resources. From step 2, **Deploy Now** fires the full deployment sequence directly (PVCs, Deployment, Service) without touching the Deploy form. **Customize** instead populates the Deploy form with the template's configuration, navigates to it, and pre-sets the environment and namespace; giving the user full control before deploying.
 
-The template library is fetched from `TEMPLATE_URL` and cached server-side for 5 minutes. By default it points to the templates file in this repository. To use your own catalogue, set `TEMPLATE_URL` to any publicly accessible JSON file matching the format below.
+The template library is fetched from `TEMPLATE_URL` and cached server-side for 5 minutes. The built-in default is the sample catalogue on the `develop` branch: `https://raw.githubusercontent.com/portainer/portainer-run/develop/templates.json` (GitHub raw URLs use `/{branch}/path`, not `refs/heads/...`). To use your own catalogue, set `TEMPLATE_URL` to any publicly accessible JSON file matching the format below.
 
 ### Template file format
 
@@ -221,7 +221,9 @@ Administrators can disable environments from the Cluster Readiness page. Disable
 
 `server/` — Node.js (or Bun) HTTPS proxy, static UI, env-status aggregator, and session cache. Entry: `server/server.js`.
 `client/` — Vite + React application (current UI).
-`old-implementation/` — archived monolith: `portainer-run.html` (original single-file frontend) and `templates.json` (sample application catalogue). The server can still fall back to the HTML if `client/dist` is not present.
+`old-implementation/` — archived monolith: `portainer-run.html` (original single-file frontend). The server can still fall back to the HTML if `client/dist` is not present.
+
+`templates.json` (repo root) — sample application catalogue for the Catalogue and Deploy flows; the default `TEMPLATE_URL` points at this file on GitHub raw.
 `Dockerfile` — multi-stage build: `oven/bun:1-alpine` builds the client and runs the API; includes `openssl` for certificate generation.
 `.env.example` — environment variable reference.
 
@@ -246,7 +248,7 @@ DOCKER_BUILDKIT=0 docker build -t portainer-run .
 
 ### Build and run (local container)
 
-From the repo root, builds the image and starts a detached container (default host ports **9443** → HTTPS, **9080** → HTTP redirect):
+From the repo root, builds the image and starts a detached container (default host ports **9443** → HTTPS, **9080** → HTTP redirect). If `.env` exists in the repo root, its variables are passed into the container with `docker run --env-file` (override the path with `ENV_FILE=...`).
 
 ```bash
 ./scripts/docker-run.sh
