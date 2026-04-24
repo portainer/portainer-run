@@ -2,6 +2,24 @@ import { kubeFetch } from './api.js'
 import { formContainersFromDeploymentSpec } from './deployFormModel.js'
 
 const labelSel = (app) => `app=${app}`
+const FORM_CACHE_LIMIT = 40
+/** @type {Map<string, any>} */
+const DEPLOY_FORM_CACHE = new Map()
+/** @type {Map<string, Promise<any>>} */
+const DEPLOY_FORM_INFLIGHT = new Map()
+
+function deepClone(v) {
+  if (typeof structuredClone === 'function') return structuredClone(v)
+  return JSON.parse(JSON.stringify(v))
+}
+
+function cacheSet(key, value) {
+  DEPLOY_FORM_CACHE.set(key, deepClone(value))
+  if (DEPLOY_FORM_CACHE.size > FORM_CACHE_LIMIT) {
+    const oldest = DEPLOY_FORM_CACHE.keys().next().value
+    if (oldest) DEPLOY_FORM_CACHE.delete(oldest)
+  }
+}
 
 /**
  * Load the same form shape as the deploy page from an existing namespace workload.
@@ -11,6 +29,12 @@ const labelSel = (app) => `app=${app}`
  * @param {string} appName deployment (and app label) name
  */
 export async function loadDeployFormFromCluster(token, envId, namespace, appName) {
+  const inflightKey = `${envId}:${namespace}:${appName}`
+  if (DEPLOY_FORM_INFLIGHT.has(inflightKey)) {
+    const pending = await DEPLOY_FORM_INFLIGHT.get(inflightKey)
+    return deepClone(pending)
+  }
+  const task = (async () => {
   const depR = await kubeFetch(
     token,
     envId,
@@ -23,25 +47,38 @@ export async function loadDeployFormFromCluster(token, envId, namespace, appName
   const d = await depR.json()
   const template = d.spec?.template?.spec
   if (!template) throw new Error('Deployment has no pod template')
+  const rv = String(d.metadata?.resourceVersion || '')
+  const cacheKey = `${envId}:${namespace}:${appName}@${rv}`
+  const cached = DEPLOY_FORM_CACHE.get(cacheKey)
+  if (cached) return deepClone(cached)
 
+  // Fast path: only inspect PVCs that are actually mounted by containers.
+  const usedVolumeNames = new Set()
+  for (const ct of template.containers || []) {
+    for (const vm of ct.volumeMounts || []) {
+      if (vm?.name) usedVolumeNames.add(vm.name)
+    }
+  }
   const claimNames = new Set()
   for (const v of template.volumes || []) {
-    if (v.persistentVolumeClaim?.claimName) {
+    if (!usedVolumeNames.has(v?.name)) continue
+    if (v?.persistentVolumeClaim?.claimName) {
       claimNames.add(v.persistentVolumeClaim.claimName)
     }
   }
   const pvcMap = new Map()
-  for (const cn of claimNames) {
-    const r = await kubeFetch(
-      token,
-      envId,
-      `/api/v1/namespaces/${namespace}/persistentvolumeclaims/${encodeURIComponent(cn)}`,
-    )
-    if (r.ok) {
+  await Promise.all(
+    [...claimNames].map(async (cn) => {
+      const r = await kubeFetch(
+        token,
+        envId,
+        `/api/v1/namespaces/${namespace}/persistentvolumeclaims/${encodeURIComponent(cn)}`,
+      )
+      if (!r.ok) return
       const pvc = await r.json()
       pvcMap.set(cn, pvc)
-    }
-  }
+    }),
+  )
   const containers = formContainersFromDeploymentSpec(template, pvcMap)
   if (!containers.length) {
     throw new Error('No containers in deployment spec')
@@ -96,7 +133,7 @@ export async function loadDeployFormFromCluster(token, envId, namespace, appName
     }
   }
 
-  return {
+  const result = {
     resourceVersion: d.metadata?.resourceVersion,
     instances: d.spec?.replicas ?? 1,
     containers,
@@ -106,5 +143,15 @@ export async function loadDeployFormFromCluster(token, envId, namespace, appName
     ingPath,
     ingPort,
     ingClass,
+  }
+  cacheSet(cacheKey, result)
+  return result
+  })()
+  DEPLOY_FORM_INFLIGHT.set(inflightKey, task)
+  try {
+    const result = await task
+    return deepClone(result)
+  } finally {
+    DEPLOY_FORM_INFLIGHT.delete(inflightKey)
   }
 }

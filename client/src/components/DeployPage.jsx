@@ -13,6 +13,7 @@ import {
   fetchStorageClasses,
   readVolumeDefForDeploy,
 } from '../lib/deployK8s.js'
+import { inflightDedupe } from '../lib/inflightDedupe.js'
 
 
 import { createContainer, withDefaultCnames } from '../lib/deployFormModel.js'
@@ -134,9 +135,11 @@ export function DeployPage() {
     let cancel = false
     void (async () => {
       try {
-        const r = await fetch('/templates')
-        if (!r.ok) throw new Error('HTTP ' + r.status)
-        const data = await r.json()
+        const data = await inflightDedupe('deploy:templates-json', async () => {
+          const r = await fetch('/templates')
+          if (!r.ok) throw new Error('HTTP ' + r.status)
+          return r.json()
+        })
         if (cancel) return
         const list = data.templates || []
         const t = list.find((x) => x.id === templateQueryId)

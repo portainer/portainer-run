@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { kubeFetch } from '../../lib/api.js'
+import { inflightDedupe } from '../../lib/inflightDedupe.js'
 import { useAppStore } from '../../store/useAppStore.js'
 import { age } from '../../lib/utils.js'
 
@@ -21,31 +22,33 @@ export default function ServiceDetailRevisionsTab({ envId, namespace, name, onAf
   const namePath = encodeURIComponent(name)
 
   const fetchReplicaSetHistory = useCallback(async () => {
-    const r = await kubeFetch(
-      token,
-      envId,
-      `/apis/apps/v1/namespaces/${nsPath}/replicasets`,
-    )
-    if (!r.ok) throw new Error('HTTP ' + r.status)
-    const data = await r.json()
-    return (data.items || [])
-      .filter((rs) =>
-        rs.metadata.ownerReferences?.some(
-          (o) => o.kind === 'Deployment' && o.name === name,
-        ),
+    return inflightDedupe(`revisions:rs:${String(envId)}:${namespace}:${name}`, async () => {
+      const r = await kubeFetch(
+        token,
+        envId,
+        `/apis/apps/v1/namespaces/${nsPath}/replicasets`,
       )
-      .sort((a, b) => {
-        const ra = parseInt(
-          a.metadata.annotations?.['deployment.kubernetes.io/revision'] || '0',
-          10,
+      if (!r.ok) throw new Error('HTTP ' + r.status)
+      const data = await r.json()
+      return (data.items || [])
+        .filter((rs) =>
+          rs.metadata.ownerReferences?.some(
+            (o) => o.kind === 'Deployment' && o.name === name,
+          ),
         )
-        const rb = parseInt(
-          b.metadata.annotations?.['deployment.kubernetes.io/revision'] || '0',
-          10,
-        )
-        return rb - ra
-      })
-  }, [token, envId, namespace, name])
+        .sort((a, b) => {
+          const ra = parseInt(
+            a.metadata.annotations?.['deployment.kubernetes.io/revision'] || '0',
+            10,
+          )
+          const rb = parseInt(
+            b.metadata.annotations?.['deployment.kubernetes.io/revision'] || '0',
+            10,
+          )
+          return rb - ra
+        })
+    })
+  }, [token, envId, namespace, name, nsPath])
 
   const load = useCallback(async () => {
     if (!token || !envId || !namespace || !name) return

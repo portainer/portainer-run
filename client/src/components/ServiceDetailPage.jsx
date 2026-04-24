@@ -204,6 +204,7 @@ export function ServiceDetailPage() {
   const [refreshPending, setRefreshPending] = useState(false)
   const [restartPending, setRestartPending] = useState(false)
   const [scalePending, setScalePending] = useState(false)
+  const loadInFlight = useRef(null)
   const refreshInFlight = useRef(false)
   const restartInFlight = useRef(false)
   const scaleInFlight = useRef(false)
@@ -227,24 +228,31 @@ export function ServiceDetailPage() {
 
   const load = useCallback(async () => {
     if (!token || !envId || !namespace || !name) return
-    setErr('')
-    try {
-      const r = await kubeFetch(
-        token,
-        envId,
-        `/apis/apps/v1/namespaces/${namespace}/deployments/${name}`,
-      )
-      if (!r.ok) {
+    if (loadInFlight.current) return loadInFlight.current
+    const p = (async () => {
+      setErr('')
+      try {
+        const r = await kubeFetch(
+          token,
+          envId,
+          `/apis/apps/v1/namespaces/${namespace}/deployments/${name}`,
+        )
+        if (!r.ok) {
+          setD(null)
+          setErr('HTTP ' + r.status)
+          return
+        }
+        const json = await r.json()
+        setD(json)
+      } catch (e) {
         setD(null)
-        setErr('HTTP ' + r.status)
-        return
+        setErr(e?.message || 'Request failed')
+      } finally {
+        loadInFlight.current = null
       }
-      const json = await r.json()
-      setD(json)
-    } catch (e) {
-      setD(null)
-      setErr(e?.message || 'Request failed')
-    }
+    })()
+    loadInFlight.current = p
+    return p
   }, [token, envId, namespace, name])
 
   const runRestart = useCallback(async () => {

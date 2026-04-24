@@ -1,9 +1,11 @@
 import { kubeFetch } from '../../lib/api.js'
+import { inflightDedupe } from '../../lib/inflightDedupe.js'
 
 /**
  * @returns {Promise<{ rows: [string, string][], emptyMessage?: string, error?: string }>}
  */
 export async function fetchExposureDetail(token, envId, ns, name) {
+  return inflightDedupe(`exposure:${envId}:${ns}:${name}`, async () => {
   try {
     const [svcRes, ingRes] = await Promise.all([
       kubeFetch(
@@ -75,4 +77,5 @@ export async function fetchExposureDetail(token, envId, ns, name) {
   } catch (e) {
     return { rows: [], error: e?.message || 'Request failed' }
   }
+  })
 }

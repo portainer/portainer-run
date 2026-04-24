@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { kubeFetch, portainerUrlHeaders } from '../../lib/api.js'
+import { inflightDedupe } from '../../lib/inflightDedupe.js'
 import { useAppStore } from '../../store/useAppStore.js'
 
 function lineClass(text) {
@@ -85,13 +86,18 @@ export default function ServiceDetailLogsTab({ envId, namespace, name }) {
 
     ;(async () => {
       try {
-        const r = await kubeFetch(
-          token,
-          envId,
-          `/api/v1/namespaces/${namespace}/pods?labelSelector=${encodeURIComponent('app=' + name)}`,
+        const items = await inflightDedupe(
+          `logs:pods:${envId}:${namespace}:${name}`,
+          async () => {
+            const r = await kubeFetch(
+              token,
+              envId,
+              `/api/v1/namespaces/${namespace}/pods?labelSelector=${encodeURIComponent('app=' + name)}`,
+            )
+            if (!r.ok) throw new Error('HTTP ' + r.status)
+            return (await r.json()).items || []
+          },
         )
-        if (!r.ok) throw new Error('HTTP ' + r.status)
-        const items = (await r.json()).items || []
         if (cancelled) return
         if (!items.length) {
           setLoadErr('No instances found for this app label.')

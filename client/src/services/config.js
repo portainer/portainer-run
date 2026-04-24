@@ -1,6 +1,8 @@
+import { inflightDedupe } from '../lib/inflightDedupe.js'
 import { useAppStore } from '../store/useAppStore.js'
 
 export async function loadServerConfig() {
+  return inflightDedupe('server-config', async () => {
   const st = useAppStore.getState
   try {
     const r = await fetch('/config')
@@ -21,4 +23,5 @@ export async function loadServerConfig() {
     st().setServerLabel('API proxy not reachable — is the portainer-run server running?')
     st().setAi(false, 'anthropic', '')
   }
+  })
 }

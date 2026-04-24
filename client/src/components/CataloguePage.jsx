@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { inflightDedupe } from '../lib/inflightDedupe.js'
 import { useNavigate } from 'react-router-dom'
 import { ROUTES } from '../lib/routes.js'
 import {
@@ -30,10 +31,13 @@ export function CataloguePage() {
     setLoading(true)
     setError('')
     try {
-      const r = await fetch('/templates')
-      if (!r.ok) throw new Error('HTTP ' + r.status)
-      const data = await r.json()
-      if (data.error) throw new Error(data.message || data.error)
+      const data = await inflightDedupe('catalogue:templates-json', async () => {
+        const r = await fetch('/templates')
+        if (!r.ok) throw new Error('HTTP ' + r.status)
+        const j = await r.json()
+        if (j.error) throw new Error(j.message || j.error)
+        return j
+      })
       setTemplates(data.templates || [])
     } catch (e) {
       const err = e instanceof Error ? e : new Error(String(e))

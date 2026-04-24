@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { kubeFetch } from '../../lib/api.js'
+import { inflightDedupe } from '../../lib/inflightDedupe.js'
 import { useAppStore } from '../../store/useAppStore.js'
 import {
   barColor,
@@ -31,12 +32,24 @@ export default function ServiceDetailMetricsTab({ d, envId, namespace, name }) {
   const fetchSample = useCallback(async () => {
     if (!token || !envId || !namespace || !name) return
     try {
-      const r = await kubeFetch(
-        token,
-        envId,
-        `/apis/metrics.k8s.io/v1beta1/namespaces/${namespace}/pods`,
+      const { status, data } = await inflightDedupe(
+        `metrics-pods:${envId}:${namespace}:${name}`,
+        async () => {
+          const r = await kubeFetch(
+            token,
+            envId,
+            `/apis/metrics.k8s.io/v1beta1/namespaces/${namespace}/pods`,
+          )
+          if (r.status === 404 || r.status === 503) {
+            return { status: r.status, data: null }
+          }
+          if (!r.ok) {
+            return { status: r.status, data: null }
+          }
+          return { status: r.status, data: await r.json() }
+        },
       )
-      if (r.status === 404 || r.status === 503) {
+      if (status === 404 || status === 503) {
         setUnavailable(true)
         if (timerRef.current) {
           clearInterval(timerRef.current)
@@ -45,9 +58,8 @@ export default function ServiceDetailMetricsTab({ d, envId, namespace, name }) {
         setPolling(false)
         return
       }
-      if (!r.ok) return
+      if (!data) return
 
-      const data = await r.json()
       const now = Date.now()
       const cutoff = now - 10 * 60 * 1000
       const hist = historyRef.current

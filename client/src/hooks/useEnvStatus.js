@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useAppStore, visibleEnvironments } from '../store/useAppStore.js'
 import { portainerUrlHeaders } from '../lib/api.js'
+import { inflightDedupe } from '../lib/inflightDedupe.js'
 
 function makeLimiter(n) {
   let active = 0
@@ -60,10 +61,12 @@ export function useEnvStatusOnDeployments(deps, token) {
       const prev = state.envStatusClientCache[String(envId)]
       if (prev && prev.rv === rv) continue
       const job = () =>
-        fetch(`/env-status/${envId}`, {
-          headers: { 'X-API-Key': token, ...portainerUrlHeaders() },
+        inflightDedupe(`env-status:${envId}`, async () => {
+          const r = await fetch(`/env-status/${envId}`, {
+            headers: { 'X-API-Key': token, ...portainerUrlHeaders() },
+          })
+          return r.ok ? r.json() : null
         })
-          .then((r) => (r.ok ? r.json() : null))
           .then((json) => {
             if (json && json.data) {
               patchEnvStatus(envId, rv, json.data)

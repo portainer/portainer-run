@@ -1,4 +1,5 @@
 import { kubeFetch } from './api.js'
+import { inflightDedupe } from './inflightDedupe.js'
 import { GPU_RESOURCE_KEYS } from './deployFormModel.js'
 
 export { GPU_RESOURCE_KEYS } from './deployFormModel.js'
@@ -9,6 +10,7 @@ export { GPU_RESOURCE_KEYS } from './deployFormModel.js'
  * @returns {Promise<{ ok: true, manual: boolean, namespaces: string[], message?: string } | { ok: false, error: string, manual?: boolean }>}
  */
 export async function fetchNamespaceOptions(token, envId) {
+  return inflightDedupe(`k8s:ns-options:${envId}`, async () => {
   const r = await kubeFetch(token, envId, '/api/v1/namespaces')
   if (r.status === 403 || r.status === 401) {
     return {
@@ -52,6 +54,7 @@ export async function fetchNamespaceOptions(token, envId) {
     namespaces: accessible,
     message: accessible.length + ' accessible namespace(s)',
   }
+  })
 }
 
 /**
@@ -59,9 +62,11 @@ export async function fetchNamespaceOptions(token, envId) {
  * @param {string} envId
  */
 export async function fetchStorageClasses(token, envId) {
-  const r = await kubeFetch(token, envId, '/apis/storage.k8s.io/v1/storageclasses')
-  if (!r.ok) throw new Error('HTTP ' + r.status)
-  return (await r.json()).items || []
+  return inflightDedupe(`k8s:storage-classes:${envId}`, async () => {
+    const r = await kubeFetch(token, envId, '/apis/storage.k8s.io/v1/storageclasses')
+    if (!r.ok) throw new Error('HTTP ' + r.status)
+    return (await r.json()).items || []
+  })
 }
 
 /**
@@ -71,9 +76,11 @@ export async function fetchStorageClasses(token, envId) {
  */
 export async function fetchSecretsInNamespace(token, envId, ns) {
   if (!ns) return []
-  const r = await kubeFetch(token, envId, `/api/v1/namespaces/${ns}/secrets`)
-  if (!r.ok) return []
-  return (await r.json()).items || []
+  return inflightDedupe(`k8s:secrets:${envId}:${ns}`, async () => {
+    const r = await kubeFetch(token, envId, `/api/v1/namespaces/${ns}/secrets`)
+    if (!r.ok) return []
+    return (await r.json()).items || []
+  })
 }
 
 const MANAGED_BY_LABEL = 'managed-by=portainer-run'
@@ -87,6 +94,7 @@ const MANAGED_BY_LABEL = 'managed-by=portainer-run'
  */
 export async function fetchSecretUsageFromManagedDeployments(token, envId, ns) {
   if (!ns) return {}
+  return inflightDedupe(`k8s:secret-usage:${envId}:${ns}`, async () => {
   const r = await kubeFetch(
     token,
     envId,
@@ -118,6 +126,7 @@ export async function fetchSecretUsageFromManagedDeployments(token, envId, ns) {
     }
   }
   return usage
+  })
 }
 
 /**
@@ -183,33 +192,35 @@ export function deleteNamespacedSecret(token, envId, ns, name) {
  */
 export async function detectClusterGpuType(token, envId) {
   if (!envId) return { key: 'nvidia.com/gpu', label: 'Select an environment first' }
-  const r = await kubeFetch(token, envId, '/api/v1/nodes')
-  if (!r.ok) {
-    return { key: 'nvidia.com/gpu', label: 'Could not detect GPU type' }
-  }
-  const nodes = (await r.json()).items || []
-  const typeCounts = {}
-  for (const node of nodes) {
-    const alloc = node.status?.allocatable || {}
-    for (const k of GPU_RESOURCE_KEYS) {
-      const n = parseInt(alloc[k] || '0', 10)
-      if (n > 0) typeCounts[k] = (typeCounts[k] || 0) + n
+  return inflightDedupe(`k8s:gpu-type:${envId}`, async () => {
+    const r = await kubeFetch(token, envId, '/api/v1/nodes')
+    if (!r.ok) {
+      return { key: 'nvidia.com/gpu', label: 'Could not detect GPU type' }
     }
-  }
-  if (!Object.keys(typeCounts).length) {
+    const nodes = (await r.json()).items || []
+    const typeCounts = {}
+    for (const node of nodes) {
+      const alloc = node.status?.allocatable || {}
+      for (const k of GPU_RESOURCE_KEYS) {
+        const n = parseInt(alloc[k] || '0', 10)
+        if (n > 0) typeCounts[k] = (typeCounts[k] || 0) + n
+      }
+    }
+    if (!Object.keys(typeCounts).length) {
+      return {
+        key: 'nvidia.com/gpu',
+        label: '⚠ No GPU nodes in this environment',
+        warn: 'amber',
+      }
+    }
+    const topKey = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0][0]
+    const total = Object.values(typeCounts).reduce((a, b) => a + b, 0)
     return {
-      key: 'nvidia.com/gpu',
-      label: '⚠ No GPU nodes in this environment',
-      warn: 'amber',
+      key: topKey,
+      label: `${total} GPU(s) available · ${topKey}`,
+      warn: 'green',
     }
-  }
-  const topKey = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0][0]
-  const total = Object.values(typeCounts).reduce((a, b) => a + b, 0)
-  return {
-    key: topKey,
-    label: `${total} GPU(s) available · ${topKey}`,
-    warn: 'green',
-  }
+  })
 }
 
 /** Alias for older imports — same as `detectClusterGpuType` */

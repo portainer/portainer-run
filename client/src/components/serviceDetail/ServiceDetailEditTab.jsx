@@ -98,6 +98,7 @@ export default function ServiceDetailEditTab({ d, envId, namespace, name, onSave
   }, [formLoading, location.hash, location.pathname, location.search, location.state, navigate])
 
   useEffect(() => {
+    if (formLoading) return
     if (!envId || !token || !namespace) {
       setNamespaceSecrets([])
       return
@@ -116,12 +117,13 @@ export default function ServiceDetailEditTab({ d, envId, namespace, name, onSave
     return () => {
       cancel = true
     }
-  }, [envId, token, namespace, resourceKey])
+  }, [formLoading, envId, token, namespace, resourceKey])
 
   const anyVolume = useMemo(() => containers.some((c) => c.volumeOn), [containers])
   const anyGpu = useMemo(() => containers.some((c) => c.gpuEnabled), [containers])
 
   useEffect(() => {
+    if (formLoading) return
     if (!envId || !token || !anyVolume) {
       if (!anyVolume) setScItems([])
       return
@@ -147,9 +149,10 @@ export default function ServiceDetailEditTab({ d, envId, namespace, name, onSave
     return () => {
       cancel = true
     }
-  }, [envId, token, anyVolume])
+  }, [formLoading, envId, token, anyVolume])
 
   useEffect(() => {
+    if (formLoading) return
     if (!envId || !token || !anyGpu) return
     let cancel = false
     void (async () => {
@@ -164,7 +167,7 @@ export default function ServiceDetailEditTab({ d, envId, namespace, name, onSave
     return () => {
       cancel = true
     }
-  }, [envId, token, anyGpu])
+  }, [formLoading, envId, token, anyGpu])
 
   const secretList = useMemo(() => {
     return namespaceSecrets

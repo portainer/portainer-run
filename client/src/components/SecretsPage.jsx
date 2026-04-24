@@ -9,6 +9,7 @@ import {
   fetchSecretUsageFromManagedDeployments,
   fetchSecretsInNamespace,
 } from '../lib/deployK8s.js'
+import { inflightDedupe } from '../lib/inflightDedupe.js'
 
 function newRowId() {
   return `sk-${Date.now()}-${Math.random().toString(16).slice(2)}`
@@ -118,10 +119,14 @@ export function SecretsPage() {
     setLoadState('loading')
     setLoadError('')
     try {
-      const [items, u] = await Promise.all([
-        fetchSecretsInNamespace(token, listEnvId, resolvedListNs),
-        fetchSecretUsageFromManagedDeployments(token, listEnvId, resolvedListNs),
-      ])
+      const [items, u] = await inflightDedupe(
+        `secrets-page:${listEnvId}:${resolvedListNs}`,
+        async () =>
+          Promise.all([
+            fetchSecretsInNamespace(token, listEnvId, resolvedListNs),
+            fetchSecretUsageFromManagedDeployments(token, listEnvId, resolvedListNs),
+          ]),
+      )
       setSecrets(items)
       setUsage(u)
       setLoadState('ok')

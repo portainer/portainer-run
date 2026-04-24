@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { inflightDedupe } from './lib/inflightDedupe.js'
 import { useAppStore } from './store/useAppStore.js'
 import { loadServerConfig } from './services/config.js'
 import { tryAutoConnect } from './services/session.js'
@@ -10,10 +11,10 @@ export function App() {
   const connected = useAppStore((s) => s.connected)
 
   useEffect(() => {
-    void (async () => {
+    void inflightDedupe('app:init-bootstrap', async () => {
       await loadServerConfig()
       await tryAutoConnect()
-    })()
+    })
   }, [])
 
   return (
