@@ -103,14 +103,15 @@ RULES:
 - volumes become storage config on the container that mounts them
 - ports from the first service become the exposure config
 - build directives cannot be mapped — add to warnings
-- Change any db hostnames to localhost (since all containers share localhost in a pod)
+- LOCALHOST REWRITE (critical): All containers in a Portainer Run deployment share the same network namespace — they communicate via localhost, not by service name. You MUST scan every env var value across every container and replace any value that is (or contains) the name of another service in this compose file with "localhost". This applies to ALL inter-container references regardless of variable name: DB_HOST, DATABASE_URL, REDIS_URL, RABBIT_HOST, API_HOST, WORDPRESS_DB_HOST, any connection string containing a service name, etc. Also applies to values like "mysql:3306" → "localhost:3306", "redis:6379" → "localhost:6379". Ignore dependsOn, links, and networks — they are irrelevant in a shared pod.
 
-Return ONLY valid JSON in a code block tagged deploy-config like this: \`\`\`deploy-config
+Return ONLY valid JSON in a code block tagged deploy-config like this — the fence tag must be exactly \`\`\`deploy-config with no trailing text, followed immediately by a newline, then valid JSON, then a closing \`\`\` on its own line. No other text before or after:
+\`\`\`deploy-config
 {...}
-\`\`\` No other text.
+\`\`\`
 
-Structure (example with 2 services):
-{"name":"my-app","namespace":"default","instances":1,"exposure":{"type":"NodePort","ports":[80]},"containers":[{"name":"web","image":"nginx:latest","env":[{"name":"DB_HOST","value":"localhost"}],"cpuReq":"100m","cpuLim":"500m","memReq":"128Mi","memLim":"512Mi","storage":null},{"name":"db","image":"mysql:8","env":[{"name":"MYSQL_ROOT_PASSWORD","value":"secret"},{"name":"MYSQL_DATABASE","value":"app"}],"cpuReq":"100m","cpuLim":"500m","memReq":"256Mi","memLim":"512Mi","storage":{"name":"db-data","size":"5Gi","mountPath":"/var/lib/mysql"}}],"warnings":[]}
+Structure (example: wordpress + mysql, showing localhost rewrite):
+{"name":"my-app","namespace":"default","instances":1,"exposure":{"type":"NodePort","ports":[80]},"containers":[{"name":"wordpress","image":"wordpress:latest","env":[{"name":"WORDPRESS_DB_HOST","value":"localhost:3306"},{"name":"WORDPRESS_DB_USER","value":"wordpress"},{"name":"WORDPRESS_DB_PASSWORD","value":"secret"}],"cpuReq":"100m","cpuLim":"500m","memReq":"128Mi","memLim":"512Mi","storage":null},{"name":"mysql","image":"mysql:8.0","env":[{"name":"MYSQL_ROOT_PASSWORD","value":"rootpassword"},{"name":"MYSQL_DATABASE","value":"wordpress"},{"name":"MYSQL_USER","value":"wordpress"},{"name":"MYSQL_PASSWORD","value":"secret"}],"cpuReq":"100m","cpuLim":"500m","memReq":"256Mi","memLim":"512Mi","storage":{"name":"mysql-data","size":"5Gi","mountPath":"/var/lib/mysql"}}],"warnings":[]}
 
 Session: ${ctx}`,
             messages: [{ role: 'user', content: 'Translate:\n\n' + text }],
@@ -222,7 +223,11 @@ Session context: ${ctx}${diagnosticData}
 
 IMPORTANT RULES:
 - If the user asks to SCALE an existing service (e.g. "scale nginx to 3"), respond in plain English confirming what you will do. State clearly: "I'll scale [name] to [N] instances." Do NOT output a deploy-config block for scale requests.
-- If the user asks to DEPLOY a NEW service that does not exist yet, output a deploy-config JSON block.
+- If the user asks to DEPLOY a NEW service that does not exist yet, output ONLY a deploy-config JSON block using this exact format — the code fence tag must be exactly \`\`\`deploy-config with no trailing text, followed immediately by a newline, then the JSON, then a closing \`\`\` on its own line. No prose before or after the fence:
+\`\`\`deploy-config
+{"name":"my-app","namespace":"default","instances":1,"exposure":{"type":"NodePort","ports":[80]},"containers":[{"name":"app","image":"nginx:latest","env":[],"cpuReq":"100m","cpuLim":"500m","memReq":"128Mi","memLim":"512Mi","storage":null}],"warnings":[]}
+\`\`\`
+Use NodePort exposure by default unless the user specifies otherwise. Multi-container apps (e.g. WordPress + MySQL, app + Redis, app + RabbitMQ) become multiple containers in the same pod sharing the same network namespace — they ALL communicate via localhost, not by service or container name. You MUST rewrite every inter-container hostname reference in env vars to localhost: "mysql" → "localhost", "redis" → "localhost", "rabbitmq" → "localhost", connection strings like "mysql:3306" → "localhost:3306", "redis://redis:6379" → "redis://localhost:6379", etc. Scan every env var value in every container and apply this rewrite. Each container must have its own env array containing only that container's own variables.
 - If LIVE DIAGNOSTIC DATA is provided above, you already have the logs, events, and pod status. Analyse them immediately and give a specific answer. NEVER ask the user to go check the logs or metrics themselves — you already have that data. NEVER output a JSON action plan. Just answer in plain English based on what you can see.
 - Never use Kubernetes jargon. Say "instances" not "replicas", "stopped" not "CrashLoopBackOff", "restarting" not "CrashLoopBackOff".`
 
