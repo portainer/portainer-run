@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fetchTemplatesJson } from '../lib/fetchTemplatesJson.js'
 import { inflightDedupe } from '../lib/inflightDedupe.js'
-import { useNavigate } from 'react-router-dom'
-import { ROUTES } from '../lib/routes.js'
 import {
   CATALOGUE_CATEGORY_COLORS,
   CATALOGUE_CATEGORY_LABELS,
 } from '../lib/catalogueTemplate.js'
+import { CatalogueDeployWizard } from './CatalogueDeployWizard.jsx'
 
 /**
  * @typedef {{ id: string, name: string, description?: string, category?: string, manifest?: object }} CatalogueEntry
@@ -21,12 +20,12 @@ function firstPort(t) {
 }
 
 export function CataloguePage() {
-  const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   /** @type {[CatalogueEntry[], function]} */
   const [templates, setTemplates] = useState([])
   const [filterCat, setFilterCat] = useState('all')
+  const [wizardTemplate, setWizardTemplate] = useState(/** @type {CatalogueEntry | null} */ (null))
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -59,8 +58,8 @@ export function CataloguePage() {
     return templates.filter((t) => t.category === filterCat)
   }, [templates, filterCat])
 
-  function goDeploy(t) {
-    navigate(ROUTES.deploy, { state: { catalogueTemplate: t } })
+  function openWizard(t) {
+    setWizardTemplate(t)
   }
 
   return (
@@ -190,15 +189,20 @@ export function CataloguePage() {
                   <button
                     type="button"
                     className="btn btn-primary cat-deploy-btn"
-                    onClick={() => goDeploy(t)}
+                    onClick={() => openWizard(t)}
                   >
-                    Use in Deploy
+                    Deploy Wizard
                   </button>
                 </div>
               )
             })
           : null}
       </div>
+
+      <CatalogueDeployWizard
+        template={wizardTemplate}
+        onClose={() => setWizardTemplate(null)}
+      />
     </div>
   )
 }
