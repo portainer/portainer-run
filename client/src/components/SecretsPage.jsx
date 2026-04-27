@@ -441,7 +441,7 @@ export function SecretsPage() {
           aria-modal="true"
           aria-labelledby="new-secret-title"
         >
-          <div className="modal" style={{ maxWidth: 480 }}>
+          <div className="modal" style={{ maxWidth: 660 }}>
             <div className="modal-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h3 id="new-secret-title">New Secret</h3>
               <button
@@ -542,11 +542,10 @@ export function SecretsPage() {
                         display: 'grid',
                         gridTemplateColumns: '1fr 1fr 32px',
                         gap: 8,
-                        alignItems: 'center',
+                        alignItems: 'flex-start',
                       }}
                     >
-                      <input
-                        type="text"
+                      <textarea
                         placeholder="Key (e.g. DB_PASSWORD)"
                         value={row.key}
                         onChange={(e) =>
@@ -556,6 +555,7 @@ export function SecretsPage() {
                         }
                         autoComplete="off"
                         disabled={saving}
+                        rows={2}
                         style={{
                           width: '100%',
                           background: 'var(--bg)',
@@ -565,11 +565,13 @@ export function SecretsPage() {
                           fontFamily: 'var(--mono)',
                           fontSize: 12,
                           padding: '7px 10px',
+                          resize: 'vertical',
+                          minHeight: 36,
+                          boxSizing: 'border-box',
                         }}
                       />
                       <div style={{ position: 'relative' }}>
-                        <input
-                          type={showPw[row.id] ? 'text' : 'password'}
+                        <textarea
                           placeholder="Value"
                           value={row.value}
                           onChange={(e) =>
@@ -578,15 +580,21 @@ export function SecretsPage() {
                             )
                           }
                           disabled={saving}
+                          rows={2}
                           style={{
                             width: '100%',
                             background: 'var(--bg)',
                             border: '1px solid var(--border2)',
                             borderRadius: 6,
-                            color: 'var(--text-bright)',
+                            color: showPw[row.id] ? 'var(--text-bright)' : 'transparent',
+                            caretColor: 'var(--text-bright)',
+                            textShadow: showPw[row.id] ? 'none' : '0 0 8px var(--text-dim)',
                             fontFamily: 'var(--mono)',
                             fontSize: 12,
-                            padding: '7px 52px 7px 10px',
+                            padding: '7px 44px 7px 10px',
+                            resize: 'vertical',
+                            minHeight: 36,
+                            boxSizing: 'border-box',
                           }}
                         />
                         <button
@@ -598,8 +606,7 @@ export function SecretsPage() {
                           style={{
                             position: 'absolute',
                             right: 8,
-                            top: '50%',
-                            transform: 'translateY(-50%)',
+                            top: 8,
                             background: 'none',
                             border: 'none',
                             color: 'var(--text-dim)',
@@ -616,7 +623,7 @@ export function SecretsPage() {
                       <button
                         type="button"
                         className="btn btn-ghost btn-sm"
-                        style={{ minWidth: 32, width: 32, padding: 0 }}
+                        style={{ minWidth: 32, width: 32, padding: 0, marginTop: 4 }}
                         onClick={() => setFormKeys((prev) => prev.filter((r) => r.id !== row.id))}
                         disabled={saving || formKeys.length < 2}
                         title="Remove row"
