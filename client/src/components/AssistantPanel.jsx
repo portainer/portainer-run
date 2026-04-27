@@ -223,9 +223,9 @@ Session context: ${ctx}${diagnosticData}
 
 IMPORTANT RULES:
 - If the user asks to SCALE an existing service (e.g. "scale nginx to 3"), respond in plain English confirming what you will do. State clearly: "I'll scale [name] to [N] instances." Do NOT output a deploy-config block for scale requests.
-- If the user asks to DEPLOY a NEW service that does not exist yet, output ONLY a deploy-config JSON block using this exact format — the code fence tag must be exactly \`\`\`deploy-config with no trailing text, followed immediately by a newline, then the JSON, then a closing \`\`\` on its own line. No prose before or after the fence. ALWAYS populate the env arrays with the correct environment variables for each container — never leave env as an empty array [] for containers that require configuration. Example (WordPress + MySQL, two containers, env vars fully populated, localhost rewrite applied):
+- If the user asks to DEPLOY a NEW service that does not exist yet: FIRST use the web_search tool to find the vendor's official docker-compose.yml. Search priority order: (1) the vendor's own GitHub repo (e.g. "wordpress docker-compose.yml site:github.com/docker"), (2) Docker Hub official image page (e.g. "mysql docker hub official docker-compose"), (3) the vendor's official documentation. Use the REAL volumes, env vars, ports, and image tags from that official source — do NOT invent them from memory. After searching, output ONLY a deploy-config JSON block using this exact format — the code fence tag must be exactly \`\`\`deploy-config with no trailing text, followed immediately by a newline, then the JSON, then a closing \`\`\` on its own line. No prose before or after the fence. ALWAYS populate the env arrays with the correct environment variables for each container — never leave env as an empty array [] for containers that require configuration. Include ALL volumes defined in the official compose file. Example (WordPress + MySQL, two containers, env vars fully populated, localhost rewrite applied):
 \`\`\`deploy-config
-{"name":"wordpress","namespace":"default","instances":1,"exposure":{"type":"NodePort","ports":[80]},"containers":[{"name":"wordpress","image":"wordpress:latest","env":[{"name":"WORDPRESS_DB_HOST","value":"localhost:3306"},{"name":"WORDPRESS_DB_USER","value":"wordpress"},{"name":"WORDPRESS_DB_PASSWORD","value":"wordpress"},{"name":"WORDPRESS_DB_NAME","value":"wordpress"}],"cpuReq":"200m","cpuLim":"500m","memReq":"256Mi","memLim":"512Mi","storage":null},{"name":"mysql","image":"mysql:8.0","env":[{"name":"MYSQL_ROOT_PASSWORD","value":"rootpassword"},{"name":"MYSQL_DATABASE","value":"wordpress"},{"name":"MYSQL_USER","value":"wordpress"},{"name":"MYSQL_PASSWORD","value":"wordpress"}],"cpuReq":"200m","cpuLim":"1000m","memReq":"512Mi","memLim":"1Gi","storage":{"name":"wordpress-mysql-data","size":"10Gi","mountPath":"/var/lib/mysql"}}],"warnings":["Default passwords used — change before production use"]}
+{"name":"wordpress","namespace":"default","instances":1,"exposure":{"type":"NodePort","ports":[80]},"containers":[{"name":"wordpress","image":"wordpress:latest","env":[{"name":"WORDPRESS_DB_HOST","value":"localhost:3306"},{"name":"WORDPRESS_DB_USER","value":"wordpress"},{"name":"WORDPRESS_DB_PASSWORD","value":"wordpress"},{"name":"WORDPRESS_DB_NAME","value":"wordpress"}],"cpuReq":"200m","cpuLim":"500m","memReq":"256Mi","memLim":"512Mi","storage":{"name":"wordpress-data","size":"5Gi","mountPath":"/var/www/html"}},{"name":"mysql","image":"mysql:8.0","env":[{"name":"MYSQL_ROOT_PASSWORD","value":"rootpassword"},{"name":"MYSQL_DATABASE","value":"wordpress"},{"name":"MYSQL_USER","value":"wordpress"},{"name":"MYSQL_PASSWORD","value":"wordpress"}],"cpuReq":"200m","cpuLim":"1000m","memReq":"512Mi","memLim":"1Gi","storage":{"name":"wordpress-mysql-data","size":"10Gi","mountPath":"/var/lib/mysql"}}],"warnings":["Default passwords used — change before production use"]}
 \`\`\`
 Use NodePort exposure by default unless the user specifies otherwise. All containers share the same network namespace — inter-container hostnames MUST be rewritten to localhost: "mysql" → "localhost", "redis" → "localhost:6379", "rabbitmq" → "localhost", etc. Each container must have its own env array with only its own variables — never merge env vars across containers.
 - If LIVE DIAGNOSTIC DATA is provided above, you already have the logs, events, and pod status. Analyse them immediately and give a specific answer. NEVER ask the user to go check the logs or metrics themselves — you already have that data. NEVER output a JSON action plan. Just answer in plain English based on what you can see.
@@ -239,16 +239,24 @@ Use NodePort exposure by default unless the user specifies otherwise. All contai
     setRows((r) => [...r, { id: assistantId, role: 'assistant', text: '', stream: true, isMd: true }])
     setThinking(null)
 
+    // Deploy requests use web search so the model can find official docker-compose files.
+    // Health/diagnostic requests don't need it (we already supply live data).
+    const isDeployRequest = !isScaleQ && !isHealthQ && !diagnosticData
+    const toolsPayload = isDeployRequest
+      ? [{ type: 'web_search_20250305', name: 'web_search' }]
+      : undefined
+
     try {
       const response = await fetch('/ai/triage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: getAssistantModel(),
-          max_tokens: 1500,
+          max_tokens: isDeployRequest ? 4000 : 1500,
           stream: true,
           system: systemPrompt,
           messages,
+          ...(toolsPayload ? { tools: toolsPayload } : {}),
         }),
       })
       if (!response.ok) {
