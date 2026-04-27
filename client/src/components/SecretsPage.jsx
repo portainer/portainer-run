@@ -441,7 +441,7 @@ export function SecretsPage() {
           aria-modal="true"
           aria-labelledby="new-secret-title"
         >
-          <div className="modal" style={{ maxWidth: 660 }}>
+          <div className="modal" style={{ width: 660, maxWidth: '95vw' }}>
             <div className="modal-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h3 id="new-secret-title">New Secret</h3>
               <button
@@ -540,7 +540,7 @@ export function SecretsPage() {
                       key={row.id}
                       style={{
                         display: 'grid',
-                        gridTemplateColumns: '1fr 1fr 32px',
+                        gridTemplateColumns: '200px 1fr 36px',
                         gap: 8,
                         alignItems: 'flex-start',
                       }}
