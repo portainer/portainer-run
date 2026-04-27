@@ -118,9 +118,16 @@ export function DeployPage() {
       if (v.containers?.length) {
         setContainers(v.containers)
       }
+      // Pre-select env/namespace if arriving from wizard Customize button
+      const wizardEnvId = location.state?.wizardEnvId
+      const wizardNs = location.state?.wizardNs
+      if (wizardEnvId) setEnvId(String(wizardEnvId))
+      if (wizardNs) { setManualNsValue(wizardNs); setManualNs(true) }
       cataloguePrefillDone.current = true
       pushToast(
-        `Loaded template “${entry.name || entry.id}” — pick a deployment target and namespace`,
+        wizardEnvId
+          ? `Loaded template “${entry.name || entry.id}” — environment and namespace pre-selected`
+          : `Loaded template “${entry.name || entry.id}” — pick a deployment target and namespace`,
         'info',
       )
       navigate({ pathname: ROUTES.deploy, search: '' }, { replace: true, state: {} })
