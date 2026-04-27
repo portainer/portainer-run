@@ -116,33 +116,50 @@ Session: ${ctx}`,
             messages: [{ role: 'user', content: 'Translate:\n\n' + text }],
           }),
         })
-        if (!response.ok) throw new Error('HTTP ' + response.status)
+        if (!response.ok) {
+          let eb = {}
+          try { eb = await response.json() } catch { /* ignore */ }
+          const err = eb?.error
+          const emsg = typeof err === 'string' ? err : err?.message || 'HTTP ' + response.status
+          throw new Error(emsg)
+        }
         const data = await response.json()
         const raw = (data.content || []).map((b) => b.text || '').join('')
-        const m = raw.match(/```deploy-config[^\n]*\n([\s\S]*?)```/)
+        const m = raw.match(/```deploy-config[^\n`]*\n?([\s\S]*?)```/)
         if (m) {
-          const cfg = JSON.parse(m[1])
-          const preview = buildDeployPreview(cfg)
-          setRows((r) => [
-            ...r,
-            {
-              id: newMsgId(),
-              role: 'assistant',
-              text: preview,
-              isMd: true,
-              actions: [
-                {
-                  label: 'Open in Deploy form',
-                  secondary: false,
-                  onClick: () => {
-                    navigate(ROUTES.deploy, { state: { deployConfigFromAssistant: cfg } })
+          let cfg = null
+          let parseErr = null
+          try {
+            cfg = JSON.parse(m[1].trim())
+          } catch (e) {
+            parseErr = e?.message || String(e)
+            console.error('[AssistantPanel] compose deploy-config parse failed:', parseErr)
+          }
+          if (cfg) {
+            const preview = buildDeployPreview(cfg)
+            setRows((r) => [
+              ...r,
+              {
+                id: newMsgId(),
+                role: 'assistant',
+                text: preview,
+                isMd: true,
+                actions: [
+                  {
+                    label: 'Open in Deploy form',
+                    secondary: false,
+                    onClick: () => {
+                      navigate(ROUTES.deploy, { state: { deployConfigFromAssistant: cfg } })
+                    },
                   },
-                },
-                { label: 'Cancel', secondary: true, onClick: () => {} },
-              ],
-            },
-          ])
-          historyRef.current = [...historyRef.current, { role: 'assistant', content: raw }]
+                  { label: 'Cancel', secondary: true, onClick: () => {} },
+                ],
+              },
+            ])
+            historyRef.current = [...historyRef.current, { role: 'assistant', content: raw }]
+          } else {
+            addError(`Compose translation returned invalid JSON (${parseErr}). Try pasting the Compose file again.`)
+          }
         } else {
           addError('Could not parse the Compose file. Please check it and try again.')
         }
@@ -251,10 +268,19 @@ IMPORTANT RULES:
         )
       })
 
-      const deployMatch = fullText.match(/```deploy-config[^\n]*\n([\s\S]*?)```/)
+      // Lenient regex: optional whitespace after tag name, closing fence may have no preceding newline
+      const deployMatch = fullText.match(/```deploy-config[^\n`]*\n?([\s\S]*?)```/)
       if (deployMatch) {
+        let cfg = null
+        let parseErr = null
         try {
-          const cfg = JSON.parse(deployMatch[1])
+          cfg = JSON.parse(deployMatch[1].trim())
+        } catch (e) {
+          parseErr = e?.message || String(e)
+          console.error('[AssistantPanel] deploy-config parse failed:', parseErr, '\nRaw block:', deployMatch[1])
+        }
+
+        if (cfg) {
           const preview = buildDeployPreview(cfg)
           setRows((r) =>
             r.map((row) =>
@@ -277,11 +303,19 @@ IMPORTANT RULES:
                 : row,
             ),
           )
-        } catch {
+        } else {
+          // Parse failed — strip the raw fence block from display so JSON never shows raw,
+          // replace with a friendly inline error message
+          const stripped = fullText
+            .replace(/```deploy-config[^\n`]*\n?[\s\S]*?```/, '')
+            .trim()
+          const displayText =
+            (stripped ? stripped + '\n\n' : '') +
+            `⚠ Could not parse the deployment config (${parseErr}). Try rephrasing your request.`
           setRows((r) =>
             r.map((row) =>
               row.id === assistantId
-                ? { ...row, text: fullText, isMd: true, stream: false }
+                ? { ...row, text: displayText, isMd: true, stream: false }
                 : row,
             ),
           )
