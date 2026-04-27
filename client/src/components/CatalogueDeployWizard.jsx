@@ -40,7 +40,7 @@ export function CatalogueDeployWizard({ template, onClose }) {
     let cancelled = false
     setNsLoading(true)
     resetNs()
-    setNsStatus({ text: 'Loading\u2026', tone: 'dim' })
+    setNsStatus({ text: 'Loading…', tone: 'dim' })
     ;(async () => {
       try {
         const r = await fetchNamespaceOptions(token, envId)
@@ -83,12 +83,12 @@ export function CatalogueDeployWizard({ template, onClose }) {
   const env = environments.find((e) => String(e.Id) === String(envId))
 
   const containerSummary = (template.manifest?.spec?.template?.spec?.containers || [])
-    .map((c) => c.image || c.name).join(', ') || '\u2014'
+    .map((c) => c.image || c.name).join(', ') || '—'
 
   let exposureSummary = 'None'
   if (cfg.exposure && cfg.exposure.type !== 'none') {
     if (cfg.exposure.type === 'Ingress' && cfg.exposure.host) {
-      exposureSummary = 'Ingress \u2192 ' + cfg.exposure.host
+      exposureSummary = 'Ingress → ' + cfg.exposure.host
     } else if (cfg.exposure.ports?.length) {
       exposureSummary = cfg.exposure.type + ' port ' + cfg.exposure.ports.join(', ')
     } else if (cfg.exposure.port) {
@@ -100,7 +100,7 @@ export function CatalogueDeployWizard({ template, onClose }) {
 
   const gpuContainers = cfg.containers.filter((c) => c.gpuKey && c.gpuCount > 0)
   const gpuSummary = gpuContainers.length
-    ? gpuContainers.map((c) => c.gpuCount + '\u00d7 ' + (c.gpuKey.split('/')[1] || c.gpuKey)).join(', ')
+    ? gpuContainers.map((c) => c.gpuCount + '× ' + (c.gpuKey.split('/')[1] || c.gpuKey)).join(', ')
     : null
 
   function onNext() {
@@ -153,7 +153,7 @@ export function CatalogueDeployWizard({ template, onClose }) {
         containerSpecs, containerRowIds, volumeDefs, exposeType, servicePorts,
         ingress: { host: cfg.exposure?.host || '', path: '/', port: cfg.exposure?.port || servicePorts[0] || 80, ingressClass: '' },
       })
-      pushToast('"' + cfg.name + '" deployed to ' + resolvedNs + ' \u2014 ' + containerSpecs.length + ' container(s)', 'ok')
+      pushToast('"' + cfg.name + '" deployed to ' + resolvedNs + ' — ' + containerSpecs.length + ' container(s)', 'ok')
       onClose()
       void manualRefresh()
       navigate(ROUTES.services)
@@ -198,7 +198,7 @@ export function CatalogueDeployWizard({ template, onClose }) {
               <div className="field">
                 <label>Environment</label>
                 <select value={envId} onChange={(e) => setEnvId(e.target.value)} style={sel}>
-                  <option value="">\u2014 Select environment \u2014</option>
+                  <option value="">— Select environment —</option>
                   {vis.map((e) => <option key={e.Id} value={String(e.Id)}>{e.Name}</option>)}
                 </select>
               </div>
@@ -211,8 +211,8 @@ export function CatalogueDeployWizard({ template, onClose }) {
                   <input type="text" placeholder="Enter namespace" value={manualNsValue} onChange={(e) => setManualNsValue(e.target.value)} style={sel} />
                 ) : (
                   <select value={namespace} onChange={(e) => setNamespace(e.target.value)} disabled={nsLoading || !envId} style={sel}>
-                    {!envId && <option value="">Select environment first\u2026</option>}
-                    {envId && nsLoading && <option value="">Loading namespaces\u2026</option>}
+                    {!envId && <option value="">Select environment first…</option>}
+                    {envId && nsLoading && <option value="">Loading namespaces…</option>}
                     {envId && !nsLoading && nsList.length === 0 && <option value="">No accessible namespaces</option>}
                     {nsList.map((n) => <option key={n} value={n}>{n}</option>)}
                   </select>
@@ -221,7 +221,7 @@ export function CatalogueDeployWizard({ template, onClose }) {
             </div>
             <div className="modal-foot">
               <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
-              <button type="button" className="btn btn-primary btn-sm" onClick={onNext} disabled={nsLoading || !envId}>Next \u2192</button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={onNext} disabled={nsLoading || !envId}>Next →</button>
             </div>
           </>
         )}
@@ -256,10 +256,10 @@ export function CatalogueDeployWizard({ template, onClose }) {
               </p>
             </div>
             <div className="modal-foot">
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setStep(1)} disabled={deploying}>\u2190 Back</button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setStep(1)} disabled={deploying}>← Back</button>
               <button type="button" className="btn btn-ghost btn-sm" onClick={onCustomize} disabled={deploying}>Customize</button>
               <button type="button" className="btn btn-primary btn-sm" onClick={() => void onDeployNow()} disabled={deploying}>
-                {deploying ? <><span className="spinner" style={{ width: 12, height: 12, display: 'inline-block', marginRight: 6 }} />Deploying\u2026</> : 'Deploy Now'}
+                {deploying ? <><span className="spinner" style={{ width: 12, height: 12, display: 'inline-block', marginRight: 6 }} />Deploying…</> : 'Deploy Now'}
               </button>
             </div>
           </>
