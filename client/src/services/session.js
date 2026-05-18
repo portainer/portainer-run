@@ -6,6 +6,8 @@ import { cancelRefreshTimer, refreshCache } from './refreshDeployments.js'
 
 const TOKEN_KEY = 'portainer_run_token'
 const URL_KEY = 'portainer_run_url'
+const TS_KEY = 'portainer_run_ts'
+const SESSION_TTL_MS = 60 * 60 * 1000 // 1 hour
 
 /**
  * @returns {Promise<boolean>}
@@ -85,10 +87,11 @@ export async function connectWithToken(token) {
     }
 
     try {
-      sessionStorage.setItem(TOKEN_KEY, tok)
+      localStorage.setItem(TOKEN_KEY, tok)
+      localStorage.setItem(TS_KEY, String(Date.now()))
       const p = (st().portainerBaseUrl || '').trim()
-      if (p) sessionStorage.setItem(URL_KEY, p)
-      else sessionStorage.removeItem(URL_KEY)
+      if (p) localStorage.setItem(URL_KEY, p)
+      else localStorage.removeItem(URL_KEY)
     } catch {
       // ignore
     }
@@ -146,7 +149,7 @@ export function disconnect() {
     fetch('/cache', { method: 'DELETE', headers: h }).catch(() => {})
   }
   try {
-    sessionStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(TOKEN_KEY)
   } catch {
     // ignore
   }
@@ -163,12 +166,25 @@ export async function tryAutoConnect() {
   let saved
   let url
   try {
-    saved = sessionStorage.getItem(TOKEN_KEY)
-    url = sessionStorage.getItem(URL_KEY)
+    saved = localStorage.getItem(TOKEN_KEY)
+    url = localStorage.getItem(URL_KEY)
   } catch {
     return
   }
   if (!saved) return
+
+  // Check session has not expired
+  let ts = 0
+  try { ts = parseInt(localStorage.getItem(TS_KEY) || '0', 10) } catch { /* ignore */ }
+  if (!ts || Date.now() - ts > SESSION_TTL_MS) {
+    try {
+      localStorage.removeItem(TOKEN_KEY)
+      localStorage.removeItem(URL_KEY)
+      localStorage.removeItem(TS_KEY)
+    } catch { /* ignore */ }
+    return
+  }
+
   if (url) st().setPortainerBaseUrl(url)
   await connectWithToken(saved)
 }

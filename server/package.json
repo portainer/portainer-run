@@ -6,5 +6,8 @@
   "scripts": {
     "start": "bun run server.js",
     "start:node": "node server.js"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
   }
 }

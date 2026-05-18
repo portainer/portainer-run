@@ -657,6 +657,10 @@ export function ServiceDetailPage() {
                           envId: String(envId),
                           ns: namespace,
                           name,
+                          // GitOps annotations — present only if deployed via Portainer Run GitOps
+                          gitTargetId: d?.metadata?.annotations?.['portainer-run/git-target-id'] || null,
+                          gitBranch: d?.metadata?.annotations?.['portainer-run/git-branch'] || null,
+                          gitPath: d?.metadata?.annotations?.['portainer-run/git-path'] || null,
                         })
                       }
                     >

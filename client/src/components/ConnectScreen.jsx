@@ -33,17 +33,12 @@ export function ConnectScreen() {
     <div className="main" style={{ display: 'grid' }}>
       <div className="connect-wrap" style={{ gridColumn: '1 / -1' }}>
         <div style={{ marginBottom: 24, textAlign: 'center' }}>
-          <div
-            style={{
-              fontFamily: 'var(--mono)',
-              fontSize: 28,
-              fontWeight: 600,
-              color: 'var(--text-bright)',
-              letterSpacing: '-0.04em',
-              marginBottom: 8,
-            }}
-          >
-            portainer<span style={{ color: 'var(--accent)' }}>_run</span>
+          <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', marginBottom: 8 }}>
+            <img src="/portainer-logo.png" alt="Portainer" style={{ height: 26, width: 'auto', display: 'block' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 6 }}>
+              <div style={{ width: 12, height: 12, background: 'var(--accent)', borderRadius: 2, flexShrink: 0 }} />
+              <span style={{ fontFamily: '"Arial Black",Arial,sans-serif', fontWeight: 900, fontSize: 13, color: 'var(--accent)', letterSpacing: '0.12em', lineHeight: 1, textTransform: 'uppercase' }}>RUN</span>
+            </div>
           </div>
           <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>
             Deploy and manage Kubernetes workloads via Portainer
