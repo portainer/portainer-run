@@ -8,6 +8,7 @@ import { DeployPage } from './components/DeployPage.jsx'
 import { ReadinessPage } from './components/ReadinessPage.jsx'
 import { CataloguePage } from './components/CataloguePage.jsx'
 import { SecretsPage } from './components/SecretsPage.jsx'
+import { GitTargetsPage } from './components/GitTargetsPage.jsx'
 import {
   ServiceDetailIndexRedirect,
   ServiceDetailPage,
@@ -65,6 +66,7 @@ export function AppRoutes() {
         <Route path="catalogue" element={<CataloguePage />} />
         <Route path="secrets" element={<SecretsPage />} />
         <Route path="readiness" element={<ReadinessPage />} />
+        <Route path="git-targets" element={<GitTargetsPage />} />
         <Route path="*" element={<Navigate to={ROUTES.dashboard} replace />} />
       </Route>
     </Routes>

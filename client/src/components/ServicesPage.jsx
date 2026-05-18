@@ -68,10 +68,10 @@ function cacheStatusDotClass(status) {
 
 function cacheStatusShortText(cache, cacheStatus) {
   if (cacheStatus === 'loading') {
-    if (cache?.everLoaded) return 'Refreshing…'
-    return 'Loading…'
+    if (cache?.everLoaded) return 'Refreshing\u2026'
+    return 'Loading\u2026'
   }
-  if (cacheStatus === 'cached') return 'Showing cache — live load…'
+  if (cacheStatus === 'cached') return 'Showing cache \u2014 live load\u2026'
   if (cacheStatus === 'fresh') {
     if (cache?.lastFetch) {
       const s = Math.round((Date.now() - cache.lastFetch) / 1000)
@@ -80,7 +80,7 @@ function cacheStatusShortText(cache, cacheStatus) {
     return 'Up to date'
   }
   if (cacheStatus === 'stale') return 'Live refresh failed'
-  return '—'
+  return '\u2014'
 }
 
 function serviceRowId(d) {
@@ -103,7 +103,7 @@ function ServiceRowContent({
   const name = d.metadata.name
   const ns = d.metadata.namespace
   const envId = d._envId
-  const envName = d._envName || '—'
+  const envName = d._envName || '\u2014'
   const images = (d.spec?.template?.spec?.containers || [])
     .map((c) => c.image)
     .filter(Boolean)
@@ -117,7 +117,7 @@ function ServiceRowContent({
     setRestarting(true)
     try {
       await restartDeployment(token, String(envId), ns, name)
-      pushToast(`“${name}” is restarting — pods will be replaced one by one`, 'ok')
+      pushToast(`\u201c${name}\u201d is restarting \u2014 pods will be replaced one by one`, 'ok')
       void manualRefresh(false)
     } catch (err) {
       pushToast('Restart failed: ' + (err?.message || String(err)), 'err')
@@ -141,13 +141,13 @@ function ServiceRowContent({
         {name}
         </div>
       </div>
-      <div className="svc-image" title={images.join('\n') || '—'}>
+      <div className="svc-image" title={images.join('\n') || '\u2014'}>
         {images.length ? (
           images.map((img, i) => (
             <div key={`${name}-img-${i}`} className="svc-image-line">{img}</div>
           ))
         ) : (
-          '—'
+          '\u2014'
         )}
       </div>
       <div className="svc-env" title={envName}>
@@ -179,7 +179,7 @@ function ServiceRowContent({
             {extra.accessLabel}
           </span>
         ) : (
-          <span className="exp-none">—</span>
+          <span className="exp-none">\u2014</span>
         )}
       </div>
       <div className="svc-age">{age(created)}</div>
@@ -197,12 +197,19 @@ function ServiceRowContent({
           onClick={onRestart}
           disabled={restarting}
         >
-          {restarting ? '…' : 'Restart'}
+          {restarting ? '\u2026' : 'Restart'}
         </button>
         <button
           type="button"
           className="btn btn-danger btn-xs"
-          onClick={() => setDeleteTarget({ envId: String(envId), ns, name })}
+          onClick={() => setDeleteTarget({
+            envId: String(envId),
+            ns,
+            name,
+            gitTargetId: d?.metadata?.annotations?.['portainer-run/git-target-id'] || null,
+            gitBranch: d?.metadata?.annotations?.['portainer-run/git-branch'] || null,
+            gitPath: d?.metadata?.annotations?.['portainer-run/git-path'] || null,
+          })}
         >
           Delete
         </button>
@@ -436,7 +443,7 @@ export function ServicesPage() {
               onSubFilterChange={setListSubFilter}
               sortOptions={SERVICE_LIST_SORT}
               defaultSort="name"
-              searchPlaceholder="Filter services…"
+              searchPlaceholder="Filter services\u2026"
               emptyMessage="No services to show"
               noResultsMessage="No services match"
               includeZeroCountSubFilters

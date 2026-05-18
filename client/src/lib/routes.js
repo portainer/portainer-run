@@ -6,6 +6,7 @@ export const ROUTES = {
   catalogue: '/catalogue',
   secrets: '/secrets',
   readiness: '/readiness',
+  gitTargets: '/git-targets',
 }
 
 /**
@@ -25,6 +26,7 @@ const APP_PATHS = new Set([
   ROUTES.catalogue,
   ROUTES.secrets,
   ROUTES.readiness,
+  ROUTES.gitTargets,
 ])
 
 /**

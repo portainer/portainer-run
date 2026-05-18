@@ -15,6 +15,8 @@ import { tryServeStatic } from './static.js'
 import { proxyToPortainer } from './proxy/portainer.js'
 import { proxyToAnthropic } from './proxy/anthropic.js'
 import { proxyToOpenAI } from './proxy/openai.js'
+import { handleConnections } from './routes/connections.js'
+import { handleGitOps } from './routes/gitops.js'
 
 /**
  * @param {import('http').IncomingMessage} req
@@ -39,7 +41,7 @@ export async function handleRequest(req, res) {
         aiAvailable: !!(ANTHROPIC_KEY || OPENAI_KEY),
         aiProvider: AI_PROVIDER,
         baseDomain: BASE_DOMAIN,
-      })
+      }),
     )
     return
   }
@@ -86,6 +88,18 @@ export async function handleRequest(req, res) {
       proxyToAnthropic(req, res, body)
     }
     return
+  }
+
+  // Git target connections API
+  if (pathname.startsWith('/api/connections')) {
+    const handled = await handleConnections(req, res, pathname)
+    if (handled !== null) return
+  }
+
+  // GitOps deploy/update API
+  if (pathname.startsWith('/api/gitops')) {
+    const handled = await handleGitOps(req, res, pathname)
+    if (handled !== null) return
   }
 
   if (tryServeStatic(pathname, res)) return

@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { useAppStore, visibleEnvironments, isEnvDisabled } from '../store/useAppStore.js'
 import { ROUTES } from '../lib/routes.js'
 import { parseKnativeManifest, CATALOGUE_CATEGORY_COLORS, CATALOGUE_CATEGORY_LABELS } from '../lib/catalogueTemplate.js'
-import { fetchNamespaceOptions, executeDeploy } from '../lib/deployK8s.js'
-import { manualRefresh } from '../services/refreshDeployments.js'
+import { fetchNamespaceOptions } from '../lib/deployK8s.js'
+import { gitOpsDeploy } from '../lib/gitTargets.js'
+import { manualRefresh, schedulePostDeployRefreshes } from '../services/refreshDeployments.js'
+import { GitOpsStep } from './deploy/GitOpsStep.jsx'
 
 export function CatalogueDeployWizard({ template, onClose }) {
   const navigate = useNavigate()
@@ -15,6 +17,7 @@ export function CatalogueDeployWizard({ template, onClose }) {
   const pushToast = useAppStore((s) => s.pushToast)
   const vis = visibleEnvironments({ environments, disabledEnvs })
 
+  // step 1: env/ns, step 2: confirm summary, step 3: git target
   const [step, setStep] = useState(1)
   const [envId, setEnvId] = useState('')
   const [nsList, setNsList] = useState([])
@@ -28,39 +31,31 @@ export function CatalogueDeployWizard({ template, onClose }) {
   const resolvedNs = manualNs ? manualNsValue.trim() : namespace
 
   const resetNs = useCallback(() => {
-    setNsList([])
-    setNamespace('')
-    setManualNs(false)
-    setManualNsValue('')
+    setNsList([]); setNamespace(''); setManualNs(false); setManualNsValue('')
     setNsStatus({ text: '', tone: 'dim' })
   }, [])
 
   useEffect(() => {
     if (!envId || !token) { resetNs(); return }
     let cancelled = false
-    setNsLoading(true)
-    resetNs()
+    setNsLoading(true); resetNs()
     setNsStatus({ text: 'Loading…', tone: 'dim' })
     ;(async () => {
       try {
         const r = await fetchNamespaceOptions(token, envId)
         if (cancelled) return
         if (r.ok && r.manual) {
-          setManualNs(true)
-          setNsStatus({ text: r.message || 'Enter namespace manually', tone: 'amber' })
+          setManualNs(true); setNsStatus({ text: r.message || 'Enter namespace manually', tone: 'amber' })
         } else if (r.ok) {
           setNsList(r.namespaces)
-          const def = r.namespaces.find((n) => n === 'default') || r.namespaces[0] || ''
-          setNamespace(def)
+          setNamespace(r.namespaces.find((n) => n === 'default') || r.namespaces[0] || '')
           setNsStatus({ text: r.message || '', tone: 'green' })
         } else {
-          setManualNs(true)
-          setNsStatus({ text: (r && r.error) || 'Could not load namespaces', tone: 'red' })
+          setManualNs(true); setNsStatus({ text: r.error || 'Could not load namespaces', tone: 'red' })
         }
       } catch (e) {
         if (cancelled) return
-        setManualNs(true)
-        setNsStatus({ text: (e && e.message) || 'Error loading namespaces', tone: 'red' })
+        setManualNs(true); setNsStatus({ text: e?.message || 'Error loading namespaces', tone: 'red' })
       } finally {
         if (!cancelled) setNsLoading(false)
       }
@@ -69,10 +64,7 @@ export function CatalogueDeployWizard({ template, onClose }) {
   }, [envId, token, resetNs])
 
   useEffect(() => {
-    setStep(1)
-    setEnvId('')
-    resetNs()
-    setNsLoading(false)
+    setStep(1); setEnvId(''); resetNs(); setNsLoading(false)
   }, [template?.id, resetNs])
 
   if (!template) return null
@@ -87,15 +79,10 @@ export function CatalogueDeployWizard({ template, onClose }) {
 
   let exposureSummary = 'None'
   if (cfg.exposure && cfg.exposure.type !== 'none') {
-    if (cfg.exposure.type === 'Ingress' && cfg.exposure.host) {
-      exposureSummary = 'Ingress → ' + cfg.exposure.host
-    } else if (cfg.exposure.ports?.length) {
-      exposureSummary = cfg.exposure.type + ' port ' + cfg.exposure.ports.join(', ')
-    } else if (cfg.exposure.port) {
-      exposureSummary = cfg.exposure.type + ' port ' + cfg.exposure.port
-    } else {
-      exposureSummary = cfg.exposure.type
-    }
+    if (cfg.exposure.type === 'Ingress' && cfg.exposure.host) exposureSummary = 'Ingress → ' + cfg.exposure.host
+    else if (cfg.exposure.ports?.length) exposureSummary = cfg.exposure.type + ' port ' + cfg.exposure.ports.join(', ')
+    else if (cfg.exposure.port) exposureSummary = cfg.exposure.type + ' port ' + cfg.exposure.port
+    else exposureSummary = cfg.exposure.type
   }
 
   const gpuContainers = cfg.containers.filter((c) => c.gpuKey && c.gpuCount > 0)
@@ -105,9 +92,7 @@ export function CatalogueDeployWizard({ template, onClose }) {
 
   function onNext() {
     if (!envId) { pushToast('Select an environment', 'err'); return }
-    if (isEnvDisabled({ disabledEnvs }, envId)) {
-      pushToast('This environment has been disabled by an administrator', 'err'); return
-    }
+    if (isEnvDisabled({ disabledEnvs }, envId)) { pushToast('This environment has been disabled by an administrator', 'err'); return }
     if (!resolvedNs) { pushToast('Select or enter a namespace', 'err'); return }
     setStep(2)
   }
@@ -117,45 +102,52 @@ export function CatalogueDeployWizard({ template, onClose }) {
     navigate(ROUTES.deploy, { state: { catalogueTemplate: template, wizardEnvId: envId, wizardNs: resolvedNs } })
   }
 
-  async function onDeployNow() {
-    if (!envId || !resolvedNs) return
+  /** Build deploy params from parsed catalogue config */
+  function buildDeployParams() {
+    const containerRowIds = cfg.containers.map((_, i) => 'wz-ct-' + i)
+    const containerSpecs = cfg.containers.map((ct) => {
+      const spec = { name: ct.name, image: ct.image, imagePullPolicy: 'Always' }
+      const res = {
+        requests: { cpu: ct.cpuReq, memory: ct.memReq },
+        limits: { cpu: ct.cpuLim, memory: ct.memLim },
+      }
+      if (ct.gpuKey && ct.gpuCount > 0) { res.limits[ct.gpuKey] = String(ct.gpuCount); res.requests[ct.gpuKey] = String(ct.gpuCount) }
+      spec.resources = res
+      if (ct.env?.length) spec.env = ct.env
+      if (ct.storage) spec.volumeMounts = [{ name: ct.storage.name, mountPath: ct.storage.mountPath }]
+      return spec
+    })
+    const volumeDefs = cfg.containers.filter((ct) => ct.storage).map((ct) => ({
+      containerId: containerRowIds[cfg.containers.indexOf(ct)],
+      name: ct.storage.name, size: ct.storage.size || '1Gi', mountPath: ct.storage.mountPath,
+    }))
+    const exposeType = cfg.exposure?.type === 'Ingress' ? 'Ingress'
+      : cfg.exposure?.type === 'LoadBalancer' ? 'LoadBalancer'
+      : cfg.exposure?.type === 'NodePort' ? 'NodePort' : 'none'
+    const servicePorts = cfg.exposure?.ports?.length ? cfg.exposure.ports
+      : cfg.exposure?.port ? [cfg.exposure.port] : [80]
+    return {
+      appName: cfg.name,
+      ns: resolvedNs,
+      instances: cfg.instances || 1,
+      containerSpecs,
+      containerRowIds,
+      volumeDefs,
+      exposeType,
+      servicePorts,
+      ingress: { host: cfg.exposure?.host || '', path: '/', port: cfg.exposure?.port || servicePorts[0] || 80, ingressClass: '' },
+    }
+  }
+
+  async function onGitOpsConfirm({ gitTargetId, branch, pathPrefix, pollInterval }) {
     setDeploying(true)
     try {
-      const containerRowIds = cfg.containers.map((_, i) => 'wz-ct-' + i)
-      const containerSpecs = cfg.containers.map((ct) => {
-        const spec = { name: ct.name, image: ct.image, imagePullPolicy: 'Always' }
-        const res = {
-          requests: { cpu: ct.cpuReq, memory: ct.memReq },
-          limits: { cpu: ct.cpuLim, memory: ct.memLim },
-        }
-        if (ct.gpuKey && ct.gpuCount > 0) {
-          res.limits[ct.gpuKey] = String(ct.gpuCount)
-          res.requests[ct.gpuKey] = String(ct.gpuCount)
-        }
-        spec.resources = res
-        if (ct.env?.length) spec.env = ct.env
-        if (ct.storage) spec.volumeMounts = [{ name: ct.storage.name, mountPath: ct.storage.mountPath }]
-        return spec
-      })
-      const volumeDefs = cfg.containers
-        .filter((ct) => ct.storage)
-        .map((ct) => ({
-          containerId: containerRowIds[cfg.containers.indexOf(ct)],
-          name: ct.storage.name, size: ct.storage.size || '1Gi', mountPath: ct.storage.mountPath,
-        }))
-      const exposeType = cfg.exposure?.type === 'Ingress' ? 'Ingress'
-        : cfg.exposure?.type === 'LoadBalancer' ? 'LoadBalancer'
-        : cfg.exposure?.type === 'NodePort' ? 'NodePort' : 'none'
-      const servicePorts = cfg.exposure?.ports?.length ? cfg.exposure.ports
-        : cfg.exposure?.port ? [cfg.exposure.port] : [80]
-      await executeDeploy(token, {
-        envId, ns: resolvedNs, appName: cfg.name, instances: cfg.instances || 1,
-        containerSpecs, containerRowIds, volumeDefs, exposeType, servicePorts,
-        ingress: { host: cfg.exposure?.host || '', path: '/', port: cfg.exposure?.port || servicePorts[0] || 80, ingressClass: '' },
-      })
-      pushToast('"' + cfg.name + '" deployed to ' + resolvedNs + ' — ' + containerSpecs.length + ' container(s)', 'ok')
+      const deployParams = buildDeployParams()
+      await gitOpsDeploy({ gitTargetId, branch, pathPrefix, pollInterval, envId, deployParams })
+      pushToast(`"${cfg.name}" committed to Git and GitOps stack created in ${resolvedNs}`, 'ok')
       onClose()
       void manualRefresh()
+      schedulePostDeployRefreshes()
       navigate(ROUTES.services)
     } catch (e) {
       pushToast('Deploy failed: ' + (e?.message || String(e)), 'err')
@@ -172,10 +164,12 @@ export function CatalogueDeployWizard({ template, onClose }) {
 
   return (
     <div className="modal-overlay open" role="dialog" aria-modal="true" aria-labelledby="wz-title">
-      <div className="modal" style={{ width: 480 }}>
+      <div className="modal" style={{ width: step === 3 ? 540 : 480 }}>
         <div className="modal-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-dim)', marginBottom: 4 }}>DEPLOY WIZARD</div>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-dim)', marginBottom: 4 }}>
+              DEPLOY WIZARD — STEP {step} OF 3
+            </div>
             <h3 id="wz-title" style={{ margin: 0 }}>{template.name}</h3>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -258,11 +252,23 @@ export function CatalogueDeployWizard({ template, onClose }) {
             <div className="modal-foot">
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => setStep(1)} disabled={deploying}>← Back</button>
               <button type="button" className="btn btn-ghost btn-sm" onClick={onCustomize} disabled={deploying}>Customize</button>
-              <button type="button" className="btn btn-primary btn-sm" onClick={() => void onDeployNow()} disabled={deploying}>
-                {deploying ? <><span className="spinner" style={{ width: 12, height: 12, display: 'inline-block', marginRight: 6 }} />Deploying…</> : 'Deploy Now'}
-              </button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => setStep(3)} disabled={deploying}>Next →</button>
             </div>
           </>
+        )}
+
+        {step === 3 && (
+          <div className="modal-body" style={{ padding: 0 }}>
+            <GitOpsStep
+              appName={cfg.name}
+              ns={resolvedNs}
+              envId={envId}
+              deployParams={buildDeployParams()}
+              onConfirm={onGitOpsConfirm}
+              onBack={() => setStep(2)}
+              deploying={deploying}
+            />
+          </div>
         )}
       </div>
     </div>

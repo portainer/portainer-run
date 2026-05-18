@@ -14,7 +14,7 @@ if (fs.existsSync(envFile)) {
     if (!t || t.startsWith('#')) continue
     const [k, ...vParts] = t.split('=')
     if (!k?.trim() || process.env[k.trim()]) continue
-    const v = vParts.join('=').trim().replace(/^["']|["']$/g, '')
+    const v = vParts.join('=').trim().replace(/^[\"']|[\"']$/g, '')
     process.env[k.trim()] = v
   }
 }
@@ -31,6 +31,7 @@ export const SSL_CERT_PATH = process.env.SSL_CERT || ''
 export const SSL_KEY_PATH = process.env.SSL_KEY || ''
 export const CERT_DIR = process.env.SSL_CERT_DIR || projectRoot
 export const CACHE_DIR = process.env.CACHE_DIR || path.join(projectRoot, 'data')
+export const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || ''
 
 /** Default catalogue: same sample JSON as the repo, served from Git (raw). */
 const DEFAULT_TEMPLATE_URL =
@@ -79,13 +80,19 @@ if (PORTAINER_URL) {
   }
 } else {
   console.log(
-    '\nℹ️  No PORTAINER_URL in environment — the browser will send the instance URL (X-Portainer-URL) on each request.\n'
+    '\nℹ️  No PORTAINER_URL in environment — the browser will send the instance URL (X-Portainer-URL) on each request.\n',
   )
 }
 
 if (!ANTHROPIC_KEY && !OPENAI_KEY) {
   console.warn(
-    '\n⚠️   No AI key set (ANTHROPIC_API_KEY or OPENAI_API_KEY) — AI triage will be unavailable\n'
+    '\n⚠️   No AI key set (ANTHROPIC_API_KEY or OPENAI_API_KEY) — AI triage will be unavailable\n',
+  )
+}
+
+if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length < 32) {
+  console.warn(
+    '\n⚠️   ENCRYPTION_KEY is not set or too short — Git target credentials cannot be stored. Set a random 32+ character string in .env\n',
   )
 }
 

@@ -39,12 +39,11 @@ export function MainLayout() {
         <div className="app-header-brand">
           <Link to={ROUTES.dashboard} className="app-header-brand-link" title="Portainer Run — Dashboard">
             <div className="logo">
-              <div className="logo-icon">
-                <svg viewBox="0 0 24 24" aria-hidden>
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-                </svg>
+              <img src="/portainer-logo.png" alt="Portainer" className="logo-wordmark" />
+              <div className="logo-run-row">
+                <div className="logo-run-square" />
+                <span className="logo-run">RUN</span>
               </div>
-              Portainer Run
             </div>
           </Link>
         </div>
@@ -63,14 +62,7 @@ export function MainLayout() {
               onClick={() => setChatOpen(!chatOpen)}
               title="Assistant"
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-              >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
               </svg>
               <span>Assistant</span>
@@ -83,11 +75,7 @@ export function MainLayout() {
         <nav>
           <div className="nav-label">Workloads</div>
           <div className="nav-section">
-            <NavLink
-              to={ROUTES.dashboard}
-              className={navClass}
-              end
-            >
+            <NavLink to={ROUTES.dashboard} className={navClass} end>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <rect x="3" y="3" width="7" height="7" rx="1" />
                 <rect x="14" y="3" width="7" height="7" rx="1" />
@@ -126,11 +114,21 @@ export function MainLayout() {
               Secrets
             </NavLink>
           </div>
+
+          <div className="nav-label" style={{ marginTop: 16 }}>GitOps</div>
+          <div className="nav-section">
+            <NavLink to={ROUTES.gitTargets} className={navClass}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+              </svg>
+              Git Targets
+            </NavLink>
+          </div>
+
           {isAdmin ? (
             <>
-              <div className="nav-label" style={{ marginTop: 16 }}>
-                Admin
-              </div>
+              <div className="nav-label" style={{ marginTop: 16 }}>Admin</div>
               <div className="nav-section">
                 <NavLink to={ROUTES.readiness} className={navClass}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -141,9 +139,8 @@ export function MainLayout() {
               </div>
             </>
           ) : null}
-          <div className="nav-label" style={{ marginTop: 16 }}>
-            Session
-          </div>
+
+          <div className="nav-label" style={{ marginTop: 16 }}>Session</div>
           <div className="nav-section">
             <div
               className="nav-item"
