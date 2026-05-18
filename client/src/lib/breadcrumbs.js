@@ -67,5 +67,9 @@ export function getBreadcrumbItems(pathname) {
     return [{ label: 'Cluster Readiness', current: true }]
   }
 
+  if (path === ROUTES.gitTargets) {
+    return [{ label: 'Git Targets', current: true }]
+  }
+
   return [{ label: 'App', current: true }]
 }
