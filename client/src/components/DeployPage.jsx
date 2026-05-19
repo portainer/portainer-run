@@ -8,6 +8,7 @@ import {
   buildK8sContainer,
   detectClusterGpuType,
   fetchNamespaceOptions,
+  fetchNamespaceQuota,
   fetchSecretsInNamespace,
   fetchStorageClasses,
   readVolumeDefForDeploy,
@@ -52,6 +53,8 @@ export function DeployPage() {
   const [namespaceSecrets, setNamespaceSecrets] = useState([])
   const [scItems, setScItems] = useState([])
   const [nsList, setNsList] = useState([])
+
+  const [nsQuota, setNsQuota] = useState({ requiresLimits: false, requiresRequests: false })
 
   // GitOps step state
   const [gitOpsStep, setGitOpsStep] = useState(false)
@@ -165,6 +168,11 @@ export function DeployPage() {
   }, [])
 
   useEffect(() => {
+    if (!envId || !token || !resolvedNs) { setNsQuota({ requiresLimits: false, requiresRequests: false }); return }
+    void fetchNamespaceQuota(token, envId, resolvedNs).then(setNsQuota)
+  }, [envId, token, resolvedNs])
+
+  useEffect(() => {
     if (!envId || !token || !resolvedNs) { setNamespaceSecrets([]); return }
     let cancel = false
     void (async () => {
@@ -247,7 +255,22 @@ export function DeployPage() {
     if (isEnvDisabled(useAppStore.getState(), envId)) { pushToast('This environment has been disabled by an administrator', 'err'); return }
     if (!resolvedNs) { pushToast('Select or enter a namespace', 'err'); return }
 
+    // Validate resource limits if namespace quota requires them
     const forBuild = withDefaultCnames(containers)
+    if (nsQuota.requiresLimits || nsQuota.requiresRequests) {
+      for (const c of forBuild) {
+        if (!c.image?.trim()) continue
+        if (nsQuota.requiresLimits && (!c.cpuLim?.trim() || !c.memLim?.trim())) {
+          pushToast(`Container "${c.name || c.image}" must have CPU and memory limits — the namespace has a resource quota that requires them`, 'err')
+          return
+        }
+        if (nsQuota.requiresRequests && (!c.cpuReq?.trim() || !c.memReq?.trim())) {
+          pushToast(`Container "${c.name || c.image}" must have CPU and memory requests — the namespace has a resource quota that requires them`, 'err')
+          return
+        }
+      }
+    }
+
     for (const c of forBuild) {
       if (c.volumeOn) {
         const v = readVolumeDefForDeploy(c)

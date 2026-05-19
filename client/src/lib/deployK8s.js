@@ -621,3 +621,26 @@ export async function applyDeploymentFormUpdate(
     ingress,
   })
 }
+
+/**
+ * Fetch ResourceQuotas for a namespace and return which resource fields are required.
+ * Returns { requiresLimits: bool, requiresRequests: bool } based on quota hard limits.
+ */
+export async function fetchNamespaceQuota(token, envId, ns) {
+  try {
+    const r = await kubeFetch(token, envId, `/api/v1/namespaces/${ns}/resourcequotas`)
+    if (!r.ok) return { requiresLimits: false, requiresRequests: false }
+    const data = await r.json()
+    const quotas = data.items || []
+    let requiresLimits = false
+    let requiresRequests = false
+    for (const q of quotas) {
+      const hard = q.spec?.hard || {}
+      if (hard['limits.cpu'] || hard['limits.memory']) requiresLimits = true
+      if (hard['requests.cpu'] || hard['requests.memory']) requiresRequests = true
+    }
+    return { requiresLimits, requiresRequests }
+  } catch {
+    return { requiresLimits: false, requiresRequests: false }
+  }
+}

@@ -4,6 +4,7 @@ import {
   applyDeploymentFormUpdate,
   buildK8sContainer,
   detectClusterGpuType,
+  fetchNamespaceQuota,
   fetchSecretsInNamespace,
   fetchStorageClasses,
   readVolumeDefForDeploy,
@@ -69,6 +70,12 @@ export default function ServiceDetailEditTab({ d, envId, namespace, name, onSave
   const isGitOps = Boolean(gitOpsInfo)
 
   const resourceKey = d?.metadata?.uid + '@' + (d?.metadata?.resourceVersion || '')
+  const [nsQuota, setNsQuota] = useState({ requiresLimits: false, requiresRequests: false })
+
+  useEffect(() => {
+    if (!token || !envId || !namespace) return
+    void fetchNamespaceQuota(token, envId, namespace).then(setNsQuota)
+  }, [token, envId, namespace])
 
   useEffect(() => {
     if (!token || !envId || !namespace || !name) return
@@ -170,6 +177,20 @@ export default function ServiceDetailEditTab({ d, envId, namespace, name, onSave
     setSaving(true)
     try {
       const forBuild = withDefaultCnames(containers)
+      if (nsQuota.requiresLimits || nsQuota.requiresRequests) {
+        for (const c of forBuild) {
+          if (!c.image?.trim()) continue
+          if (nsQuota.requiresLimits && (!c.cpuLim?.trim() || !c.memLim?.trim())) {
+            pushToast(`Container "${c.name || c.image}" must have CPU and memory limits — the namespace has a resource quota that requires them`, 'err')
+            return
+          }
+          if (nsQuota.requiresRequests && (!c.cpuReq?.trim() || !c.memReq?.trim())) {
+            pushToast(`Container "${c.name || c.image}" must have CPU and memory requests — the namespace has a resource quota that requires them`, 'err')
+            return
+          }
+        }
+      }
+
       for (const c of forBuild) {
         if (c.volumeOn) {
           const v = readVolumeDefForDeploy(c)
