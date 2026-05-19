@@ -91,9 +91,13 @@ if (!ANTHROPIC_KEY && !OPENAI_KEY) {
 }
 
 if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length < 32) {
-  console.warn(
-    '\n⚠️   ENCRYPTION_KEY is not set or too short — Git target credentials cannot be stored. Set a random 32+ character string in .env\n',
+  console.error(
+    '\n❌  ENCRYPTION_KEY is not set or is too short (minimum 32 characters).\n' +
+    '    Git target credentials cannot be stored without it.\n' +
+    '    Generate one with: openssl rand -hex 32\n' +
+    '    Then add ENCRYPTION_KEY=<value> to your .env file or docker run command.\n'
   )
+  process.exit(1)
 }
 
 /** Set only when `PORTAINER_URL` is non-empty. */
