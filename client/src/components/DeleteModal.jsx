@@ -29,7 +29,14 @@ export function DeleteModal() {
       })
       if (!r.ok && r.status !== 404) throw new Error('HTTP ' + r.status)
 
-      // 2. Optionally delete the manifest from the Git repo
+      // 2. Delete associated resources — best-effort, 404s silently ignored
+      await Promise.allSettled([
+        kubeFetch(token, envId, `/api/v1/namespaces/${ns}/services/${name}`, { method: 'DELETE' }),
+        kubeFetch(token, envId, `/apis/networking.k8s.io/v1/namespaces/${ns}/ingresses/${name}`, { method: 'DELETE' }),
+        kubeFetch(token, envId, `/api/v1/namespaces/${ns}/persistentvolumeclaims/${name}`, { method: 'DELETE' }),
+      ])
+
+      // 3. Optionally delete the manifest from the Git repo
       if (isGitOps && deleteManifest) {
         try {
           await gitOpsDeleteManifest({ gitTargetId, branch: gitBranch, gitPath, appName: name })
