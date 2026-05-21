@@ -23,43 +23,105 @@
                 {
                   "name": "wordpress",
                   "image": "wordpress:latest",
-                  "ports": [{ "containerPort": 80 }],
+                  "ports": [
+                    {
+                      "containerPort": 80
+                    }
+                  ],
                   "env": [
-                    { "name": "WORDPRESS_DB_HOST", "value": "localhost" },
-                    { "name": "WORDPRESS_DB_USER", "value": "wpuser" },
-                    { "name": "WORDPRESS_DB_PASSWORD", "value": "changeme" },
-                    { "name": "WORDPRESS_DB_NAME", "value": "wordpress" }
+                    {
+                      "name": "WORDPRESS_DB_HOST",
+                      "value": "localhost"
+                    },
+                    {
+                      "name": "WORDPRESS_DB_USER",
+                      "value": "wpuser"
+                    },
+                    {
+                      "name": "WORDPRESS_DB_PASSWORD",
+                      "value": "changeme"
+                    },
+                    {
+                      "name": "WORDPRESS_DB_NAME",
+                      "value": "wordpress"
+                    }
                   ],
                   "resources": {
-                    "requests": { "cpu": "100m", "memory": "128Mi" },
-                    "limits": { "cpu": "500m", "memory": "512Mi" }
+                    "requests": {
+                      "cpu": "100m",
+                      "memory": "128Mi"
+                    },
+                    "limits": {
+                      "cpu": "500m",
+                      "memory": "512Mi"
+                    }
                   },
-                  "volumeMounts": [{ "name": "wordpress-data", "mountPath": "/var/www/html" }]
+                  "volumeMounts": [
+                    {
+                      "name": "wordpress-data",
+                      "mountPath": "/var/www/html"
+                    }
+                  ]
                 },
                 {
                   "name": "mysql",
                   "image": "mysql:8.0",
                   "env": [
-                    { "name": "MYSQL_DATABASE", "value": "wordpress" },
-                    { "name": "MYSQL_USER", "value": "wpuser" },
-                    { "name": "MYSQL_PASSWORD", "value": "changeme" },
-                    { "name": "MYSQL_RANDOM_ROOT_PASSWORD", "value": "1" }
+                    {
+                      "name": "MYSQL_DATABASE",
+                      "value": "wordpress"
+                    },
+                    {
+                      "name": "MYSQL_USER",
+                      "value": "wpuser"
+                    },
+                    {
+                      "name": "MYSQL_PASSWORD",
+                      "value": "changeme"
+                    },
+                    {
+                      "name": "MYSQL_RANDOM_ROOT_PASSWORD",
+                      "value": "1"
+                    }
                   ],
                   "resources": {
-                    "requests": { "cpu": "100m", "memory": "256Mi" },
-                    "limits": { "cpu": "500m", "memory": "512Mi" }
+                    "requests": {
+                      "cpu": "100m",
+                      "memory": "256Mi"
+                    },
+                    "limits": {
+                      "cpu": "500m",
+                      "memory": "512Mi"
+                    }
                   },
-                  "volumeMounts": [{ "name": "mysql-data", "mountPath": "/var/lib/mysql" }]
+                  "volumeMounts": [
+                    {
+                      "name": "mysql-data",
+                      "mountPath": "/var/lib/mysql"
+                    }
+                  ]
                 }
               ],
               "volumes": [
-                { "name": "wordpress-data", "persistentVolumeClaim": { "claimName": "wordpress-data" } },
-                { "name": "mysql-data", "persistentVolumeClaim": { "claimName": "mysql-data" } }
+                {
+                  "name": "wordpress-data",
+                  "persistentVolumeClaim": {
+                    "claimName": "wordpress-data"
+                  }
+                },
+                {
+                  "name": "mysql-data",
+                  "persistentVolumeClaim": {
+                    "claimName": "mysql-data"
+                  }
+                }
               ]
             }
           }
         }
-      }
+      },
+      "type": "portainer-run",
+      "allowCustomise": true
     },
     {
       "id": "nginx",
@@ -83,17 +145,29 @@
                 {
                   "name": "nginx",
                   "image": "nginx:latest",
-                  "ports": [{ "containerPort": 80 }],
+                  "ports": [
+                    {
+                      "containerPort": 80
+                    }
+                  ],
                   "resources": {
-                    "requests": { "cpu": "50m", "memory": "64Mi" },
-                    "limits": { "cpu": "200m", "memory": "128Mi" }
+                    "requests": {
+                      "cpu": "50m",
+                      "memory": "64Mi"
+                    },
+                    "limits": {
+                      "cpu": "200m",
+                      "memory": "128Mi"
+                    }
                   }
                 }
               ]
             }
           }
         }
-      }
+      },
+      "type": "portainer-run",
+      "allowCustomise": true
     },
     {
       "id": "postgres-pgadmin",
@@ -117,40 +191,89 @@
                 {
                   "name": "pgadmin",
                   "image": "dpage/pgadmin4:latest",
-                  "ports": [{ "containerPort": 80 }],
+                  "ports": [
+                    {
+                      "containerPort": 80
+                    }
+                  ],
                   "env": [
-                    { "name": "PGADMIN_DEFAULT_EMAIL", "value": "admin@example.com" },
-                    { "name": "PGADMIN_DEFAULT_PASSWORD", "value": "changeme" },
-                    { "name": "PGADMIN_CONFIG_SERVER_MODE", "value": "False" }
+                    {
+                      "name": "PGADMIN_DEFAULT_EMAIL",
+                      "value": "admin@example.com"
+                    },
+                    {
+                      "name": "PGADMIN_DEFAULT_PASSWORD",
+                      "value": "changeme"
+                    },
+                    {
+                      "name": "PGADMIN_CONFIG_SERVER_MODE",
+                      "value": "False"
+                    }
                   ],
                   "resources": {
-                    "requests": { "cpu": "100m", "memory": "128Mi" },
-                    "limits": { "cpu": "500m", "memory": "512Mi" }
+                    "requests": {
+                      "cpu": "100m",
+                      "memory": "128Mi"
+                    },
+                    "limits": {
+                      "cpu": "500m",
+                      "memory": "512Mi"
+                    }
                   }
                 },
                 {
                   "name": "postgres",
                   "image": "postgres:16",
                   "env": [
-                    { "name": "POSTGRES_DB", "value": "app" },
-                    { "name": "POSTGRES_USER", "value": "appuser" },
-                    { "name": "POSTGRES_PASSWORD", "value": "changeme" },
-                    { "name": "PGDATA", "value": "/var/lib/postgresql/data/pgdata" }
+                    {
+                      "name": "POSTGRES_DB",
+                      "value": "app"
+                    },
+                    {
+                      "name": "POSTGRES_USER",
+                      "value": "appuser"
+                    },
+                    {
+                      "name": "POSTGRES_PASSWORD",
+                      "value": "changeme"
+                    },
+                    {
+                      "name": "PGDATA",
+                      "value": "/var/lib/postgresql/data/pgdata"
+                    }
                   ],
                   "resources": {
-                    "requests": { "cpu": "100m", "memory": "256Mi" },
-                    "limits": { "cpu": "500m", "memory": "512Mi" }
+                    "requests": {
+                      "cpu": "100m",
+                      "memory": "256Mi"
+                    },
+                    "limits": {
+                      "cpu": "500m",
+                      "memory": "512Mi"
+                    }
                   },
-                  "volumeMounts": [{ "name": "postgres-data", "mountPath": "/var/lib/postgresql/data" }]
+                  "volumeMounts": [
+                    {
+                      "name": "postgres-data",
+                      "mountPath": "/var/lib/postgresql/data"
+                    }
+                  ]
                 }
               ],
               "volumes": [
-                { "name": "postgres-data", "persistentVolumeClaim": { "claimName": "postgres-data" } }
+                {
+                  "name": "postgres-data",
+                  "persistentVolumeClaim": {
+                    "claimName": "postgres-data"
+                  }
+                }
               ]
             }
           }
         }
-      }
+      },
+      "type": "portainer-run",
+      "allowCustomise": true
     },
     {
       "id": "redis",
@@ -174,21 +297,43 @@
                 {
                   "name": "redis",
                   "image": "redis:7-alpine",
-                  "ports": [{ "containerPort": 6379 }],
+                  "ports": [
+                    {
+                      "containerPort": 6379
+                    }
+                  ],
                   "resources": {
-                    "requests": { "cpu": "50m", "memory": "64Mi" },
-                    "limits": { "cpu": "200m", "memory": "256Mi" }
+                    "requests": {
+                      "cpu": "50m",
+                      "memory": "64Mi"
+                    },
+                    "limits": {
+                      "cpu": "200m",
+                      "memory": "256Mi"
+                    }
                   },
-                  "volumeMounts": [{ "name": "redis-data", "mountPath": "/data" }]
+                  "volumeMounts": [
+                    {
+                      "name": "redis-data",
+                      "mountPath": "/data"
+                    }
+                  ]
                 }
               ],
               "volumes": [
-                { "name": "redis-data", "persistentVolumeClaim": { "claimName": "redis-data" } }
+                {
+                  "name": "redis-data",
+                  "persistentVolumeClaim": {
+                    "claimName": "redis-data"
+                  }
+                }
               ]
             }
           }
         }
-      }
+      },
+      "type": "portainer-run",
+      "allowCustomise": true
     },
     {
       "id": "ghost",
@@ -212,43 +357,131 @@
                 {
                   "name": "ghost",
                   "image": "ghost:latest",
-                  "ports": [{ "containerPort": 2368 }],
+                  "ports": [
+                    {
+                      "containerPort": 2368
+                    }
+                  ],
                   "env": [
-                    { "name": "database__client", "value": "mysql" },
-                    { "name": "database__connection__host", "value": "localhost" },
-                    { "name": "database__connection__user", "value": "ghost" },
-                    { "name": "database__connection__password", "value": "changeme" },
-                    { "name": "database__connection__database", "value": "ghost" }
+                    {
+                      "name": "database__client",
+                      "value": "mysql"
+                    },
+                    {
+                      "name": "database__connection__host",
+                      "value": "localhost"
+                    },
+                    {
+                      "name": "database__connection__user",
+                      "value": "ghost"
+                    },
+                    {
+                      "name": "database__connection__password",
+                      "value": "changeme"
+                    },
+                    {
+                      "name": "database__connection__database",
+                      "value": "ghost"
+                    }
                   ],
                   "resources": {
-                    "requests": { "cpu": "100m", "memory": "256Mi" },
-                    "limits": { "cpu": "500m", "memory": "512Mi" }
+                    "requests": {
+                      "cpu": "100m",
+                      "memory": "256Mi"
+                    },
+                    "limits": {
+                      "cpu": "500m",
+                      "memory": "512Mi"
+                    }
                   },
-                  "volumeMounts": [{ "name": "ghost-data", "mountPath": "/var/lib/ghost/content" }]
+                  "volumeMounts": [
+                    {
+                      "name": "ghost-data",
+                      "mountPath": "/var/lib/ghost/content"
+                    }
+                  ]
                 },
                 {
                   "name": "mysql",
                   "image": "mysql:8.0",
                   "env": [
-                    { "name": "MYSQL_DATABASE", "value": "ghost" },
-                    { "name": "MYSQL_USER", "value": "ghost" },
-                    { "name": "MYSQL_PASSWORD", "value": "changeme" },
-                    { "name": "MYSQL_RANDOM_ROOT_PASSWORD", "value": "1" }
+                    {
+                      "name": "MYSQL_DATABASE",
+                      "value": "ghost"
+                    },
+                    {
+                      "name": "MYSQL_USER",
+                      "value": "ghost"
+                    },
+                    {
+                      "name": "MYSQL_PASSWORD",
+                      "value": "changeme"
+                    },
+                    {
+                      "name": "MYSQL_RANDOM_ROOT_PASSWORD",
+                      "value": "1"
+                    }
                   ],
                   "resources": {
-                    "requests": { "cpu": "100m", "memory": "256Mi" },
-                    "limits": { "cpu": "500m", "memory": "512Mi" }
+                    "requests": {
+                      "cpu": "100m",
+                      "memory": "256Mi"
+                    },
+                    "limits": {
+                      "cpu": "500m",
+                      "memory": "512Mi"
+                    }
                   },
-                  "volumeMounts": [{ "name": "mysql-data", "mountPath": "/var/lib/mysql" }]
+                  "volumeMounts": [
+                    {
+                      "name": "mysql-data",
+                      "mountPath": "/var/lib/mysql"
+                    }
+                  ]
                 }
               ],
               "volumes": [
-                { "name": "ghost-data", "persistentVolumeClaim": { "claimName": "ghost-data" } },
-                { "name": "mysql-data", "persistentVolumeClaim": { "claimName": "mysql-data" } }
+                {
+                  "name": "ghost-data",
+                  "persistentVolumeClaim": {
+                    "claimName": "ghost-data"
+                  }
+                },
+                {
+                  "name": "mysql-data",
+                  "persistentVolumeClaim": {
+                    "claimName": "mysql-data"
+                  }
+                }
               ]
             }
           }
         }
+      },
+      "type": "portainer-run",
+      "allowCustomise": true
+    },
+    {
+      "id": "nginx-statefulset",
+      "name": "Nginx StatefulSet",
+      "type": "kubernetes",
+      "description": "Nginx deployed as a StatefulSet with persistent storage. Use when you need stable pod identity or ordered deployment.",
+      "category": "web",
+      "allowCustomise": true,
+      "manifest": "apiVersion: apps/v1\nkind: StatefulSet\nmetadata:\n  name: nginx-statefulset\n  labels:\n    app: nginx-statefulset\n    managed-by: portainer-run\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: nginx-statefulset\n  serviceName: nginx-statefulset\n  template:\n    metadata:\n      labels:\n        app: nginx-statefulset\n        managed-by: portainer-run\n    spec:\n      containers:\n        - name: nginx-statefulset\n          image: nginx:latest\n          imagePullPolicy: Always\n          ports:\n            - containerPort: 80\n          resources:\n            requests:\n              cpu: 50m\n              memory: 64Mi\n            limits:\n              cpu: 200m\n              memory: 128Mi\n          volumeMounts:\n            - name: nginx-statefulset-0\n              mountPath: /usr/share/nginx/html\n  volumeClaimTemplates:\n    - metadata:\n        name: nginx-statefulset-0\n      spec:\n        accessModes: [ReadWriteOnce]\n        resources:\n          requests:\n            storage: 1Gi\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: nginx-statefulset\n  labels:\n    app: nginx-statefulset\n    managed-by: portainer-run\nspec:\n  selector:\n    app: nginx-statefulset\n  type: NodePort\n  ports:\n    - port: 80\n      targetPort: 80\n      protocol: TCP\n"
+    },
+    {
+      "id": "postgresql-helm",
+      "name": "PostgreSQL",
+      "type": "helm",
+      "description": "PostgreSQL database via the Bitnami Helm chart. Production-ready with persistent storage, configurable credentials, and optional replication.",
+      "category": "database",
+      "allowCustomise": true,
+      "helm": {
+        "repo": "https://charts.bitnami.com/bitnami",
+        "chart": "postgresql",
+        "version": "16.2.1",
+        "defaultValues": "auth:\n  postgresPassword: changeme\n  database: app\nprimary:\n  persistence:\n    enabled: true\n    size: 8Gi\n  resources:\n    requests:\n      cpu: 250m\n      memory: 256Mi\n    limits:\n      cpu: 500m\n      memory: 512Mi\n"
       }
     }
   ]
