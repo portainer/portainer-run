@@ -363,7 +363,7 @@ On first start the container generates a self-signed TLS certificate (3 year val
 | Variable | Default | Description |
 |---|---|---|
 | `PORTAINER_URL` | — | Full URL of your Portainer instance. Example: `https://portainer.example.com:9443` |
-| `ENCRYPTION_KEY` | — | **Required.** Encrypts stored Git target credentials at rest. Must be at least 32 characters. Generate with: `openssl rand -hex 32` |
+| `ENCRYPTION_KEY` | — | Encrypts stored Git target credentials at rest. Must be at least 32 characters. Generate with: `openssl rand -hex 32` |
 | `ANTHROPIC_API_KEY` | — | Anthropic API key. Enables the Assistant and AI triage using Claude. |
 | `OPENAI_API_KEY` | — | OpenAI API key. Enables the Assistant and AI triage using GPT-4o. Set one or the other — not both. Anthropic takes priority if both are set. |
 | `AI_PROVIDER` | auto | Override AI provider: `anthropic` or `openai`. Auto-detected from whichever key is set. |
