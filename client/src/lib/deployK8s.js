@@ -1,8 +1,7 @@
 import { kubeFetch } from './api.js'
 import { inflightDedupe } from './inflightDedupe.js'
 import { GPU_RESOURCE_KEYS } from './deployFormModel.js'
-
-const SYSTEM_NS = new Set(['kube-system', 'kube-public', 'kube-node-lease', 'portainer'])
+import { useAppStore } from '../store/useAppStore.js'
 
 export { GPU_RESOURCE_KEYS } from './deployFormModel.js'
 
@@ -13,6 +12,7 @@ export { GPU_RESOURCE_KEYS } from './deployFormModel.js'
  */
 export async function fetchNamespaceOptions(token, envId) {
   return inflightDedupe(`k8s:ns-options:${envId}`, async () => {
+  const denylist = new Set(useAppStore.getState().nsDenylist)
   const r = await kubeFetch(token, envId, '/api/v1/namespaces')
   if (r.status === 403 || r.status === 401) {
     return {
@@ -41,7 +41,7 @@ export async function fetchNamespaceOptions(token, envId) {
         return pr.ok ? ns : null
       }),
     )
-  ).filter((ns) => ns && !ns.startsWith('kube-') && !SYSTEM_NS.has(ns))
+  ).filter((ns) => ns && !ns.startsWith('kube-') && !denylist.has(ns))
   if (!accessible.length) {
     return {
       ok: true,

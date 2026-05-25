@@ -50,6 +50,7 @@ export async function handleRequest(req, res) {
         aiAvailable: !!(ANTHROPIC_KEY || OPENAI_KEY),
         aiProvider: AI_PROVIDER,
         baseDomain: BASE_DOMAIN,
+        nsDenylist: [...SYSTEM_NS],
       }),
     )
     return
