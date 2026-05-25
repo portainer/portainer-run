@@ -369,6 +369,7 @@ On first start the container generates a self-signed TLS certificate (3 year val
 | `SSL_KEY` | — | Path to TLS private key file. Uses self-signed if not set. |
 | `SSL_CERT_DIR` | `/app` | Directory for self-signed certificate storage. |
 | `CACHE_DIR` | `/app/data` | Directory for session cache file. Mount as a volume to persist across restarts. |
+| `NS_DENYLIST` | — | Comma-separated list of additional namespaces to block from all write operations. `kube-system`, `kube-public`, `kube-node-lease`, and `portainer` are always blocked. Example: `monitoring,cert-manager,ingress-nginx` |
 
 ## Connecting
 

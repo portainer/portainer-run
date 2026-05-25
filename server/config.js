@@ -32,6 +32,10 @@ export const SSL_KEY_PATH = process.env.SSL_KEY || ''
 export const CERT_DIR = process.env.SSL_CERT_DIR || projectRoot
 export const CACHE_DIR = process.env.CACHE_DIR || path.join(projectRoot, 'data')
 export const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || ''
+export const NS_DENYLIST = (process.env.NS_DENYLIST || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
 
 /** Default catalogue: same sample JSON as the repo, served from Git (raw). */
 const DEFAULT_TEMPLATE_URL =

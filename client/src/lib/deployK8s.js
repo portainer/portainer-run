@@ -2,6 +2,8 @@ import { kubeFetch } from './api.js'
 import { inflightDedupe } from './inflightDedupe.js'
 import { GPU_RESOURCE_KEYS } from './deployFormModel.js'
 
+const SYSTEM_NS = new Set(['kube-system', 'kube-public', 'kube-node-lease', 'portainer'])
+
 export { GPU_RESOURCE_KEYS } from './deployFormModel.js'
 
 /**
@@ -39,7 +41,7 @@ export async function fetchNamespaceOptions(token, envId) {
         return pr.ok ? ns : null
       }),
     )
-  ).filter(Boolean)
+  ).filter((ns) => ns && !ns.startsWith('kube-') && !SYSTEM_NS.has(ns))
   if (!accessible.length) {
     return {
       ok: true,
