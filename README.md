@@ -274,6 +274,7 @@ docker run -d \
   -p 443:443 \
   -p 80:80 \
   -e PORTAINER_URL=https://portainer.example.com:9443 \
+  -e ENCRYPTION_KEY=<change-me-to-a-rand-32-string> \
   -e ANTHROPIC_API_KEY=sk-ant-... \
   --name portainer-run \
   portainer-run
@@ -286,6 +287,7 @@ docker run -d \
   -p 443:443 \
   -p 80:80 \
   -e PORTAINER_URL=https://portainer.example.com:9443 \
+  -e ENCRYPTION_KEY=<change-me-to-a-rand-32-string> \
   -e OPENAI_API_KEY=sk-... \
   --name portainer-run \
   portainer-run
@@ -299,6 +301,7 @@ docker run -d \
   -p 80:80 \
   -v /path/to/certs:/certs \
   -e PORTAINER_URL=https://portainer.example.com:9443 \
+  -e ENCRYPTION_KEY=<change-me-to-a-rand-32-string> \
   -e ANTHROPIC_API_KEY=sk-ant-... \
   -e SSL_CERT=/certs/fullchain.pem \
   -e SSL_KEY=/certs/privkey.pem \
@@ -314,6 +317,7 @@ docker run -d \
   -p 80:80 \
   -v /data/portainer-run:/app/data \
   -e PORTAINER_URL=https://portainer.example.com:9443 \
+  -e ENCRYPTION_KEY=<change-me-to-a-rand-32-string> \
   -e ANTHROPIC_API_KEY=sk-ant-... \
   --name portainer-run \
   portainer-run
@@ -326,6 +330,7 @@ docker run -d \
   -p 443:443 \
   -p 80:80 \
   -e PORTAINER_URL=https://portainer.example.com:9443 \
+  -e ENCRYPTION_KEY=<change-me-to-a-rand-32-string> \
   -e TEMPLATE_URL=https://your-server.com/templates.json \
   --name portainer-run \
   portainer-run
@@ -338,6 +343,7 @@ docker run -d \
   -p 8443:8443 \
   -p 8080:8080 \
   -e PORTAINER_URL=https://portainer.example.com:9443 \
+  -e ENCRYPTION_KEY=<change-me-to-a-rand-32-string> \
   -e PORT=8443 \
   -e HTTP_PORT=8080 \
   --name portainer-run \
@@ -352,11 +358,12 @@ On first start the container generates a self-signed TLS certificate (3 year val
 
 ## Environment variables
 
-`PORTAINER_URL` is required. All others are optional.
+`PORTAINER_URL` and `ENCRYPTION_KEY` are required. All others are optional.
 
 | Variable | Default | Description |
 |---|---|---|
 | `PORTAINER_URL` | — | Full URL of your Portainer instance. Example: `https://portainer.example.com:9443` |
+| `ENCRYPTION_KEY` | — | **Required.** Encrypts stored Git target credentials at rest. Must be at least 32 characters. Generate with: `openssl rand -hex 32` |
 | `ANTHROPIC_API_KEY` | — | Anthropic API key. Enables the Assistant and AI triage using Claude. |
 | `OPENAI_API_KEY` | — | OpenAI API key. Enables the Assistant and AI triage using GPT-4o. Set one or the other — not both. Anthropic takes priority if both are set. |
 | `AI_PROVIDER` | auto | Override AI provider: `anthropic` or `openai`. Auto-detected from whichever key is set. |
