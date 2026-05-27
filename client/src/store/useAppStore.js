@@ -21,6 +21,8 @@ export const useAppStore = create((set, get) => ({
   baseDomain: '',
   /** @type {Record<string, { reason?: string, disabledAt?: string }>} */
   disabledEnvs: {},
+  /** Namespaces blocked from all write operations — populated from /config on startup. */
+  nsDenylist: [],
   cache: { ...initialCache },
   cacheStatus: 'loading' /** 'loading' | 'cached' | 'fresh' | 'stale' */,
 
@@ -50,6 +52,7 @@ export const useAppStore = create((set, get) => ({
   setAi: (isAiAvailable, aiProvider, baseDomain) =>
     set({ isAiAvailable, aiProvider, baseDomain: baseDomain || '' }),
   setDisabledEnvs: (disabledEnvs) => set({ disabledEnvs }),
+  setNsDenylist: (nsDenylist) => set({ nsDenylist: Array.isArray(nsDenylist) ? nsDenylist : [] }),
   setCache: (updater) =>
     set((s) => (typeof updater === 'function' ? { cache: updater(s.cache) } : { cache: updater })),
   setCacheField: (patch) => set((s) => ({ cache: { ...s.cache, ...patch } })),
