@@ -1,8 +1,9 @@
 import { readBody } from '../lib/http.js'
 import { CORS } from '../lib/cors.js'
 import { getConnectionById } from '../models/connection.js'
-import { commitFiles, ensureBranch, buildRepoHttpsUrl, deleteFile } from '../proxy/git.js'
+import { commitFiles, ensureBranch, buildRepoHttpsUrl, deleteFile, deleteDirectory, fetchFile } from '../proxy/git.js'
 import { buildManifests, serializeManifests, buildManifestPath } from '../lib/manifestSerialize.js'
+import { serializeManifestBuilder } from '../lib/manifestBuilderSerialize.js'
 import { resolvePortainerTarget } from '../resolve-portainer.js'
 import https from 'node:https'
 import http from 'node:http'
@@ -41,6 +42,9 @@ export async function handleGitOps(req, res, pathname) {
   if (pathname === '/api/gitops/manifest' && req.method === 'POST') {
     return handleDeleteManifest(req, res)
   }
+  if (pathname === '/api/gitops/manifest' && req.method === 'GET') {
+    return handleFetchManifest(req, res)
+  }
   return null
 }
 
@@ -70,15 +74,18 @@ async function handleDeploy(req, res) {
   const data = parseJson(body)
   if (!data) return json(res, 400, { error: 'Invalid request body' })
 
-  const { gitTargetId, branch, pathPrefix, pollInterval, deployParams, envId } = data
-  if (!gitTargetId || !branch || !deployParams || !envId) {
-    return json(res, 400, { error: 'gitTargetId, branch, deployParams and envId are required' })
+  const { gitTargetId, branch, pathPrefix, pollInterval, deployParams, manifestBuilderParams, envId } = data
+  if (!gitTargetId || !branch || (!deployParams && !manifestBuilderParams) || !envId) {
+    return json(res, 400, { error: 'gitTargetId, branch, deployParams or manifestBuilderParams, and envId are required' })
   }
 
   const conn = getConnectionById(gitTargetId)
   if (!conn) return json(res, 404, { error: 'Git target not found' })
 
-  const { appName, ns } = deployParams
+  // Determine which deploy path to use
+  const isManifestBuilder = Boolean(manifestBuilderParams)
+  const appName = isManifestBuilder ? manifestBuilderParams.appName : deployParams.appName
+  const ns = isManifestBuilder ? manifestBuilderParams.namespace : deployParams.ns
   const gitPath = sanitizeGitPath(buildManifestPath({ pathPrefix: sanitizeGitPath(pathPrefix || conn.payload.pathPrefix || ''), ns, appName }))
 
   try {
@@ -86,13 +93,16 @@ async function handleDeploy(req, res) {
     await ensureBranch(conn.payload, branch)
 
     // 2. Build manifests with GitOps annotations
-    const manifests = buildManifests({
-      ...deployParams,
-      gitopsAnnotations: { gitTargetId, gitBranch: branch, gitPath },
-    })
-
-    // 3. Serialize to YAML
-    const yamlContent = serializeManifests(manifests)
+    let yamlContent
+    if (isManifestBuilder) {
+      yamlContent = serializeManifestBuilder(manifestBuilderParams, { gitTargetId, gitBranch: branch, gitPath })
+    } else {
+      const manifests = buildManifests({
+        ...deployParams,
+        gitopsAnnotations: { gitTargetId, gitBranch: branch, gitPath },
+      })
+      yamlContent = serializeManifests(manifests)
+    }
 
     // 4. Commit to Git
     const commitResult = await commitFiles(
@@ -159,12 +169,17 @@ async function handleUpdate(req, res) {
   const { appName } = deployParams
 
   try {
-    const manifests = buildManifests({
-      ...deployParams,
-      gitopsAnnotations: { gitTargetId, gitBranch: branch, gitPath },
-    })
-
-    const yamlContent = serializeManifests(manifests)
+    // If client serialized the YAML directly (MB edit path), use it as-is
+    let yamlContent
+    if (deployParams._yamlOverride) {
+      yamlContent = deployParams._yamlOverride
+    } else {
+      const manifests = buildManifests({
+        ...deployParams,
+        gitopsAnnotations: { gitTargetId, gitBranch: branch, gitPath },
+      })
+      yamlContent = serializeManifests(manifests)
+    }
 
     const commitResult = await commitFiles(
       conn.payload,
@@ -190,22 +205,35 @@ async function handleValidate(req, res) {
   const data = parseJson(body)
   if (!data) return json(res, 400, { error: 'Invalid request body' })
 
-  const { deployParams, envId } = data
-  if (!deployParams || !envId) {
-    return json(res, 400, { error: 'deployParams and envId are required' })
+  const { deployParams, manifestBuilderParams, envId } = data
+  if ((!deployParams && !manifestBuilderParams) || !envId) {
+    return json(res, 400, { error: 'deployParams or manifestBuilderParams, and envId are required' })
   }
 
   const target = resolvePortainerTarget(req)
   if (!target) return json(res, 400, { error: 'Cannot resolve Portainer target' })
 
   const userToken = req.headers['x-api-key'] || ''
-  const { appName, ns } = deployParams
 
-  // Build manifests without GitOps annotations for validation
-  const manifests = buildManifests({
-    ...deployParams,
-    gitopsAnnotations: { gitTargetId: 'dry-run', gitBranch: 'dry-run', gitPath: 'dry-run' },
-  }).filter(Boolean)
+  // Build manifests using the correct serializer for the param shape
+  let manifests = []
+  let appName, ns
+
+  if (manifestBuilderParams) {
+    appName = manifestBuilderParams.appName
+    ns = manifestBuilderParams.namespace
+    const yaml = serializeManifestBuilder(manifestBuilderParams, { gitTargetId: 'dry-run', gitBranch: 'dry-run', gitPath: 'dry-run' })
+    // Re-parse the YAML back to objects for validation
+    const jsYaml = await import('js-yaml')
+    manifests = jsYaml.loadAll(yaml).filter(Boolean)
+  } else {
+    appName = deployParams.appName
+    ns = deployParams.ns
+    manifests = buildManifests({
+      ...deployParams,
+      gitopsAnnotations: { gitTargetId: 'dry-run', gitBranch: 'dry-run', gitPath: 'dry-run' },
+    }).filter(Boolean)
+  }
 
   const results = []
 
@@ -252,10 +280,38 @@ async function handleDeleteManifest(req, res) {
   if (!conn) return json(res, 404, { error: 'Git target not found' })
 
   try {
-    await deleteFile(conn.payload, branch, gitPath, `remove: ${appName || gitPath}`)
+    // Paths ending without an extension are treated as directories (vibe source paths)
+    // Paths ending with .yaml/.yml are manifest files
+    const isDirectory = !gitPath.match(/\.[a-zA-Z0-9]+$/)
+    if (isDirectory) {
+      await deleteDirectory(conn.payload, branch, gitPath, `remove: ${appName || gitPath}`)
+    } else {
+      await deleteFile(conn.payload, branch, gitPath, `remove: ${appName || gitPath}`)
+    }
     return json(res, 200, { ok: true })
   } catch (err) {
     console.error('[gitops delete manifest error]', err.message)
+    return json(res, 502, { error: err.message })
+  }
+}
+
+async function handleFetchManifest(req, res) {
+  const url = new URL(req.url, 'https://localhost')
+  const gitTargetId = sanitizeGitPath(url.searchParams.get('gitTargetId') || '')
+  const branch = url.searchParams.get('branch') || ''
+  const gitPath = sanitizeGitPath(url.searchParams.get('path') || '')
+
+  if (!gitTargetId || !branch || !gitPath) {
+    return json(res, 400, { error: 'gitTargetId, branch and path are required' })
+  }
+
+  const conn = getConnectionById(gitTargetId)
+  if (!conn) return json(res, 404, { error: 'Git target not found' })
+
+  try {
+    const content = await fetchFile(conn.payload, branch, gitPath)
+    return json(res, 200, { content })
+  } catch (err) {
     return json(res, 502, { error: err.message })
   }
 }

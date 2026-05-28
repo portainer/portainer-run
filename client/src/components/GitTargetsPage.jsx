@@ -53,7 +53,7 @@ export function GitTargetsPage() {
     setTesting((t) => ({ ...t, [id]: true }))
     try {
       const r = await testGitTarget(id)
-      setTestResults((t) => ({ ...t, [id]: { ok: true, message: r.message } }))
+      setTestResults((t) => ({ ...t, [id]: { ok: true, message: r.message, permissions: r.permissions, details: r.details || [] } }))
     } catch (e) {
       setTestResults((t) => ({ ...t, [id]: { ok: false, message: e.message || 'Test failed' } }))
     } finally {
@@ -138,10 +138,35 @@ export function GitTargetsPage() {
                 </div>
                 {testResults[conn.id] && (
                   <div style={{
-                    marginTop: 6, fontSize: 12, fontFamily: 'var(--mono)',
-                    color: testResults[conn.id].ok ? 'var(--green)' : 'var(--red)',
+                    marginTop: 8, padding: '10px 12px', borderRadius: 6,
+                    fontSize: 12, fontFamily: 'var(--mono)',
+                    background: testResults[conn.id].ok && testResults[conn.id].permissions?.canWrite
+                      ? 'rgba(74,222,128,0.08)'
+                      : testResults[conn.id].ok && !testResults[conn.id].permissions?.canWrite
+                      ? 'rgba(251,191,36,0.08)'
+                      : 'rgba(248,113,113,0.08)',
+                    color: testResults[conn.id].ok && testResults[conn.id].permissions?.canWrite
+                      ? 'var(--green)'
+                      : testResults[conn.id].ok && !testResults[conn.id].permissions?.canWrite
+                      ? 'var(--amber)'
+                      : 'var(--red)',
+                    border: `1px solid ${testResults[conn.id].ok && testResults[conn.id].permissions?.canWrite
+                      ? 'rgba(74,222,128,0.3)'
+                      : testResults[conn.id].ok && !testResults[conn.id].permissions?.canWrite
+                      ? 'rgba(251,191,36,0.3)'
+                      : 'rgba(248,113,113,0.3)'}`,
+                    display: 'flex', flexDirection: 'column', gap: 4,
                   }}>
-                    {testResults[conn.id].ok ? '✓' : '✕'} {testResults[conn.id].message}
+                    <div style={{ fontWeight: 600 }}>
+                      {testResults[conn.id].ok
+                        ? (testResults[conn.id].permissions?.canWrite ? '✓' : '⚠')
+                        : '✕'} {testResults[conn.id].message}
+                    </div>
+                    {testResults[conn.id].details?.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 11, opacity: 0.85 }}>
+                        {testResults[conn.id].details.map((d, i) => <div key={i}>{d}</div>)}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

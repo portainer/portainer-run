@@ -42,6 +42,8 @@ export async function refreshCache(manual = false) {
     st().setCache((c) => ({ ...c, lastFetch: Date.now(), everLoaded: true, fetching: false }))
     setCacheStatus('fresh')
     touchSession()
+
+
     if (!manual) scheduleNextRefresh()
     return
   }
@@ -60,6 +62,8 @@ export async function refreshCache(manual = false) {
     st().setCache((c) => ({ ...c, lastFetch: Date.now(), everLoaded: true, fetching: false }))
     setCacheStatus('fresh')
     touchSession()
+
+
   } catch (e) {
     if (manual) st().pushToast('Refresh failed: ' + (e && e.message), 'err')
     setCacheStatus('stale')

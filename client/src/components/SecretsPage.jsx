@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAppStore, visibleEnvironments } from '../store/useAppStore.js'
+import { checkEnvPermissions } from '../lib/envPermissions.js'
 import { icons } from '../design-system/icons.js'
 import { age } from '../lib/utils.js'
 import {
@@ -17,6 +18,8 @@ function newRowId() {
 
 export function SecretsPage() {
   const token = useAppStore((s) => s.token)
+  const envPermissions = useAppStore((s) => s.envPermissions)
+  const patchEnvPermissions = useAppStore((s) => s.patchEnvPermissions)
   const environments = useAppStore((s) => s.environments)
   const disabledEnvs = useAppStore((s) => s.disabledEnvs)
   const pushToast = useAppStore((s) => s.pushToast)
@@ -200,6 +203,26 @@ export function SecretsPage() {
 
   const resolvedFormNs = formNsManual ? formNsValue.trim() : formNamespace
 
+  // Permission checks — fire when both env and namespace are known
+  const listPerms = (listEnvId && resolvedListNs) ? (envPermissions[`${listEnvId}:${resolvedListNs}`] || { canCreateSecret: true, canDeleteSecret: true }) : { canCreateSecret: true, canDeleteSecret: true }
+  const formPerms = (formEnvId && resolvedFormNs) ? (envPermissions[`${formEnvId}:${resolvedFormNs}`] || { canCreateSecret: true }) : { canCreateSecret: true }
+
+  useEffect(() => {
+    if (!listEnvId || !resolvedListNs || !token) return
+    const key = `${listEnvId}:${resolvedListNs}`
+    if (envPermissions[key] !== undefined) return
+    void checkEnvPermissions(token, listEnvId, resolvedListNs)
+      .then((p) => patchEnvPermissions(listEnvId, resolvedListNs, p))
+  }, [listEnvId, resolvedListNs])
+
+  useEffect(() => {
+    if (!formEnvId || !resolvedFormNs || !token) return
+    const key = `${formEnvId}:${resolvedFormNs}`
+    if (envPermissions[key] !== undefined) return
+    void checkEnvPermissions(token, formEnvId, resolvedFormNs)
+      .then((p) => patchEnvPermissions(formEnvId, resolvedFormNs, p))
+  }, [formEnvId, resolvedFormNs])
+
   async function saveNewSecret() {
     if (!formEnvId) {
       pushToast('Select an environment', 'err')
@@ -277,7 +300,7 @@ export function SecretsPage() {
           <div className="page-title">Secrets</div>
           <div className="page-sub">Kubernetes Secret objects in a namespace. Values are write-only after save.</div>
         </div>
-        <button type="button" className="btn btn-primary btn-sm" onClick={() => openCreate()} disabled={!vis.length}>
+        <button type="button" className="btn btn-primary btn-sm" onClick={() => openCreate()} disabled={!vis.length || !listPerms.canCreateSecret} title={!listPerms.canCreateSecret ? 'No permission to create secrets in this namespace' : undefined}>
           + New Secret
         </button>
       </div>
@@ -417,7 +440,10 @@ export function SecretsPage() {
                     <button
                       type="button"
                       className="btn btn-danger btn-xs"
-                      onClick={() => setDeleteTarget({ envId: listEnvId, ns: resolvedListNs, name })}
+                      disabled={!listPerms.canDeleteSecret}
+                      title={!listPerms.canDeleteSecret ? 'No permission to delete secrets in this namespace' : undefined}
+                      style={!listPerms.canDeleteSecret ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
+                      onClick={() => listPerms.canDeleteSecret && setDeleteTarget({ envId: listEnvId, ns: resolvedListNs, name })}
                     >
                       Delete
                     </button>

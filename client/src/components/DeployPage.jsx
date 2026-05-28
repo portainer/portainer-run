@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAppStore, visibleEnvironments, isEnvDisabled } from '../store/useAppStore.js'
 import { mapDeployConfigToFormValues, parseKnativeManifest } from '../lib/catalogueTemplate.js'
 import { ROUTES } from '../lib/routes.js'
@@ -17,12 +17,38 @@ import { fetchTemplatesJson } from '../lib/fetchTemplatesJson.js'
 import { inflightDedupe } from '../lib/inflightDedupe.js'
 import { createContainer, withDefaultCnames } from '../lib/deployFormModel.js'
 import { gitOpsDeploy } from '../lib/gitTargets.js'
+import { checkEnvPermissions } from '../lib/envPermissions.js'
 import {
   DeployContainersFormList,
   DeployExposureFormFields,
   DeployNameAndInstancesRow,
 } from './deploy/DeployFormSections.jsx'
 import { GitOpsStep } from './deploy/GitOpsStep.jsx'
+
+const SD_STEPS = [
+  { num: 1, label: 'Target' },
+  { num: 2, label: 'Application' },
+  { num: 3, label: 'Deploy' },
+]
+
+function Stepper({ current }) {
+  return (
+    <div className="mb-stepper">
+      {SD_STEPS.map((s, i) => {
+        const state = s.num < current ? 'done' : s.num === current ? 'active' : 'idle'
+        return (
+          <div key={s.num} style={{ display: 'flex', alignItems: 'center' }}>
+            <div className={`mb-step mb-step--${state}`}>
+              <div className="mb-step-num">{state === 'done' ? '✓' : s.num}</div>
+              <span className="mb-step-label">{s.label}</span>
+            </div>
+            {i < SD_STEPS.length - 1 && <div className="mb-step-sep" />}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 export function DeployPage() {
   const location = useLocation()
@@ -32,6 +58,7 @@ export function DeployPage() {
   const environments = useAppStore((s) => s.environments)
   const disabledEnvs = useAppStore((s) => s.disabledEnvs)
   const pushToast = useAppStore((s) => s.pushToast)
+  const envPermissions = useAppStore((s) => s.envPermissions)
   const cataloguePrefillDone = useRef(false)
   const lastAssistantDeployKey = useRef('')
 
@@ -56,8 +83,7 @@ export function DeployPage() {
 
   const [nsQuota, setNsQuota] = useState({ requiresLimits: false, requiresRequests: false })
 
-  // GitOps step state
-  const [gitOpsStep, setGitOpsStep] = useState(false)
+  const [step, setStep] = useState(1)
   const [deploying, setDeploying] = useState(false)
   // Staged deploy params — built on form validation, passed to GitOps step
   const [stagedParams, setStagedParams] = useState(null)
@@ -154,6 +180,17 @@ export function DeployPage() {
 
   const vis = useMemo(() => visibleEnvironments({ environments, disabledEnvs }), [environments, disabledEnvs])
   const resolvedNs = manualNs ? manualNsValue.trim() : namespace
+  const patchEnvPermissions = useAppStore((s) => s.patchEnvPermissions)
+  const deployPerms = (envId && resolvedNs) ? (envPermissions[`${envId}:${resolvedNs}`] || { canDeploy: true }) : { canDeploy: true }
+
+  // Fire permission check when both env and namespace are selected
+  useEffect(() => {
+    if (!envId || !resolvedNs || !token) return
+    const key = `${envId}:${resolvedNs}`
+    if (envPermissions[key] !== undefined) return
+    void checkEnvPermissions(token, envId, resolvedNs)
+      .then((p) => patchEnvPermissions(envId, resolvedNs, p))
+  }, [envId, resolvedNs])
 
   const secretList = useMemo(() => (
     namespaceSecrets.map((s) => ({ name: s.name, keys: s.keys.filter(Boolean) })).filter((s) => s.keys.length)
@@ -243,7 +280,7 @@ export function DeployPage() {
     setServiceName(''); setNamespace(''); setNsList([]); setManualNs(false); setManualNsValue('')
     setNsStatus({ text: '', tone: 'dim' }); setInstances(1); setExposeType('none')
     setSvcPorts(['80']); setIngHost(''); setIngPath('/'); setIngPort(80); setIngClass('')
-    setContainers([createContainer(true)]); setGitOpsStep(false); setStagedParams(null)
+    setContainers([createContainer(true)]); setStep(1); setStagedParams(null)
   }, [])
 
   /** Validate form and build staged params — advances to GitOps step */
@@ -302,7 +339,7 @@ export function DeployPage() {
       servicePorts,
       ingress: { host: ingHost.trim(), path: ingPath.trim() || '/', port: ingPort, ingressClass: ingClass.trim() },
     })
-    setGitOpsStep(true)
+    setStep(3)
   }
 
   /** Called by GitOpsStep when the user confirms git target + branch */
@@ -339,121 +376,143 @@ export function DeployPage() {
     : nsStatus.tone === 'green' ? 'var(--green)'
     : nsStatus.tone === 'red' ? 'var(--red)' : 'var(--text-dim)'
 
-  if (gitOpsStep && stagedParams) {
-    return (
-      <div className="page active">
-        <div className="page-header">
-          <div>
-            <div className="page-title">Deploy a Service</div>
-            <div className="page-sub">Choose where to commit the manifest</div>
+  return (
+    <div className="page active">
+      <div className="page-header">
+        <div>
+          <div className="page-title">Simple Deploy</div>
+          <div className="page-sub">
+            Deploy a containerised application as a single service. All containers share a pod and a single network identity. For more complex workloads, use <Link to={ROUTES.deployManifest} style={{ color: 'var(--accent)' }}>Manifest Builder</Link>.
           </div>
         </div>
-        <div className="deploy-form">
+      </div>
+
+      <div className="deploy-form">
+        <Stepper current={step} />
+
+        {/* ── Step 1: Target ── */}
+        {step === 1 && (
+          <div className="form-section">
+            <div className="form-section-head">Step 1 — Target</div>
+            <div className="form-section-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {!deployPerms.canDeploy && envId && (
+                <div style={{
+                  padding: '12px 14px', background: 'rgba(239,68,68,0.08)',
+                  border: '1px solid var(--red)', borderRadius: 8,
+                  fontSize: 13, color: 'var(--red)', fontFamily: 'var(--mono)',
+                  display: 'flex', alignItems: 'center', gap: 10,
+                }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                    width="16" height="16" style={{ flexShrink: 0 }}>
+                    <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  You do not have permission to deploy workloads in the selected environment.
+                </div>
+              )}
+              <div className="frow">
+                <div className="field">
+                  <label>Deployment target</label>
+                  <select value={envId} onChange={(e) => { setEnvId(e.target.value); setNamespace(''); setNsList([]); setNsStatus({ text: '', tone: 'dim' }) }}>
+                    <option value="">— Select —</option>
+                    {vis.map((e) => <option key={e.Id} value={e.Id}>{e.Name}</option>)}
+                  </select>
+                  <div className="hint">Portainer environment to deploy into</div>
+                </div>
+                <div className="field">
+                  <label>Namespace</label>
+                  {!manualNs && (
+                    <select value={namespace} onChange={(e) => setNamespace(e.target.value)} disabled={!envId || nsLoading}>
+                      <option value="">{!envId ? 'Select target first...' : nsLoading ? 'Loading namespaces...' : '— Select —'}</option>
+                      {nsList.map((n) => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  )}
+                  {manualNs && (
+                    <input type="text" value={manualNsValue} onChange={(e) => setManualNsValue(e.target.value)} placeholder="my-namespace" />
+                  )}
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: nsStatusColor, marginTop: 4 }}>{nsStatus.text}</div>
+                  <div className="hint">Namespace must already exist in the target</div>
+                </div>
+              </div>
+              <div className="form-actions">
+                <button type="button" className="btn btn-ghost" onClick={() => { resetForm(); navigate(ROUTES.services) }}>Cancel</button>
+                <button type="button" className="btn btn-primary" onClick={() => {
+                  if (!envId) { pushToast('Select a deployment target', 'err'); return }
+                  if (!resolvedNs) { pushToast('Select or enter a namespace', 'err'); return }
+                  if (!deployPerms.canDeploy) { pushToast('No deploy permission in this environment', 'err'); return }
+                  setStep(2)
+                }}
+                  disabled={!envId || !deployPerms.canDeploy}>
+                  Next →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 2: Application ── */}
+        {step === 2 && (
+          <>
+            <div className="form-section">
+              <div className="form-section-head">Service</div>
+              <div className="form-section-body">
+                <DeployNameAndInstancesRow
+                  mode="create"
+                  serviceName={serviceName}
+                  onServiceNameChange={setServiceName}
+                  instances={instances}
+                  onInstancesChange={setInstances}
+                />
+              </div>
+            </div>
+
+            <div className="form-section">
+              <div className="form-section-head">Exposure</div>
+              <div className="form-section-body">
+                <DeployExposureFormFields
+                  exposeType={exposeType} setExposeType={setExposeType}
+                  svcPorts={svcPorts} setSvcPorts={setSvcPorts}
+                  ingHost={ingHost} setIngHost={setIngHost}
+                  ingPath={ingPath} setIngPath={setIngPath}
+                  ingPort={ingPort} setIngPort={setIngPort}
+                  ingClass={ingClass} setIngClass={setIngClass}
+                  onExposeTypeChange={(v) => { setExposeType(v); if (v === 'NodePort' || v === 'LoadBalancer') setSvcPorts((s) => s.length ? s : ['80']) }}
+                />
+              </div>
+            </div>
+
+            <div className="form-section">
+              <div className="form-section-head">Containers</div>
+              <div className="form-section-body">
+                <DeployContainersFormList
+                  containers={containers} onChange={onChange}
+                  onRemove={(id) => setContainers((p) => p.filter((x) => x.id !== id))}
+                  onAddSidecar={() => setContainers((p) => [...p, createContainer(false)])}
+                  patchContainer={patchContainer}
+                  secretList={secretList} scItems={scItems}
+                  token={token} envId={String(envId)}
+                />
+              </div>
+            </div>
+
+            <div className="form-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setStep(1)}>← Back</button>
+              <button type="button" className="btn btn-primary" onClick={onNext}>Next: Git Target →</button>
+            </div>
+          </>
+        )}
+
+        {/* ── Step 3: Deploy (GitOps) ── */}
+        {step === 3 && stagedParams && (
           <GitOpsStep
             appName={stagedParams.appName}
             ns={stagedParams.ns}
             envId={stagedParams.envId}
             deployParams={stagedParams}
             onConfirm={onGitOpsConfirm}
-            onBack={() => setGitOpsStep(false)}
+            onBack={() => setStep(2)}
             deploying={deploying}
           />
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="page active">
-      <div className="page-header">
-        <div>
-          <div className="page-title">Deploy a Service</div>
-          <div className="page-sub">
-            Define a multi-container service. All containers share a pod and localhost network.
-          </div>
-        </div>
-      </div>
-      <div className="deploy-form">
-        <div className="form-section">
-          <div className="form-section-head">Service</div>
-          <div className="form-section-body">
-            <div className="frow" style={{ marginBottom: 16 }}>
-              <div className="field">
-                <label>Deployment target</label>
-                <select value={envId} onChange={(e) => { setEnvId(e.target.value); setNamespace(''); setNsList([]); setNsStatus({ text: '', tone: 'dim' }) }}>
-                  <option value="">— Select —</option>
-                  {vis.map((e) => <option key={e.Id} value={e.Id}>{e.Name}</option>)}
-                </select>
-                <div className="hint">Portainer environment to deploy into</div>
-              </div>
-              <div className="field">
-                <label>Namespace</label>
-                {!manualNs && (
-                  <select value={namespace} onChange={(e) => setNamespace(e.target.value)} disabled={!envId || nsLoading}>
-                    <option value="">{!envId ? 'Select target first...' : nsLoading ? 'Loading namespaces...' : '— Select —'}</option>
-                    {nsList.map((n) => <option key={n} value={n}>{n}</option>)}
-                  </select>
-                )}
-                {manualNs && (
-                  <div className="field" style={{ marginTop: 10 }}>
-                    <label>Enter namespace manually</label>
-                    <input type="text" value={manualNsValue} onChange={(e) => setManualNsValue(e.target.value)} placeholder="my-namespace" />
-                    <div className="hint">Your token is namespace-scoped, or listing failed — type the namespace you can use</div>
-                  </div>
-                )}
-                <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: nsStatusColor, marginTop: 4 }}>
-                  {nsStatus.text}
-                </div>
-                <div className="hint">Namespace must already exist in the target</div>
-              </div>
-            </div>
-            <DeployNameAndInstancesRow
-              mode="create"
-              serviceName={serviceName}
-              onServiceNameChange={setServiceName}
-              instances={instances}
-              onInstancesChange={setInstances}
-            />
-          </div>
-        </div>
-
-        <div className="form-section">
-          <div className="form-section-head">Exposure</div>
-          <div className="form-section-body">
-            <DeployExposureFormFields
-              exposeType={exposeType} setExposeType={setExposeType}
-              svcPorts={svcPorts} setSvcPorts={setSvcPorts}
-              ingHost={ingHost} setIngHost={setIngHost}
-              ingPath={ingPath} setIngPath={setIngPath}
-              ingPort={ingPort} setIngPort={setIngPort}
-              ingClass={ingClass} setIngClass={setIngClass}
-              onExposeTypeChange={(v) => { setExposeType(v); if (v === 'NodePort' || v === 'LoadBalancer') setSvcPorts((s) => s.length ? s : ['80']) }}
-            />
-          </div>
-        </div>
-
-        <div className="form-section">
-          <div className="form-section-head">Containers</div>
-          <div className="form-section-body">
-            <DeployContainersFormList
-              containers={containers} onChange={onChange}
-              onRemove={(id) => setContainers((p) => p.filter((x) => x.id !== id))}
-              onAddSidecar={() => setContainers((p) => [...p, createContainer(false)])}
-              patchContainer={patchContainer}
-              secretList={secretList} scItems={scItems}
-              token={token} envId={String(envId)}
-            />
-          </div>
-        </div>
-
-        <div className="form-actions">
-          <button type="button" className="btn btn-ghost" onClick={() => { resetForm(); navigate(ROUTES.services) }}>
-            Cancel
-          </button>
-          <button type="button" className="btn btn-primary" onClick={onNext}>
-            Next: Choose Git Target →
-          </button>
-        </div>
+        )}
       </div>
     </div>
   )

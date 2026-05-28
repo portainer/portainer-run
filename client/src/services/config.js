@@ -18,7 +18,6 @@ export async function loadServerConfig() {
           : 'Set your Portainer base URL below'
     )
     st().setAi(!!d.aiAvailable, d.aiProvider || 'anthropic', d.baseDomain || '')
-    st().setNsDenylist(d.nsDenylist || [])
   } catch (e) {
     st().setPortainerFromServer(false)
     st().setServerLabel('API proxy not reachable — is the portainer-run server running?')

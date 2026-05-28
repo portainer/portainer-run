@@ -14,6 +14,8 @@ import { loadDeployFormFromCluster } from '../../lib/deployFormLoadFromCluster.j
 import { useAppStore, isEnvDisabled } from '../../store/useAppStore.js'
 import { refreshCache } from '../../services/refreshDeployments.js'
 import { gitOpsUpdate } from '../../lib/gitTargets.js'
+import MBEditTab from './MBEditTab.jsx'
+import VibeEditTab from './VibeEditTab.jsx'
 import {
   DeployContainersFormList,
   DeployExposureFormFields,
@@ -33,7 +35,13 @@ function readGitOpsAnnotations(deployment) {
   const gitBranch = ann['portainer-run/git-branch']
   const gitPath = ann['portainer-run/git-path']
   if (!gitTargetId || !gitBranch || !gitPath) return null
-  return { gitTargetId, gitBranch, gitPath, stackId: ann['portainer-run/stack-id'] }
+  return {
+    gitTargetId,
+    gitBranch,
+    gitPath,
+    stackId: ann['portainer-run/stack-id'],
+    deployType: ann['portainer-run/deploy-type'] || 'simple',
+  }
 }
 
 /**
@@ -45,6 +53,25 @@ function readGitOpsAnnotations(deployment) {
  * @param {() => Promise<void> | void} props.onSaved
  */
 export default function ServiceDetailEditTab({ d, envId, namespace, name, onSaved }) {
+  const envPerms = useAppStore((s) => s.envPermissions)
+  const perms = envPerms[`${envId}:${namespace}`] || { canEdit: true }
+
+  if (!perms.canEdit) {
+    return (
+      <div style={{
+        padding: '14px 18px', background: 'rgba(251,191,36,0.08)',
+        border: '1px solid var(--amber)', borderRadius: 8,
+        fontSize: 13, color: 'var(--amber)', fontFamily: 'var(--mono)',
+        display: 'flex', alignItems: 'center', gap: 10,
+      }}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+          width="16" height="16" style={{ flexShrink: 0 }}>
+          <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+        </svg>
+        You do not have permission to edit workloads in this environment.
+      </div>
+    )
+  }
   const location = useLocation()
   const navigate = useNavigate()
   const token = useAppStore((s) => s.token)
@@ -68,6 +95,8 @@ export default function ServiceDetailEditTab({ d, envId, namespace, name, onSave
   // Detect GitOps mode from deployment annotations
   const gitOpsInfo = useMemo(() => readGitOpsAnnotations(d), [d])
   const isGitOps = Boolean(gitOpsInfo)
+  const isMBDeploy = gitOpsInfo?.deployType === 'manifest-builder'
+  const isVibeDeploy = gitOpsInfo?.deployType === 'vibe'
 
   const resourceKey = d?.metadata?.uid + '@' + (d?.metadata?.resourceVersion || '')
   const [nsQuota, setNsQuota] = useState({ requiresLimits: false, requiresRequests: false })
@@ -248,6 +277,32 @@ export default function ServiceDetailEditTab({ d, envId, namespace, name, onSave
     }
   }, [d, token, envId, namespace, name, containers, instances, exposeType, svcPorts,
     ingHost, ingPath, ingPort, ingClass, onSaved, pushToast, isGitOps, gitOpsInfo])
+
+  // Route Vibe deployments to the dedicated Vibe edit tab
+  if (isVibeDeploy) {
+    return (
+      <VibeEditTab
+        d={d}
+        envId={envId}
+        namespace={namespace}
+        name={name}
+        gitOpsInfo={gitOpsInfo}
+        onSaved={onSaved}
+      />
+    )
+  }
+
+  // Route MB deployments to the dedicated MB edit tab
+  if (isMBDeploy) {
+    return (
+      <MBEditTab
+        envId={envId}
+        namespace={namespace}
+        gitOpsInfo={gitOpsInfo}
+        onSaved={onSaved}
+      />
+    )
+  }
 
   if (formLoading && !loadErr) {
     return <div className="loading-row"><div className="spinner" /> Loading deploy form…</div>
