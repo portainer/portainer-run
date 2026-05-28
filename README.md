@@ -34,6 +34,18 @@ Environment variables can be set as plain values, as references to individual ke
 
 GPU support is per-container. Enabling the GPU toggle auto-detects the GPU resource type available on the selected environment's nodes (NVIDIA, AMD, Intel, or Habana) and sets the correct resource key in both requests and limits. A warning is shown if no GPU nodes are found in the environment.
 
+**Vibe Deploy** is a deployment path for source files produced by AI coding tools. It accepts a folder of files directly — no container image, no CI pipeline, no Dockerfile required. Drop the files Claude or another AI tool gave you, and Portainer Run handles everything from there.
+
+The runtime is detected automatically from the file structure. A `package.json` maps to Node.js 20. A `requirements.txt` or `.py` file maps to Python 3.12. A `Gemfile` maps to Ruby 3.3. `.php` files map to PHP 8.3 with Apache. Everything else defaults to nginx for static HTML/CSS/JS sites.
+
+On deploy, three init containers run in sequence before the app starts. The first clones the committed source files from the git repository into a PersistentVolume. The second runs the appropriate dependency installer for the detected runtime (`npm install --production` for Node, `pip install -r requirements.txt` for Python, and so on) inside the same runtime image so native modules compile correctly. The third writes a `.env` file from the environment variables entered in the deploy form. None of this requires a build step or a registry.
+
+Git credentials used during source cloning are stored as a Kubernetes Secret (`appname-git-credentials`) and injected into the init container via `secretKeyRef`. The token never appears in the pod spec command.
+
+If the uploaded files include a `.env.example`, Portainer Run detects it and presents an editable list of the keys before deploying. Values are written to the PV at deploy time and never committed to git. Keys matching common patterns (SECRET, TOKEN, KEY, PASSWORD) are masked in the form.
+
+Updating an app is handled from the Edit tab on the service detail page. Portainer Run shows a Vibe Deploy-specific editor rather than the standard container edit form. Drop the updated files, click Commit & Restart, and the init containers re-run on the next pod start, syncing the new source into the PV while leaving app data (databases, uploaded files, anything written to the data directory) untouched.
+
 **Catalogue** provides one-click deployment of pre-configured application stacks. See the Catalogue section below for full details.
 
 **Secrets** provides a namespace-scoped view of Kubernetes Secrets. Secrets can be created with multiple key/value pairs (values are write-only — they are base64-encoded before storage and not displayed after saving), and deleted with a confirmation prompt. The create form targets a specific environment and namespace independently of the list filter. Any app using a secret is shown on the secret card.
@@ -55,6 +67,16 @@ Clicking any service opens a detail panel with six tabs.
 **Assistant** is a persistent chat panel available on every page. It is context-aware of whatever you are looking at (current page, open service, environment) and can answer questions about your services in plain English, proactively fetch logs and events before responding to health questions, translate a Docker Compose file into a Portainer Run deployment, describe a deployment in natural language to pre-populate the deploy form, and detect scale requests to open the Edit tab pre-filled. The assistant never executes irreversible operations directly, it routes destructive actions to the existing UI. Session history is kept in memory only and cleared on disconnect.
 
 **Cluster Readiness** (admin only) checks each environment for ingress controller availability, LoadBalancer provisioning, storage class configuration, node health, and GPU node availability. Each check reports a plain-English result. Administrators can disable environments from this page; disabled environments are hidden from all dropdowns and views for non-admin users, and blocked from receiving new deployments for everyone. Disabled state is stored in a ConfigMap (`portainer-run-config` in `kube-system`) and persists across restarts. Non-admin users see a notice on the dashboard if environments have been hidden.
+
+## Git targets
+
+Vibe Deploy and the GitOps-backed manifest deploy paths both require a git target. A git target is a stored, encrypted connection to a git repository where Portainer Run commits manifests and source files. Configure one under Git Targets before deploying.
+
+Each target stores the provider (GitHub, GitLab, Gitea, or other), the repository in `owner/repo` form, a personal access token, an optional path prefix (manifests are committed to `prefix/namespace/appname.yaml`), and a default branch. Credentials are encrypted at rest.
+
+The Test button on each git target checks connectivity and reports read and write permissions separately. For GitHub, the check uses the collaborator permissions API rather than the repository metadata response, which means it works correctly with fine-grained PATs (the modern GitHub default). The result is shown as green for full read/write access or amber if the token can read but not push — a read-only token will cause deploy to fail at the git commit step.
+
+For GitHub fine-grained PATs, the token requires Contents (read and write) permission on the target repository. Classic PATs require the `repo` scope.
 
 ## Catalogue
 
@@ -274,7 +296,6 @@ docker run -d \
   -p 443:443 \
   -p 80:80 \
   -e PORTAINER_URL=https://portainer.example.com:9443 \
-  -e ENCRYPTION_KEY=<change-me-to-a-rand-32-string> \
   -e ANTHROPIC_API_KEY=sk-ant-... \
   --name portainer-run \
   portainer-run
@@ -287,7 +308,6 @@ docker run -d \
   -p 443:443 \
   -p 80:80 \
   -e PORTAINER_URL=https://portainer.example.com:9443 \
-  -e ENCRYPTION_KEY=<change-me-to-a-rand-32-string> \
   -e OPENAI_API_KEY=sk-... \
   --name portainer-run \
   portainer-run
@@ -301,7 +321,6 @@ docker run -d \
   -p 80:80 \
   -v /path/to/certs:/certs \
   -e PORTAINER_URL=https://portainer.example.com:9443 \
-  -e ENCRYPTION_KEY=<change-me-to-a-rand-32-string> \
   -e ANTHROPIC_API_KEY=sk-ant-... \
   -e SSL_CERT=/certs/fullchain.pem \
   -e SSL_KEY=/certs/privkey.pem \
@@ -317,7 +336,6 @@ docker run -d \
   -p 80:80 \
   -v /data/portainer-run:/app/data \
   -e PORTAINER_URL=https://portainer.example.com:9443 \
-  -e ENCRYPTION_KEY=<change-me-to-a-rand-32-string> \
   -e ANTHROPIC_API_KEY=sk-ant-... \
   --name portainer-run \
   portainer-run
@@ -330,7 +348,6 @@ docker run -d \
   -p 443:443 \
   -p 80:80 \
   -e PORTAINER_URL=https://portainer.example.com:9443 \
-  -e ENCRYPTION_KEY=<change-me-to-a-rand-32-string> \
   -e TEMPLATE_URL=https://your-server.com/templates.json \
   --name portainer-run \
   portainer-run
@@ -343,7 +360,6 @@ docker run -d \
   -p 8443:8443 \
   -p 8080:8080 \
   -e PORTAINER_URL=https://portainer.example.com:9443 \
-  -e ENCRYPTION_KEY=<change-me-to-a-rand-32-string> \
   -e PORT=8443 \
   -e HTTP_PORT=8080 \
   --name portainer-run \
@@ -358,12 +374,11 @@ On first start the container generates a self-signed TLS certificate (3 year val
 
 ## Environment variables
 
-`PORTAINER_URL` and `ENCRYPTION_KEY` are required. All others are optional.
+`PORTAINER_URL` is required. All others are optional.
 
 | Variable | Default | Description |
 |---|---|---|
 | `PORTAINER_URL` | — | Full URL of your Portainer instance. Example: `https://portainer.example.com:9443` |
-| `ENCRYPTION_KEY` | — | Encrypts stored Git target credentials at rest. Must be at least 32 characters. Generate with: `openssl rand -hex 32` |
 | `ANTHROPIC_API_KEY` | — | Anthropic API key. Enables the Assistant and AI triage using Claude. |
 | `OPENAI_API_KEY` | — | OpenAI API key. Enables the Assistant and AI triage using GPT-4o. Set one or the other — not both. Anthropic takes priority if both are set. |
 | `AI_PROVIDER` | auto | Override AI provider: `anthropic` or `openai`. Auto-detected from whichever key is set. |
@@ -376,7 +391,6 @@ On first start the container generates a self-signed TLS certificate (3 year val
 | `SSL_KEY` | — | Path to TLS private key file. Uses self-signed if not set. |
 | `SSL_CERT_DIR` | `/app` | Directory for self-signed certificate storage. |
 | `CACHE_DIR` | `/app/data` | Directory for session cache file. Mount as a volume to persist across restarts. |
-| `NS_DENYLIST` | — | Comma-separated list of additional namespaces to block from all write operations. `kube-system`, `kube-public`, `kube-node-lease`, and `portainer` are always blocked. Example: `monitoring,cert-manager,ingress-nginx` |
 
 ## Connecting
 
