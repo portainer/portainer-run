@@ -2,7 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore, visibleEnvironments, isEnvDisabled } from '../store/useAppStore.js'
 import { ROUTES } from '../lib/routes.js'
-import { parseKnativeManifest, CATALOGUE_CATEGORY_COLORS, CATALOGUE_CATEGORY_LABELS } from '../lib/catalogueTemplate.js'
+import { parseKnativeManifest, CATALOGUE_CATEGORY_COLORS, CATALOGUE_CATEGORY_LABELS, CATALOGUE_TYPE_LABELS, CATALOGUE_TYPE_COLORS, getCatalogueItemType } from '../lib/catalogueTemplate.js'
+import { deployHelm } from '../lib/helmDeploy.js'
+import { checkEnvPermissions } from '../lib/envPermissions.js'
+import { yamlToManifestBuilder } from '../lib/yamlToManifestBuilder.js'
+import { HelmValuesEditor } from './catalogue/HelmValuesEditor.jsx'
 import { fetchNamespaceOptions } from '../lib/deployK8s.js'
 import { gitOpsDeploy } from '../lib/gitTargets.js'
 import { manualRefresh, schedulePostDeployRefreshes } from '../services/refreshDeployments.js'
@@ -15,6 +19,7 @@ export function CatalogueDeployWizard({ template, onClose }) {
   const disabledEnvs = useAppStore((s) => s.disabledEnvs)
   const baseDomain = useAppStore((s) => s.baseDomain)
   const pushToast = useAppStore((s) => s.pushToast)
+  const envPermissions = useAppStore((s) => s.envPermissions)
   const vis = visibleEnvironments({ environments, disabledEnvs })
 
   // step 1: env/ns, step 2: confirm summary, step 3: git target
@@ -27,8 +32,24 @@ export function CatalogueDeployWizard({ template, onClose }) {
   const [nsStatus, setNsStatus] = useState({ text: '', tone: 'dim' })
   const [nsLoading, setNsLoading] = useState(false)
   const [deploying, setDeploying] = useState(false)
+  const itemType = getCatalogueItemType(template)
+  const patchEnvPermissions = useAppStore((s) => s.patchEnvPermissions)
+
+  const [helmValues, setHelmValues] = useState('')
+  const [helmReleaseName, setHelmReleaseName] = useState('')
 
   const resolvedNs = manualNs ? manualNsValue.trim() : namespace
+
+  const deployPerms = (envId && resolvedNs) ? (envPermissions[`${envId}:${resolvedNs}`] || { canDeploy: true }) : { canDeploy: true }
+
+  // Fire permission check when both env and namespace are selected
+  useEffect(() => {
+    if (!envId || !resolvedNs || !token) return
+    const key = `${envId}:${resolvedNs}`
+    if (envPermissions[key] !== undefined) return
+    void checkEnvPermissions(token, envId, resolvedNs)
+      .then((p) => patchEnvPermissions(envId, resolvedNs, p))
+  }, [envId, resolvedNs])
 
   const resetNs = useCallback(() => {
     setNsList([]); setNamespace(''); setManualNs(false); setManualNsValue('')
@@ -65,6 +86,10 @@ export function CatalogueDeployWizard({ template, onClose }) {
 
   useEffect(() => {
     setStep(1); setEnvId(''); resetNs(); setNsLoading(false)
+    if (template?.helm) {
+      setHelmValues(template.helm.defaultValues || '')
+      setHelmReleaseName(template.helm.chart || '')
+    }
   }, [template?.id, resetNs])
 
   if (!template) return null
@@ -99,7 +124,20 @@ export function CatalogueDeployWizard({ template, onClose }) {
 
   function onCustomize() {
     onClose()
-    navigate(ROUTES.deploy, { state: { catalogueTemplate: template, wizardEnvId: envId, wizardNs: resolvedNs } })
+    if (itemType === 'kubernetes') {
+      // Parse YAML into MB form state and navigate to Manifest Builder
+      const { state, warnings } = yamlToManifestBuilder(template.manifest || '')
+      navigate(ROUTES.deployManifest, {
+        state: {
+          cataloguePreload: state,
+          catalogueWarnings: warnings,
+          wizardEnvId: envId,
+          wizardNs: resolvedNs,
+        },
+      })
+    } else {
+      navigate(ROUTES.deploy, { state: { catalogueTemplate: template, wizardEnvId: envId, wizardNs: resolvedNs } })
+    }
   }
 
   /** Build deploy params from parsed catalogue config */
@@ -142,9 +180,22 @@ export function CatalogueDeployWizard({ template, onClose }) {
   async function onGitOpsConfirm({ gitTargetId, branch, pathPrefix, pollInterval }) {
     setDeploying(true)
     try {
-      const deployParams = buildDeployParams()
-      await gitOpsDeploy({ gitTargetId, branch, pathPrefix, pollInterval, envId, deployParams })
-      pushToast(`"${cfg.name}" committed to Git and GitOps stack created in ${resolvedNs}`, 'ok')
+      if (itemType === 'helm') {
+        await deployHelm({
+          envId,
+          namespace: resolvedNs,
+          releaseName: helmReleaseName || template?.helm?.chart,
+          chart: template?.helm?.chart,
+          repo: template?.helm?.repo,
+          version: template?.helm?.version,
+          values: helmValues,
+        })
+        pushToast(`"${helmReleaseName || template?.helm?.chart}" Helm release deployed to ${resolvedNs}`, 'ok')
+      } else {
+        const deployParams = buildDeployParams()
+        await gitOpsDeploy({ gitTargetId, branch, pathPrefix, pollInterval, envId, deployParams })
+        pushToast(`"${cfg.name}" committed to Git and GitOps stack created in ${resolvedNs}`, 'ok')
+      }
       onClose()
       void manualRefresh()
       schedulePostDeployRefreshes()
@@ -189,6 +240,20 @@ export function CatalogueDeployWizard({ template, onClose }) {
         {step === 1 && (
           <>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {!deployPerms.canDeploy && envId && (
+                <div style={{
+                  padding: '12px 14px', background: 'rgba(239,68,68,0.08)',
+                  border: '1px solid var(--red)', borderRadius: 8,
+                  fontSize: 13, color: 'var(--red)', fontFamily: 'var(--mono)',
+                  display: 'flex', alignItems: 'center', gap: 10,
+                }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                    width="16" height="16" style={{ flexShrink: 0 }}>
+                    <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  You do not have permission to deploy in this environment.
+                </div>
+              )}
               <div className="field">
                 <label>Environment</label>
                 <select value={envId} onChange={(e) => setEnvId(e.target.value)} style={sel}>
@@ -215,7 +280,7 @@ export function CatalogueDeployWizard({ template, onClose }) {
             </div>
             <div className="modal-foot">
               <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
-              <button type="button" className="btn btn-primary btn-sm" onClick={onNext} disabled={nsLoading || !envId}>Next →</button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={onNext} disabled={nsLoading || !envId || !deployPerms.canDeploy} title={!deployPerms.canDeploy ? 'No deploy permission in this environment' : undefined}>Next →</button>
             </div>
           </>
         )}
@@ -245,19 +310,33 @@ export function CatalogueDeployWizard({ template, onClose }) {
                   ) : null}
                 </div>
               </div>
-              <p style={{ fontSize: 13, color: 'var(--text-dim)', margin: 0 }}>
-                Default resource limits and environment variables will be applied. To customise before deploying, use <strong style={{ color: 'var(--text)' }}>Customize</strong> instead.
-              </p>
+              {itemType === 'helm' ? (
+                <HelmValuesEditor
+                  helm={template?.helm || {}}
+                  releaseName={helmReleaseName}
+                  onReleaseNameChange={setHelmReleaseName}
+                  values={helmValues}
+                  onValuesChange={setHelmValues}
+                />
+              ) : (
+                <p style={{ fontSize: 13, color: 'var(--text-dim)', margin: 0 }}>
+                  Default resource limits and environment variables will be applied.{itemType === 'portainer-run' ? ' To customise before deploying, use Customize instead.' : ''}
+                </p>
+              )}
             </div>
             <div className="modal-foot">
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => setStep(1)} disabled={deploying}>← Back</button>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={onCustomize} disabled={deploying}>Customize</button>
-              <button type="button" className="btn btn-primary btn-sm" onClick={() => setStep(3)} disabled={deploying}>Next →</button>
+              {(template?.allowCustomise !== false) && itemType !== 'helm' && (
+                <button type="button" className="btn btn-ghost btn-sm" onClick={onCustomize} disabled={deploying}>Customize</button>
+              )}
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => setStep(3)} disabled={deploying}>
+                {itemType === 'helm' ? 'Review →' : 'Next →'}
+              </button>
             </div>
           </>
         )}
 
-        {step === 3 && (
+        {step === 3 && itemType !== 'helm' && (
           <div className="modal-body" style={{ padding: 0 }}>
             <GitOpsStep
               appName={cfg.name}
@@ -269,6 +348,21 @@ export function CatalogueDeployWizard({ template, onClose }) {
               deploying={deploying}
             />
           </div>
+        )}
+
+        {step === 3 && itemType === 'helm' && (
+          <>
+            <div className="modal-body" style={{ fontSize: 13, color: 'var(--text-dim)' }}>
+              Deploy <strong style={{ color: 'var(--text-bright)' }}>{helmReleaseName}</strong> to namespace <strong style={{ color: 'var(--text-bright)' }}>{resolvedNs}</strong> via Portainer Helm stack. No Git target required — Portainer manages the Helm release directly.
+            </div>
+            <div className="modal-foot">
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setStep(2)} disabled={deploying}>← Back</button>
+              <button type="button" className="btn btn-primary btn-sm"
+                onClick={() => void onGitOpsConfirm({})} disabled={deploying}>
+                {deploying ? 'Deploying…' : 'Deploy Helm Chart'}
+              </button>
+            </div>
+          </>
         )}
       </div>
     </div>

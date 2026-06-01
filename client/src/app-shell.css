@@ -583,3 +583,364 @@ a.nav-item{color:inherit;}
   .svc-grid-head span:nth-child(2),.svc-grid-head span:nth-child(3),.svc-grid-head span:nth-child(4),.svc-grid-head span:nth-child(7),
   .svc-l-header span:nth-child(2),.svc-l-header span:nth-child(3),.svc-l-header span:nth-child(4),.svc-l-header span:nth-child(7){display:none;}
 }
+
+/* Manifest Builder step indicator */
+.mb-stepper{display:flex;align-items:center;gap:0;margin-bottom:28px;}
+.mb-step{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;}
+.mb-step-num{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;flex-shrink:0;transition:background .2s,color .2s,border-color .2s;}
+.mb-step--done .mb-step-num{background:var(--green);color:#000;border:none;}
+.mb-step--active .mb-step-num{background:var(--accent);color:#fff;border:none;}
+.mb-step--idle .mb-step-num{background:transparent;color:var(--text-dim);border:1px solid var(--border2);}
+.mb-step--done .mb-step-label{color:var(--text-dim);}
+.mb-step--active .mb-step-label{color:var(--text-bright);font-weight:600;}
+.mb-step--idle .mb-step-label{color:var(--text-dim);}
+.mb-step-sep{width:32px;height:1px;background:var(--border2);margin:0 4px;flex-shrink:0;}
+/* Collapsible section within step 2 */
+.mb-section{border:1px solid var(--border);border-radius:8px;margin-bottom:12px;overflow:hidden;}
+.mb-section-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--surface2);cursor:pointer;user-select:none;}
+.mb-section-title{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);}
+.mb-section-title--required::after{content:' *';color:var(--accent);}
+.mb-section-chevron{color:var(--text-dim);transition:transform .2s;}
+.mb-section-chevron--open{transform:rotate(180deg);}
+.mb-section-body{padding:16px;}
+
+/* Manifest Builder section inputs — consistent padding */
+.mb-section-body select,
+.mb-section-body input[type="text"],
+.mb-section-body input[type="number"],
+.mb-section-body input[type="password"] {
+  padding:8px 12px;
+  min-height:36px;
+}
+
+/* ============================================================
+   MOBILE STYLES — max-width: 480px
+   Desktop layout is completely unchanged.
+   ============================================================ */
+
+/* Hamburger button */
+.mobile-hamburger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.mobile-hamburger:active { background: var(--surface2); }
+
+/* Mobile nav overlay */
+.mobile-nav-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0,0,0,.6);
+  backdrop-filter: blur(2px);
+}
+.mobile-nav-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 80vw;
+  max-width: 300px;
+  height: 100%;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 20px 0 40px;
+  animation: slideInRight .2s ease;
+}
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+.mobile-breadcrumb { display: none; }
+
+@media (max-width: 480px) {
+  /* ── Global overflow prevention ── */
+  html, body { overflow-x: hidden; width: 100%; }
+  * { box-sizing: border-box; }
+
+  /* ── Header ── */
+  .app-top-header {
+    grid-template-columns: 1fr auto !important;
+    padding: 0 12px;
+    gap: 8px;
+  }
+  .app-header-brand { min-width: 0; }
+  .app-header-breadcrumb { display: none !important; }
+  .logo-wordmark { height: 14px; }
+  .logo-run { font-size: 12px !important; margin-left: 6px !important; }
+  .logo-run-square { width: 8px !important; height: 8px !important; }
+  .logo-run-row { margin-top: 3px !important; }
+  .conn-badge span { display: none; }
+  .chat-toggle-btn { display: none; }
+
+  /* ── Hamburger ── */
+  .mobile-hamburger { display: flex; }
+  .mobile-nav-overlay { display: block; }
+
+  /* ── Main layout ── */
+  html, body { overflow: auto !important; height: auto !important; scroll-padding-top: var(--app-header-h); }
+  .main {
+    grid-template-columns: 1fr !important;
+    width: 100%;
+    overflow-x: hidden;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+  .main > nav { display: none !important; }
+  .content {
+    padding: 16px;
+    padding-top: 20px;
+    width: 100%;
+    overflow-x: hidden;
+    max-height: none !important;
+    overflow-y: visible !important;
+    height: auto !important;
+  }
+
+  /* ── Mobile breadcrumb ── */
+  .mobile-breadcrumb { display: block; padding: 0 0 14px; font-size: 12px; color: var(--text-dim); }
+
+  /* ── Touch targets ── */
+  .btn { min-height: 44px; }
+  .btn-xs { min-height: 36px; font-size: 12px; }
+  .btn-sm { min-height: 40px; }
+  button, select, input, textarea { touch-action: manipulation; }
+
+  /* ── Page structure ── */
+  .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .page-header-aside { width: 100%; flex-wrap: wrap; gap: 8px; }
+  .page-title { font-size: 20px; }
+  .page-sub { font-size: 13px; }
+
+  /* ── Forms ── */
+  .frow, .frow3 { display: flex !important; flex-direction: column !important; gap: 12px !important; }
+  .field input, .field select, .field textarea { width: 100%; }
+  .form-section { margin-bottom: 12px; }
+  .form-actions { flex-direction: column-reverse; gap: 8px; }
+  .form-actions .btn { width: 100%; justify-content: center; min-height: 48px; }
+
+  /* ── Connect screen ── */
+  .connect-card {
+    width: calc(100vw - 32px) !important;
+    max-width: 100% !important;
+  }
+  .connect-wrap { padding: 20px 16px !important; }
+
+  /* ── Services — card layout ── */
+  .services-page-list .list-column-headers { display: none !important; }
+
+  .svc-l-row {
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 0 !important;
+    border-radius: 10px !important;
+    overflow: hidden !important;
+    margin-bottom: 10px !important;
+    border: 1px solid var(--border) !important;
+    min-width: 0 !important;
+    grid-template-columns: unset !important;
+  }
+  .svc-name { padding: 14px 16px 4px; font-size: 15px; font-weight: 600; color: var(--text-bright); }
+  .svc-image { padding: 2px 16px 8px; font-size: 12px; }
+  .svc-env, .svc-ns { padding: 0 16px 4px; }
+  .status-cell { padding: 8px 16px; background: var(--surface2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .svc-exposure { padding: 8px 16px; }
+  .svc-age { display: none !important; }
+  .svc-actions {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr 1fr !important;
+    gap: 0 !important;
+    padding: 0 !important;
+    border-top: 1px solid var(--border);
+  }
+  .svc-actions .btn {
+    border-radius: 0 !important;
+    border-right: 1px solid var(--border);
+    min-height: 48px !important;
+    font-size: 13px;
+    justify-content: center;
+  }
+  .svc-actions .btn:last-child { border-right: none; }
+  .svc-actions .btn-danger { background: rgba(239,68,68,.08); color: var(--red); }
+
+  /* ── Status summary bar ── */
+  .status-summary-bar { flex-wrap: wrap; gap: 8px; }
+
+  /* ── Sort/filter bar ── */
+  .sl-sort-bar { flex-wrap: wrap; gap: 8px; }
+  .sl-sort-bar input[type="text"] { width: 100%; }
+
+  /* ── Dashboard env list — card layout on mobile ── */
+  .dashboard-env-list .sl-sortable-list { background: transparent; border: none; }
+  .env-list-header { display: none !important; }
+  .env-list-row {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    padding: 12px 14px !important;
+    gap: 6px !important;
+    border-radius: 8px !important;
+    border: 1px solid var(--border) !important;
+    margin-bottom: 8px !important;
+  }
+  .env-list-col-name {
+    flex: 0 0 100% !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    color: var(--text-bright) !important;
+    margin-bottom: 2px;
+  }
+  .env-list-metric {
+    flex: 0 0 auto !important;
+    text-align: left !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    font-size: 12px !important;
+    padding: 3px 8px !important;
+    border-radius: 4px !important;
+    background: var(--surface2) !important;
+    border: 1px solid var(--border) !important;
+    min-width: 0 !important;
+  }
+  .env-list-metric::before {
+    content: attr(data-label);
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-right: 2px;
+  }
+
+  /* ── Catalogue ── */
+  .cat-grid { grid-template-columns: 1fr !important; }
+  .cat-card { padding: 16px; }
+  .cat-filter-btn { min-height: 36px; padding: 6px 10px; font-size: 12px; }
+
+  /* ── Modals — slide up from bottom ── */
+  .modal-overlay.open {
+    align-items: flex-end !important;
+    padding: 0 !important;
+    padding-top: var(--app-header-h) !important;
+  }
+  .modal {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: 16px 16px 0 0 !important;
+    max-height: calc(100vh - var(--app-header-h)) !important;
+    overflow-y: auto !important;
+  }
+
+  /* ── Service detail ── */
+  .service-detail-column { padding: 0; width: 100%; max-width: 100%; overflow-x: hidden; }
+  .service-detail-page { overflow-x: hidden; }
+
+  /* ResourceDetailHeader — prevent overflow on mobile */
+  .resource-detail-header-wrap {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+  .detail-header {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    padding: 10px 12px !important;
+  }
+  .detail-header-left { min-width: 0 !important; flex: 1 1 100% !important; }
+  .detail-header-right { flex: 0 0 auto; }
+
+  /* Stat blocks — force them to fit */
+  .header-stats { flex-wrap: wrap !important; gap: 6px !important; flex-shrink: 1 !important; }
+  .stat-block { min-width: 0 !important; flex: 1 1 auto !important; }
+  .stat-block-with-dot { min-width: 0 !important; flex: 1 1 auto !important; }
+
+  /* Action bar — remove fixed height, allow wrap */
+  .header-action-bar-segment { overflow: visible !important; }
+  .action-bar-fixed-height { height: auto !important; min-height: 44px !important; }
+  .env-action-bar {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    height: auto !important;
+    min-height: 44px !important;
+    padding: 8px 12px !important;
+    position: static !important;
+  }
+  .action-bar-left { flex-wrap: wrap !important; overflow: visible !important; }
+  .action-bar-btn { min-height: 44px !important; }
+  .action-bar-btn-label { font-size: 11px; }
+  .service-detail-header-actions { flex-wrap: wrap !important; gap: 6px !important; }
+
+  /* Migrate button - hide on mobile to save space */
+  .action-bar-btn-migrate { display: none !important; }
+
+  /* Tabs — horizontal scroll */
+  .detail-tabs-row { overflow-x: auto !important; }
+  .detail-tabs {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap !important;
+    width: max-content !important;
+  }
+  .detail-tabs::-webkit-scrollbar { display: none; }
+  .detail-tab { white-space: nowrap !important; min-height: 44px !important; padding: 0 14px !important; }
+
+  /* Service detail body */
+  .service-detail-tabs-panel { overflow-x: hidden; }
+  .service-detail-body { overflow-x: hidden; }
+  .rde-content { overflow-x: hidden; }
+  .dp-section { overflow-x: hidden; }
+  .service-tab-panel { overflow-x: hidden; padding: 12px !important; }
+
+  /* ── KV table ── */
+  .kv { grid-template-columns: 1fr !important; }
+  .kv-key { color: var(--text-dim); font-size: 11px; margin-top: 6px; }
+
+  /* ── Manifest builder stepper ── */
+  .mb-stepper { overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+  .mb-step-label { font-size: 11px; }
+  .mb-step-sep { width: 16px; min-width: 16px; }
+  .mb-step-num { width: 20px; height: 20px; font-size: 10px; }
+
+  /* ── MB sections ── */
+  .mb-section-body select,
+  .mb-section-body input[type="text"],
+  .mb-section-body input[type="number"],
+  .mb-section-body input[type="password"] {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  /* ── Deploy steps ── */
+  .deploy-form { padding: 0; }
+  .form-section-body { padding: 14px; }
+
+  /* ── GitOps step — stack branch/poll on mobile ── */
+  .gitops-branch-row {
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+  .gitops-branch-row > div { width: 100% !important; }
+
+  /* ── Git targets ── */
+  .git-target-row { flex-direction: column; gap: 8px; }
+
+  /* ── Secrets ── */
+  .secrets-row { flex-direction: column; gap: 8px; }
+
+  /* ── iOS Safari safe area — prevent browser chrome obscuring bottom content ── */
+  .content {
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 80px)) !important;
+  }
+  .form-actions {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}

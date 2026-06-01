@@ -342,10 +342,10 @@ export function DashboardPage() {
             renderItem={(row) => (
               <div className="env-list-row">
                 <div className="env-list-col-name">{row.name}</div>
-                <div className="env-list-metric">{row.total}</div>
-                <div className="env-list-metric env-list-metric--run">{row.running}</div>
-                <div className="env-list-metric env-list-metric--deg">{row.degraded}</div>
-                <div className="env-list-metric env-list-metric--down">{row.unavailable}</div>
+                <div className="env-list-metric" data-label="TOTAL">{row.total}</div>
+                <div className="env-list-metric env-list-metric--run" data-label="RUN">{row.running}</div>
+                <div className="env-list-metric env-list-metric--deg" data-label="DEG">{row.degraded}</div>
+                <div className="env-list-metric env-list-metric--down" data-label="DOWN">{row.unavailable}</div>
               </div>
             )}
           />

@@ -336,6 +336,88 @@ async function deleteFileGitea(payload, branch, filePath, message) {
 }
 
 /**
+ * Delete all files under a directory path in the repo.
+ * Lists the directory recursively and deletes each file individually.
+ * @param {object} payload
+ * @param {string} branch
+ * @param {string} dirPath
+ * @param {string} message
+ */
+export async function deleteDirectory(payload, branch, dirPath, message) {
+  const { provider } = payload
+  if (provider === 'github') return deleteDirectoryGitHub(payload, branch, dirPath, message)
+  if (provider === 'gitlab') return deleteDirectoryGitLab(payload, branch, dirPath, message)
+  return deleteDirectoryGitea(payload, branch, dirPath, message)
+}
+
+async function listFilesGitHub(payload, branch, path) {
+  const { repo } = payload
+  const headers = buildHeaders(payload)
+  const data = await request('GET', `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}`, headers)
+  // If array, it's a directory listing; if object with sha, it's a file
+  if (!Array.isArray(data)) return [data]
+  const files = []
+  for (const item of data) {
+    if (item.type === 'file') files.push(item)
+    else if (item.type === 'dir') files.push(...await listFilesGitHub(payload, branch, item.path))
+  }
+  return files
+}
+
+async function deleteDirectoryGitHub(payload, branch, dirPath, message) {
+  const files = await listFilesGitHub(payload, branch, dirPath)
+  if (!files.length) return { ok: true, deleted: 0 }
+  for (const file of files) {
+    await deleteFileGitHub(payload, branch, file.path, message)
+  }
+  return { ok: true, deleted: files.length }
+}
+
+async function listFilesGitLab(payload, branch, path) {
+  const { repo, url: baseUrl } = payload
+  const base = baseUrl || 'https://gitlab.com'
+  const encoded = encodeURIComponent(repo)
+  const headers = buildHeaders(payload)
+  // GitLab tree API lists contents recursively with recursive=true
+  const items = await request('GET',
+    `${base}/api/v4/projects/${encoded}/repository/tree?path=${encodeURIComponent(path)}&ref=${branch}&recursive=true&per_page=100`,
+    headers)
+  return items.filter((i) => i.type === 'blob')
+}
+
+async function deleteDirectoryGitLab(payload, branch, dirPath, message) {
+  const files = await listFilesGitLab(payload, branch, dirPath)
+  if (!files.length) return { ok: true, deleted: 0 }
+  for (const file of files) {
+    await deleteFileGitLab(payload, branch, file.path, message)
+  }
+  return { ok: true, deleted: files.length }
+}
+
+async function listFilesGitea(payload, branch, path) {
+  const { repo, url: baseUrl } = payload
+  const base = baseUrl || ''
+  const headers = buildHeaders(payload)
+  const data = await request('GET', `${base}/api/v1/repos/${repo}/contents/${path}?ref=${branch}`, headers)
+  if (!Array.isArray(data)) return [data]
+  const files = []
+  for (const item of data) {
+    if (item.type === 'file') files.push(item)
+    else if (item.type === 'dir') files.push(...await listFilesGitea(payload, branch, item.path))
+  }
+  return files
+}
+
+async function deleteDirectoryGitea(payload, branch, dirPath, message) {
+  const files = await listFilesGitea(payload, branch, dirPath)
+  if (!files.length) return { ok: true, deleted: 0 }
+  for (const file of files) {
+    await deleteFileGitea(payload, branch, file.path, message)
+  }
+  return { ok: true, deleted: files.length }
+}
+
+/**
  * Build the HTTPS repo URL from a connection payload (for Portainer GitOps stack creation).
  * @param {object} payload
  * @returns {string}
@@ -358,17 +440,140 @@ export function buildRepoHttpsUrl(payload) {
 export async function testGitConnection(payload) {
   const { provider, repo, url: baseUrl } = payload
   const headers = buildHeaders(payload)
+
   if (provider === 'github') {
-    await request('GET', `https://api.github.com/repos/${repo}`, headers)
-    return { ok: true, message: 'GitHub repository accessible' }
+    const base = 'https://api.github.com'
+
+    // 1. Confirm repo is accessible
+    const repoData = await request('GET', `${base}/repos/${repo}`, headers)
+
+    // 2. Get authenticated user to look up collaborator permission
+    //    Fine-grained PATs don't return permissions in the repo response,
+    //    so we check the collaborator endpoint instead.
+    let canWrite = false
+    let canAdmin = false
+    let permMethod = 'collaborator API'
+    try {
+      const userRes = await request('GET', `${base}/user`, headers)
+      const username = userRes.login
+      if (username) {
+        const collabRes = await request('GET', `${base}/repos/${repo}/collaborators/${username}/permission`, headers)
+        const level = collabRes.permission // 'admin' | 'write' | 'read' | 'none'
+        canWrite = level === 'write' || level === 'admin'
+        canAdmin = level === 'admin'
+      }
+    } catch {
+      // Collaborator API may 404 for org repos with restricted visibility —
+      // fall back to legacy permissions field if present
+      const p = repoData.permissions || {}
+      if (Object.keys(p).length > 0) {
+        canWrite = Boolean(p.push || p.admin)
+        canAdmin = Boolean(p.admin)
+        permMethod = 'legacy permissions field'
+      } else {
+        // Cannot determine — assume write (token works, repo accessible)
+        canWrite = true
+        permMethod = 'assumed (could not verify)'
+      }
+    }
+
+    return {
+      ok: true,
+      message: `GitHub repository accessible`,
+      permissions: { canRead: true, canWrite, canAdmin },
+      details: [
+        `Read: yes`,
+        `Write (push): ${canWrite ? 'yes' : 'no'}`,
+        `Admin: ${canAdmin ? 'yes' : 'no'}`,
+        `Permission check: ${permMethod}`,
+        ...(!canWrite ? ['⚠ This token cannot push to the repository — deployments will fail'] : []),
+      ],
+    }
   }
+
   if (provider === 'gitlab') {
     const base = baseUrl || 'https://gitlab.com'
     const encoded = encodeURIComponent(repo)
-    await request('GET', `${base}/api/v4/projects/${encoded}`, headers)
-    return { ok: true, message: 'GitLab repository accessible' }
+    const data = await request('GET', `${base}/api/v4/projects/${encoded}`, headers)
+    // access_level: 50=owner, 40=maintainer, 30=developer(push), 20=reporter(read), 10=guest
+    const level = data.permissions?.project_access?.access_level
+      ?? data.permissions?.group_access?.access_level
+      ?? 0
+    const canRead  = level >= 20
+    const canWrite = level >= 30
+    const canAdmin = level >= 40
+    const levelLabel = level >= 50 ? 'Owner' : level >= 40 ? 'Maintainer' : level >= 30 ? 'Developer' : level >= 20 ? 'Reporter' : level >= 10 ? 'Guest' : 'None'
+    return {
+      ok: true,
+      message: `GitLab repository accessible`,
+      permissions: { canRead, canWrite, canAdmin },
+      details: [
+        `Access level: ${levelLabel} (${level})`,
+        `Read: ${canRead ? 'yes' : 'no'}`,
+        `Write (push): ${canWrite ? 'yes' : 'no'}`,
+        ...(!canWrite ? ['⚠ This token cannot push to the repository — deployments will fail'] : []),
+      ],
+    }
   }
+
+  // Gitea
   const base = baseUrl || ''
-  await request('GET', `${base}/api/v1/repos/${repo}`, headers)
-  return { ok: true, message: 'Gitea repository accessible' }
+  const data = await request('GET', `${base}/api/v1/repos/${repo}`, headers)
+  const p = data.permissions || {}
+  const canRead  = true
+  const canWrite = Boolean(p.push || p.admin)
+  const canAdmin = Boolean(p.admin)
+  return {
+    ok: true,
+    message: `Gitea repository accessible`,
+    permissions: { canRead, canWrite, canAdmin },
+    details: [
+      `Read: ${canRead ? 'yes' : 'no'}`,
+      `Write (push): ${canWrite ? 'yes' : 'no'}`,
+      `Admin: ${canAdmin ? 'yes' : 'no'}`,
+      ...(!canWrite ? ['⚠ This token cannot push to the repository — deployments will fail'] : []),
+    ],
+  }
+}
+
+/**
+ * Fetch the raw content of a single file from the repo.
+ * @param {object} payload  decrypted connection payload
+ * @param {string} branch
+ * @param {string} filePath
+ * @returns {Promise<string>}  raw file content
+ */
+export async function fetchFile(payload, branch, filePath) {
+  const { provider } = payload
+  if (provider === 'github') return fetchFileGitHub(payload, branch, filePath)
+  if (provider === 'gitlab') return fetchFileGitLab(payload, branch, filePath)
+  return fetchFileGitea(payload, branch, filePath)
+}
+
+async function fetchFileGitHub(payload, branch, filePath) {
+  const { repo } = payload
+  const headers = buildHeaders(payload)
+  const data = await request('GET', `https://api.github.com/repos/${repo}/contents/${filePath}?ref=${branch}`, headers)
+  if (!data.content) throw new Error('File content not found in GitHub response')
+  return Buffer.from(data.content.replace(/\n/g, ''), 'base64').toString('utf8')
+}
+
+async function fetchFileGitLab(payload, branch, filePath) {
+  const { repo, url: baseUrl } = payload
+  const base = baseUrl || 'https://gitlab.com'
+  const encoded = encodeURIComponent(repo)
+  const encodedPath = encodeURIComponent(filePath)
+  const headers = buildHeaders(payload)
+  const data = await request('GET', `${base}/api/v4/projects/${encoded}/repository/files/${encodedPath}?ref=${branch}`, headers)
+  if (!data.content) throw new Error('File content not found in GitLab response')
+  return Buffer.from(data.content, 'base64').toString('utf8')
+}
+
+async function fetchFileGitea(payload, branch, filePath) {
+  const { repo, url: baseUrl } = payload
+  const base = baseUrl || ''
+  const headers = buildHeaders(payload)
+  const data = await request('GET', `${base}/api/v1/repos/${repo}/contents/${filePath}?ref=${branch}`, headers)
+  if (!data.content) throw new Error('File content not found in Gitea response')
+  return Buffer.from(data.content.replace(/\n/g, ''), 'base64').toString('utf8')
 }

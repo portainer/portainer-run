@@ -5,6 +5,7 @@ import { MainLayout } from './components/MainLayout.jsx'
 import { DashboardPage } from './components/DashboardPage.jsx'
 import { ServicesPage } from './components/ServicesPage.jsx'
 import { DeployPage } from './components/DeployPage.jsx'
+import { ManifestBuilderPage } from './components/deployManifest/ManifestBuilderPage.jsx'
 import { ReadinessPage } from './components/ReadinessPage.jsx'
 import { CataloguePage } from './components/CataloguePage.jsx'
 import { SecretsPage } from './components/SecretsPage.jsx'
@@ -13,6 +14,7 @@ import {
   ServiceDetailIndexRedirect,
   ServiceDetailPage,
 } from './components/ServiceDetailPage.jsx'
+import { VibeDeploy } from './components/VibeDeploy.jsx'
 import { ROUTES, getSafeAppPath } from './lib/routes.js'
 
 function RootRedirect() {
@@ -62,7 +64,10 @@ export function AppRoutes() {
           path="services/:envId/:namespace/:name/:tab"
           element={<ServiceDetailPage />}
         />
-        <Route path="deploy" element={<DeployPage />} />
+        <Route path="deploy" element={<Navigate to={ROUTES.deploy} replace />} />
+        <Route path="deploy/simple" element={<DeployPage />} />
+        <Route path="deploy/manifest" element={<ManifestBuilderPage />} />
+        <Route path="deploy/vibe" element={<VibeDeploy />} />
         <Route path="catalogue" element={<CataloguePage />} />
         <Route path="secrets" element={<SecretsPage />} />
         <Route path="readiness" element={<ReadinessPage />} />

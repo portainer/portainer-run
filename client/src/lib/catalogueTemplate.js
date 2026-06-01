@@ -15,6 +15,22 @@ function newId() {
   return 'c-' + Date.now() + '-' + Math.random().toString(16).slice(2)
 }
 
+export const CATALOGUE_TYPE_LABELS = {
+  'portainer-run': 'Run',
+  'kubernetes': 'Kubernetes',
+  'helm': 'Helm',
+}
+
+export const CATALOGUE_TYPE_COLORS = {
+  'portainer-run': 'var(--accent)',
+  'kubernetes': '#f59e0b',
+  'helm': '#8b5cf6',
+}
+
+export function getCatalogueItemType(t) {
+  return t?.type || 'portainer-run'
+}
+
 export const CATALOGUE_CATEGORY_LABELS = {
   all: 'All',
   cms: 'CMS',

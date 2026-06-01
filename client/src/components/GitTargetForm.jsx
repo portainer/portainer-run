@@ -31,7 +31,7 @@ export function GitTargetForm({ initial, onSaved, onCancel }) {
     setTestResult(null)
     try {
       const r = await testGitTargetPayload(payload)
-      setTestResult({ ok: true, message: r.message })
+      setTestResult({ ok: true, message: r.message, permissions: r.permissions, details: r.details || [] })
     } catch (e) {
       setTestResult({ ok: false, message: e.message || 'Test failed' })
     } finally {
@@ -137,12 +137,36 @@ export function GitTargetForm({ initial, onSaved, onCancel }) {
 
         {testResult && (
           <div style={{
-            padding: '8px 12px', borderRadius: 6, fontSize: 13, fontFamily: 'var(--mono)',
-            background: testResult.ok ? 'var(--green-dim, rgba(74,222,128,0.1))' : 'var(--red-dim, rgba(248,113,113,0.1))',
-            color: testResult.ok ? 'var(--green)' : 'var(--red)',
-            border: `1px solid ${testResult.ok ? 'var(--green)' : 'var(--red)'}`,
+            padding: '12px 14px', borderRadius: 6, fontSize: 12, fontFamily: 'var(--mono)',
+            background: testResult.ok && testResult.permissions?.canWrite
+              ? 'rgba(74,222,128,0.08)'
+              : testResult.ok && !testResult.permissions?.canWrite
+              ? 'rgba(251,191,36,0.08)'
+              : 'rgba(248,113,113,0.08)',
+            color: testResult.ok && testResult.permissions?.canWrite
+              ? 'var(--green)'
+              : testResult.ok && !testResult.permissions?.canWrite
+              ? 'var(--amber)'
+              : 'var(--red)',
+            border: `1px solid ${
+              testResult.ok && testResult.permissions?.canWrite
+                ? 'rgba(74,222,128,0.3)'
+                : testResult.ok && !testResult.permissions?.canWrite
+                ? 'rgba(251,191,36,0.3)'
+                : 'rgba(248,113,113,0.3)'
+            }`,
+            display: 'flex', flexDirection: 'column', gap: 6,
           }}>
-            {testResult.ok ? '✓' : '✕'} {testResult.message}
+            <div style={{ fontWeight: 600 }}>
+              {testResult.ok ? (testResult.permissions?.canWrite ? '✓' : '⚠') : '✕'} {testResult.message}
+            </div>
+            {testResult.details && testResult.details.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, opacity: 0.85 }}>
+                {testResult.details.map((d, i) => (
+                  <div key={i}>{d}</div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

@@ -9,7 +9,7 @@ import yaml from 'js-yaml'
  * Valid CPU:    "100m", "0.5", "1", "2"
  * Valid memory: "128Mi", "512Mi", "1Gi", "256Ki"
  */
-function normalizeQuantity(value, type = 'memory') {
+export function normalizeQuantity(value, type = 'memory') {
   if (!value || !String(value).trim()) return null
   let v = String(value).trim()
 

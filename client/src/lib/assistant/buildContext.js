@@ -9,13 +9,13 @@ import { ROUTES } from '../routes.js'
 function pageFromPath(pathname) {
   if (pathname === ROUTES.dashboard || pathname === '/') return 'dashboard'
   if (pathname === ROUTES.services) return 'services'
-  if (pathname.startsWith(`${ROUTES.services}/`)) {
-    return 'service-detail'
-  }
-  if (pathname === ROUTES.deploy) return 'deploy'
+  if (pathname.startsWith(`${ROUTES.services}/`)) return 'service-detail'
+  if (pathname === ROUTES.deploy) return 'simple-deploy'
+  if (pathname === ROUTES.deployManifest) return 'manifest-builder'
   if (pathname === ROUTES.catalogue) return 'catalogue'
   if (pathname === ROUTES.secrets) return 'secrets'
   if (pathname === ROUTES.readiness) return 'readiness'
+  if (pathname === ROUTES.gitTargets) return 'git-targets'
   return 'unknown'
 }
 
