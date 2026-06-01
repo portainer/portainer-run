@@ -4,6 +4,9 @@ import { inflightDedupe } from '../lib/inflightDedupe.js'
 import {
   CATALOGUE_CATEGORY_COLORS,
   CATALOGUE_CATEGORY_LABELS,
+  CATALOGUE_TYPE_COLORS,
+  CATALOGUE_TYPE_LABELS,
+  getCatalogueItemType,
 } from '../lib/catalogueTemplate.js'
 import { CatalogueDeployWizard } from './CatalogueDeployWizard.jsx'
 
@@ -25,6 +28,7 @@ export function CataloguePage() {
   /** @type {[CatalogueEntry[], function]} */
   const [templates, setTemplates] = useState([])
   const [filterCat, setFilterCat] = useState('all')
+  const [filterType, setFilterType] = useState('all')
   const [wizardTemplate, setWizardTemplate] = useState(/** @type {CatalogueEntry | null} */ (null))
 
   const load = useCallback(async () => {
@@ -54,9 +58,12 @@ export function CataloguePage() {
   }, [templates])
 
   const filtered = useMemo(() => {
-    if (filterCat === 'all') return templates
-    return templates.filter((t) => t.category === filterCat)
-  }, [templates, filterCat])
+    return templates.filter((t) => {
+      if (filterCat !== 'all' && t.category !== filterCat) return false
+      if (filterType !== 'all' && getCatalogueItemType(t) !== filterType) return false
+      return true
+    })
+  }, [templates, filterCat, filterType])
 
   function openWizard(t) {
     setWizardTemplate(t)
@@ -67,7 +74,7 @@ export function CataloguePage() {
       <div className="page-header" style={{ alignItems: 'center' }}>
         <div>
           <div className="page-title">Catalogue</div>
-          <div className="page-sub">Pre-built Knative-style templates. Open in Deploy to choose environment and namespace.</div>
+          <div className="page-sub">Pre-built application templates — Simple Deploy, Kubernetes manifests, and Helm charts. Deploy in one click or customise before deploying.</div>
         </div>
         <span
           style={{
@@ -102,20 +109,37 @@ export function CataloguePage() {
       ) : null}
 
       {!error && !loading ? (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-          {categories.map((cat) => {
-            const active = cat === filterCat
-            return (
-              <button
-                key={cat}
-                type="button"
-                className={'cat-filter-btn' + (active ? ' active' : '')}
-                onClick={() => setFilterCat(cat)}
-              >
-                {CATALOGUE_CATEGORY_LABELS[cat] || (cat === 'all' ? 'All' : cat)}
-              </button>
-            )
-          })}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', flex: 1 }}>
+            {categories.map((cat) => {
+              const active = cat === filterCat
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  className={'cat-filter-btn' + (active ? ' active' : '')}
+                  onClick={() => setFilterCat(cat)}
+                >
+                  {CATALOGUE_CATEGORY_LABELS[cat] || (cat === 'all' ? 'All' : cat)}
+                </button>
+              )
+            })}
+          </div>
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            style={{
+              fontFamily: 'var(--mono)', fontSize: 12,
+              background: 'var(--surface2)', border: '1px solid var(--border2)',
+              borderRadius: 6, color: filterType !== 'all' ? CATALOGUE_TYPE_COLORS[filterType] : 'var(--text-dim)',
+              padding: '5px 10px', cursor: 'pointer', flexShrink: 0,
+            }}
+          >
+            <option value="all">All types</option>
+            {['portainer-run', 'kubernetes', 'helm'].map((type) => (
+              <option key={type} value={type}>{CATALOGUE_TYPE_LABELS[type] || type}</option>
+            ))}
+          </select>
         </div>
       ) : null}
 
@@ -166,25 +190,48 @@ export function CataloguePage() {
                 <div key={t.id} className="cat-card">
                   <div className="cat-card-head">
                     <div className="cat-card-name">{t.name || t.id}</div>
-                    <span
-                      className="cat-badge"
-                      style={{
-                        background: color + '22',
-                        color,
-                        border: '1px solid ' + color + '44',
-                      }}
-                    >
-                      {t.category
-                        ? CATALOGUE_CATEGORY_LABELS[t.category] || t.category
-                        : '—'}
-                    </span>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      <span
+                        className="cat-badge"
+                        style={{
+                          background: CATALOGUE_TYPE_COLORS[getCatalogueItemType(t)] + '22',
+                          color: CATALOGUE_TYPE_COLORS[getCatalogueItemType(t)],
+                          border: '1px solid ' + CATALOGUE_TYPE_COLORS[getCatalogueItemType(t)] + '44',
+                        }}
+                      >
+                        {CATALOGUE_TYPE_LABELS[getCatalogueItemType(t)] || getCatalogueItemType(t)}
+                      </span>
+                      <span
+                        className="cat-badge"
+                        style={{
+                          background: color + '22',
+                          color,
+                          border: '1px solid ' + color + '44',
+                        }}
+                      >
+                        {t.category
+                          ? CATALOGUE_CATEGORY_LABELS[t.category] || t.category
+                          : '—'}
+                      </span>
+                    </div>
                   </div>
                   <div className="cat-card-desc">{t.description || '—'}</div>
                   <div className="cat-card-meta">
-                    <span>
-                      {cc} container{cc !== 1 ? 's' : ''}
-                    </span>
-                    <span>port {port}</span>
+                    {getCatalogueItemType(t) === 'helm' ? (
+                      <>
+                        <span>{t.helm?.chart}</span>
+                        <span>v{t.helm?.version}</span>
+                      </>
+                    ) : getCatalogueItemType(t) === 'kubernetes' ? (
+                      <>
+                        <span>Kubernetes manifest</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>{cc} container{cc !== 1 ? 's' : ''}</span>
+                        <span>port {port}</span>
+                      </>
+                    )}
                   </div>
                   <button
                     type="button"

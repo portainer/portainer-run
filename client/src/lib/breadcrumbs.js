@@ -52,7 +52,11 @@ export function getBreadcrumbItems(pathname) {
   }
 
   if (path === ROUTES.deploy) {
-    return [{ label: 'Deploy', current: true }]
+    return [{ label: 'Simple Deploy', current: true }]
+  }
+
+  if (path === ROUTES.deployManifest) {
+    return [{ label: 'Manifest Builder', current: true }]
   }
 
   if (path === ROUTES.catalogue) {

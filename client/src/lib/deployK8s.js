@@ -1,7 +1,6 @@
 import { kubeFetch } from './api.js'
 import { inflightDedupe } from './inflightDedupe.js'
 import { GPU_RESOURCE_KEYS } from './deployFormModel.js'
-import { useAppStore } from '../store/useAppStore.js'
 
 export { GPU_RESOURCE_KEYS } from './deployFormModel.js'
 
@@ -12,7 +11,6 @@ export { GPU_RESOURCE_KEYS } from './deployFormModel.js'
  */
 export async function fetchNamespaceOptions(token, envId) {
   return inflightDedupe(`k8s:ns-options:${envId}`, async () => {
-  const denylist = new Set(useAppStore.getState().nsDenylist)
   const r = await kubeFetch(token, envId, '/api/v1/namespaces')
   if (r.status === 403 || r.status === 401) {
     return {
@@ -41,7 +39,7 @@ export async function fetchNamespaceOptions(token, envId) {
         return pr.ok ? ns : null
       }),
     )
-  ).filter((ns) => ns && !ns.startsWith('kube-') && !denylist.has(ns))
+  ).filter(Boolean)
   if (!accessible.length) {
     return {
       ok: true,
@@ -81,7 +79,8 @@ export async function fetchSecretsInNamespace(token, envId, ns) {
   return inflightDedupe(`k8s:secrets:${envId}:${ns}`, async () => {
     const r = await kubeFetch(token, envId, `/api/v1/namespaces/${ns}/secrets`)
     if (!r.ok) return []
-    return (await r.json()).items || []
+    const items = (await r.json()).items || []
+    return items.filter((s) => !isSystemSecret(s))
   })
 }
 
@@ -645,4 +644,69 @@ export async function fetchNamespaceQuota(token, envId, ns) {
   } catch {
     return { requiresLimits: false, requiresRequests: false }
   }
+}
+
+/**
+ * Fetch ConfigMaps in a namespace.
+ */
+const SYSTEM_CONFIGMAP_PATTERNS = [
+  /^kube-/,
+  /^system:/,
+  /^istio/,
+  /^coredns/,
+]
+const SYSTEM_CONFIGMAP_NAMES = new Set([
+  'kube-root-ca.crt',
+])
+
+export async function fetchConfigMapsInNamespace(token, envId, ns) {
+  if (!ns) return []
+  return inflightDedupe(`k8s:configmaps:${envId}:${ns}`, async () => {
+    const r = await kubeFetch(token, envId, `/api/v1/namespaces/${ns}/configmaps`)
+    if (!r.ok) return []
+    const items = (await r.json()).items || []
+    return items
+      .filter((cm) => {
+        const name = cm.metadata.name
+        if (SYSTEM_CONFIGMAP_NAMES.has(name)) return false
+        if (SYSTEM_CONFIGMAP_PATTERNS.some((p) => p.test(name))) return false
+        return true
+      })
+      .map((cm) => ({
+        name: cm.metadata.name,
+        keys: Object.keys(cm.data || {}),
+      }))
+  })
+}
+
+/**
+ * Fetch imagePullSecrets (kubernetes.io/dockerconfigjson) in a namespace.
+ */
+const SYSTEM_SECRET_TYPES = new Set([
+  'kubernetes.io/service-account-token',
+  'bootstrap.kubernetes.io/token',
+  'kubernetes.io/tls',
+])
+const SYSTEM_SECRET_PATTERNS = [
+  /^default-token-/,
+  /^kube-/,
+]
+
+function isSystemSecret(s) {
+  if (SYSTEM_SECRET_TYPES.has(s.type)) return true
+  const name = s.metadata.name
+  if (SYSTEM_SECRET_PATTERNS.some((p) => p.test(name))) return true
+  return false
+}
+
+export async function fetchImagePullSecrets(token, envId, ns) {
+  if (!ns) return []
+  return inflightDedupe(`k8s:pullsecrets:${envId}:${ns}`, async () => {
+    const r = await kubeFetch(token, envId, `/api/v1/namespaces/${ns}/secrets`)
+    if (!r.ok) return []
+    const items = (await r.json()).items || []
+    return items
+      .filter((s) => !isSystemSecret(s) && (s.type === 'kubernetes.io/dockerconfigjson' || s.type === 'kubernetes.io/dockercfg'))
+      .map((s) => s.metadata.name)
+  })
 }

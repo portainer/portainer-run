@@ -10,6 +10,7 @@ import { kubeFetch } from '../lib/api.js'
 import { age } from '../lib/utils.js'
 import { patchDeploymentReplicas } from '../lib/patchDeploymentReplicas.js'
 import { restartDeployment } from '../lib/restartDeployment.js'
+import { checkEnvPermissions } from '../lib/envPermissions.js'
 import { refreshCache } from '../services/refreshDeployments.js'
 import { loadDeployFormFromCluster } from '../lib/deployFormLoadFromCluster.js'
 import {
@@ -190,6 +191,7 @@ export function ServiceDetailPage() {
   const disabledEnvs = useAppStore((s) => s.disabledEnvs)
   const setDeleteTarget = useAppStore((s) => s.setDeleteTarget)
   const pushToast = useAppStore((s) => s.pushToast)
+  const envPermissions = useAppStore((s) => s.envPermissions)
 
   const [d, setD] = useState(/** @type {object | null} */ (null))
   const [err, setErr] = useState('')
@@ -211,6 +213,17 @@ export function ServiceDetailPage() {
   const scaleInFlight = useRef(false)
 
   const tab = tabParam || 'overview'
+  const patchEnvPermissions = useAppStore((s) => s.patchEnvPermissions)
+  const perms = (envId && namespace) ? (envPermissions[`${envId}:${namespace}`] ?? null) : null
+
+  // Fire permission check on mount using known env+namespace
+  useEffect(() => {
+    if (!token || !envId || !namespace) return
+    const key = `${envId}:${namespace}`
+    if (envPermissions[key] !== undefined) return
+    void checkEnvPermissions(token, envId, namespace)
+      .then((p) => patchEnvPermissions(envId, namespace, p))
+  }, [envId, namespace])
 
   const envName = useMemo(() => {
     const id = String(envId)
@@ -644,7 +657,7 @@ export function ServiceDetailPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <button
                       type="button"
-                      className="action-bar-btn"
+                      className="action-bar-btn action-bar-btn-migrate"
                       onClick={openMigrateDialog}
                     >
                       <span className="action-bar-btn-label">Migrate</span>
@@ -652,15 +665,18 @@ export function ServiceDetailPage() {
                     <button
                       type="button"
                       className="action-bar-btn action-bar-btn-danger"
+                      disabled={!perms?.canDelete}
+                      title={!perms?.canDelete ? 'You do not have permission to delete workloads in this environment' : undefined}
+                      style={!perms?.canDelete ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
                       onClick={() =>
-                        setDeleteTarget({
+                        perms?.canDelete && setDeleteTarget({
                           envId: String(envId),
                           ns: namespace,
                           name,
-                          // GitOps annotations — present only if deployed via Portainer Run GitOps
                           gitTargetId: d?.metadata?.annotations?.['portainer-run/git-target-id'] || null,
                           gitBranch: d?.metadata?.annotations?.['portainer-run/git-branch'] || null,
                           gitPath: d?.metadata?.annotations?.['portainer-run/git-path'] || null,
+                          vibeSourcePath: d?.metadata?.annotations?.['portainer-run/vibe-source-path'] || null,
                         })
                       }
                     >

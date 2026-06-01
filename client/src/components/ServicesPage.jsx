@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { checkEnvPermissions } from '../lib/envPermissions.js'
 import { restartDeployment } from '../lib/restartDeployment.js'
 import { useNavigate } from 'react-router-dom'
 import SortableList from '../design-system/react/SortableList.jsx'
@@ -99,6 +100,17 @@ function ServiceRowContent({
 }) {
   const token = useAppStore((s) => s.token)
   const pushToast = useAppStore((s) => s.pushToast)
+  const envPermissions = useAppStore((s) => s.envPermissions)
+  const patchEnvPermissions = useAppStore((s) => s.patchEnvPermissions)
+  const permKey = `${d._envId}:${d.metadata.namespace}`
+  const perms = envPermissions[permKey] ?? null
+
+  // Fire permission check for this row's env+namespace if not yet cached
+  useEffect(() => {
+    if (envPermissions[permKey] !== undefined) return
+    void checkEnvPermissions(token, d._envId, d.metadata.namespace)
+      .then((p) => patchEnvPermissions(d._envId, d.metadata.namespace, p))
+  }, [permKey])
   const [restarting, setRestarting] = useState(false)
   const name = d.metadata.name
   const ns = d.metadata.namespace
@@ -117,7 +129,7 @@ function ServiceRowContent({
     setRestarting(true)
     try {
       await restartDeployment(token, String(envId), ns, name)
-      pushToast(`\u201c${name}\u201d is restarting — pods will be replaced one by one`, 'ok')
+      pushToast(`"${name}" is restarting — pods will be replaced one by one`, 'ok')
       void manualRefresh(false)
     } catch (err) {
       pushToast('Restart failed: ' + (err?.message || String(err)), 'err')
@@ -160,6 +172,11 @@ function ServiceRowContent({
         <span className="status-light">
           <span className={`status-dot ${dot}`} />
           {label}
+          {d.spec?.replicas > 1 && (
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-dim)', marginLeft: 6 }}>
+              {d.status?.readyReplicas || 0}/{d.spec.replicas}
+            </span>
+          )}
         </span>
         {extra.reason ? <span className="status-reason">{extra.reason}</span> : null}
       </div>
@@ -187,7 +204,10 @@ function ServiceRowContent({
         <button
           type="button"
           className="btn btn-ghost btn-xs"
-          onClick={() => navigate(serviceDetailPath(String(envId), ns, name, 'logs'))}
+          onClick={() => perms?.canViewLogs ? navigate(serviceDetailPath(String(envId), ns, name, 'logs')) : null}
+          disabled={!perms?.canViewLogs}
+          title={!perms?.canViewLogs ? 'You do not have permission to view logs in this environment' : undefined}
+          style={!perms?.canViewLogs ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
         >
           Logs
         </button>
@@ -195,24 +215,13 @@ function ServiceRowContent({
           type="button"
           className="btn btn-ghost btn-xs"
           onClick={onRestart}
-          disabled={restarting}
+          disabled={restarting || !perms?.canRestart}
+          title={!perms?.canRestart ? 'You do not have permission to restart workloads in this environment' : undefined}
+          style={!perms?.canRestart ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
         >
           {restarting ? '…' : 'Restart'}
         </button>
-        <button
-          type="button"
-          className="btn btn-danger btn-xs"
-          onClick={() => setDeleteTarget({
-            envId: String(envId),
-            ns,
-            name,
-            gitTargetId: d?.metadata?.annotations?.['portainer-run/git-target-id'] || null,
-            gitBranch: d?.metadata?.annotations?.['portainer-run/git-branch'] || null,
-            gitPath: d?.metadata?.annotations?.['portainer-run/git-path'] || null,
-          })}
-        >
-          Delete
-        </button>
+
       </div>
     </div>
   )

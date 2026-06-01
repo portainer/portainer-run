@@ -21,8 +21,6 @@ export const useAppStore = create((set, get) => ({
   baseDomain: '',
   /** @type {Record<string, { reason?: string, disabledAt?: string }>} */
   disabledEnvs: {},
-  /** Namespaces blocked from all write operations — populated from /config on startup. */
-  nsDenylist: [],
   cache: { ...initialCache },
   cacheStatus: 'loading' /** 'loading' | 'cached' | 'fresh' | 'stale' */,
 
@@ -32,6 +30,9 @@ export const useAppStore = create((set, get) => ({
   // Aggregated /env-status/{id} for rows
   /** @type {Record<string, { rv: string, data: Record<string, { statusReason?: string, accessUrl?: string|null, accessLabel?: string|null }> }>} */
   envStatusClientCache: {},
+
+  /** @type {Record<string, { canDeploy: boolean, canEdit: boolean, canDelete: boolean, canRestart: boolean, canViewLogs: boolean }>} */
+  envPermissions: {},
 
   /** @type {null | { envId: string, ns: string, name: string }} */
   deleteTarget: null,
@@ -52,7 +53,6 @@ export const useAppStore = create((set, get) => ({
   setAi: (isAiAvailable, aiProvider, baseDomain) =>
     set({ isAiAvailable, aiProvider, baseDomain: baseDomain || '' }),
   setDisabledEnvs: (disabledEnvs) => set({ disabledEnvs }),
-  setNsDenylist: (nsDenylist) => set({ nsDenylist: Array.isArray(nsDenylist) ? nsDenylist : [] }),
   setCache: (updater) =>
     set((s) => (typeof updater === 'function' ? { cache: updater(s.cache) } : { cache: updater })),
   setCacheField: (patch) => set((s) => ({ cache: { ...s.cache, ...patch } })),
@@ -68,6 +68,9 @@ export const useAppStore = create((set, get) => ({
       },
     })),
 
+  setEnvPermissions: (envPermissions) => set({ envPermissions }),
+  patchEnvPermissions: (envId, namespace, perms) =>
+    set((s) => ({ envPermissions: { ...s.envPermissions, [`${envId}:${namespace}`]: perms } })),
   setDeleteTarget: (deleteTarget) => set({ deleteTarget }),
   setChatOpen: (chatOpen) => {
     if (typeof document !== 'undefined') {
@@ -101,6 +104,7 @@ export const useAppStore = create((set, get) => ({
       deleteTarget: null,
       chatOpen: false,
       envStatusClientCache: {},
+      envPermissions: {},
       toasts: [],
     })),
 }))

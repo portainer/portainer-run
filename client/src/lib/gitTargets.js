@@ -128,10 +128,10 @@ export function gitOpsUpdate({ gitTargetId, branch, gitPath, deployParams }) {
  * @param {string} p.envId
  * @returns {Promise<{ ok: boolean, results: { kind, name, status, message }[] }>}
  */
-export function gitOpsValidate({ deployParams, envId }) {
+export function gitOpsValidate({ deployParams, manifestBuilderParams, envId }) {
   return serverFetch('/api/gitops/validate', {
     method: 'POST',
-    body: JSON.stringify({ deployParams, envId }),
+    body: JSON.stringify({ deployParams, manifestBuilderParams, envId }),
   })
 }
 
@@ -151,4 +151,35 @@ export function gitOpsDeleteManifest({ gitTargetId, branch, gitPath, appName }) 
     method: 'POST',
     body: JSON.stringify({ gitTargetId, branch, gitPath, appName }),
   })
+}
+
+/**
+ * Deploy via Manifest Builder — commits generated manifest to git, creates Portainer GitOps stack.
+ *
+ * @param {object} p
+ * @param {string} p.gitTargetId
+ * @param {string} p.branch
+ * @param {string} [p.pathPrefix]
+ * @param {string} [p.pollInterval]
+ * @param {string} p.envId
+ * @param {object} p.manifestBuilderParams  — full ManifestBuilder form state
+ */
+export function gitOpsDeployManifestBuilder({ gitTargetId, branch, pathPrefix, pollInterval, envId, manifestBuilderParams }) {
+  return serverFetch('/api/gitops/deploy', {
+    method: 'POST',
+    body: JSON.stringify({ gitTargetId, branch, pathPrefix, pollInterval, envId, manifestBuilderParams }),
+  })
+}
+
+/**
+ * Fetch raw manifest YAML from Git for editing.
+ * @param {object} p
+ * @param {string} p.gitTargetId
+ * @param {string} p.branch
+ * @param {string} p.gitPath
+ * @returns {Promise<{ content: string }>}
+ */
+export function gitOpsFetchManifest({ gitTargetId, branch, gitPath }) {
+  const params = new URLSearchParams({ gitTargetId, branch, path: gitPath })
+  return serverFetch(`/api/gitops/manifest?${params}`)
 }
