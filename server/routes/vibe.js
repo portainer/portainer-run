@@ -300,7 +300,9 @@ function buildVibeManifests({
 
   // Service
   if (exposeType !== 'none') {
-    const svcType = exposeType === 'NodePort' ? 'NodePort' : 'ClusterIP'
+    const svcType = exposeType === 'LoadBalancer' ? 'LoadBalancer'
+      : exposeType === 'NodePort' ? 'NodePort'
+      : 'ClusterIP'
     const svc = {
       apiVersion: 'v1',
       kind: 'Service',
@@ -308,7 +310,7 @@ function buildVibeManifests({
       spec: {
         type: svcType,
         selector: { app: safeApp },
-        ports: [{ port, targetPort: port, protocol: 'TCP', ...(svcType === 'NodePort' ? {} : {}) }],
+        ports: [{ port, targetPort: port, protocol: 'TCP' }],
       },
     }
     manifests.push(svc)
