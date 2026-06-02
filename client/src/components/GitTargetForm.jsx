@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { createGitTarget, updateGitTarget, testGitTargetPayload } from '../lib/gitTargets.js'
+import { createGitTarget, updateGitTarget, testGitTargetPayload, initializeGitTarget } from '../lib/gitTargets.js'
+import EmptyRepoWarning from './EmptyRepoWarning.jsx'
 
 const PROVIDERS = ['github', 'gitlab', 'gitea', 'other']
 
@@ -16,6 +17,7 @@ function defaultPayload() {
 export function GitTargetForm({ initial, onSaved, onCancel }) {
   const [name, setName] = useState(initial?.name || '')
   const [payload, setPayload] = useState(initial?.payload || defaultPayload())
+  const [savedId, setSavedId] = useState(editTarget?.id || null)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -31,7 +33,7 @@ export function GitTargetForm({ initial, onSaved, onCancel }) {
     setTestResult(null)
     try {
       const r = await testGitTargetPayload(payload)
-      setTestResult({ ok: true, message: r.message, permissions: r.permissions, details: r.details || [] })
+      setTestResult({ ok: true, message: r.message, permissions: r.permissions, details: r.details || [], isEmpty: r.isEmpty })
     } catch (e) {
       setTestResult({ ok: false, message: e.message || 'Test failed' })
     } finally {
@@ -168,6 +170,13 @@ export function GitTargetForm({ initial, onSaved, onCancel }) {
               </div>
             )}
           </div>
+        )}
+
+        {testResult?.ok && testResult?.isEmpty && savedId && (
+          <EmptyRepoWarning
+            id={savedId}
+            onInitialized={() => setTestResult((r) => ({ ...r, isEmpty: false }))}
+          />
         )}
 
         {error && (

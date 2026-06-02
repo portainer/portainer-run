@@ -25,6 +25,7 @@ export const useAppStore = create((set, get) => ({
   cacheStatus: 'loading' /** 'loading' | 'cached' | 'fresh' | 'stale' */,
 
   connected: false,
+  authChecking: false,
   connectError: '',
 
   // Aggregated /env-status/{id} for rows
@@ -58,6 +59,7 @@ export const useAppStore = create((set, get) => ({
   setCacheField: (patch) => set((s) => ({ cache: { ...s.cache, ...patch } })),
   setCacheStatus: (cacheStatus) => set({ cacheStatus }),
   setConnected: (connected) => set({ connected }),
+  setAuthChecking: (authChecking) => set({ authChecking }),
   setConnectError: (connectError) => set({ connectError }),
   setEnvStatusClientCache: (envStatusClientCache) => set({ envStatusClientCache }),
   patchEnvStatus: (envId, rv, data) =>
@@ -100,6 +102,7 @@ export const useAppStore = create((set, get) => ({
       cache: { ...initialCache },
       cacheStatus: 'loading',
       connected: false,
+      authChecking: false,
       connectError: '',
       deleteTarget: null,
       chatOpen: false,

@@ -101,6 +101,40 @@ export async function handleConnections(req, res, pathname) {
     }
   }
 
+  // POST /api/connections/:id/initialize  (create initial commit on empty repo)
+  const initMatch = pathname.match(/^\/api\/connections\/([^/]+)\/initialize$/)
+  if (initMatch && method === 'POST') {
+    const id = initMatch[1]
+    const conn = getConnectionById(id)
+    if (!conn) return json(res, 404, { error: 'Connection not found' })
+    try {
+      const { provider, repo } = conn.payload
+      const headers = buildHeaders(conn.payload)
+      if (provider === 'github') {
+        const base = 'https://api.github.com'
+        const repoData = await request('GET', `${base}/repos/${repo}`, headers)
+        const defaultBranch = repoData.default_branch
+        const tree = await request('POST', `${base}/repos/${repo}/git/trees`, headers, {
+          tree: [{ path: 'README.md', mode: '100644', type: 'blob', content: `# ${repo.split('/').pop()}
+` }],
+        })
+        const commit = await request('POST', `${base}/repos/${repo}/git/commits`, headers, {
+          message: 'chore: initialise repository',
+          tree: tree.sha,
+          parents: [],
+        })
+        await request('POST', `${base}/repos/${repo}/git/refs`, headers, {
+          ref: `refs/heads/${defaultBranch}`,
+          sha: commit.sha,
+        })
+        return json(res, 200, { ok: true, branch: defaultBranch })
+      }
+      return json(res, 400, { error: 'Initialize not supported for this provider yet' })
+    } catch (e) {
+      return json(res, 502, { error: e.message || 'Initialize failed' })
+    }
+  }
+
   // POST /api/connections/:id/test
   const testMatch = pathname.match(/^\/api\/connections\/([^/]+)\/test$/)
   if (testMatch && method === 'POST') {
