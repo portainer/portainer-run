@@ -17,6 +17,7 @@ import { fetchTemplatesJson } from '../lib/fetchTemplatesJson.js'
 import { inflightDedupe } from '../lib/inflightDedupe.js'
 import { createContainer, withDefaultCnames } from '../lib/deployFormModel.js'
 import { gitOpsDeploy } from '../lib/gitTargets.js'
+import { listGitTargets } from '../lib/gitTargets.js'
 import { checkEnvPermissions } from '../lib/envPermissions.js'
 import {
   DeployContainersFormList,
@@ -53,7 +54,12 @@ function Stepper({ current }) {
 export function DeployPage() {
   const location = useLocation()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [noGitTargets, setNoGitTargets] = useState(false)
+  useEffect(() => {
+    listGitTargets().then((r) => setNoGitTargets(!r || r.length === 0)).catch(() => {})
+  }, [])
+
+    const [searchParams] = useSearchParams()
   const token = useAppStore((s) => s.token)
   const environments = useAppStore((s) => s.environments)
   const disabledEnvs = useAppStore((s) => s.disabledEnvs)
@@ -388,6 +394,21 @@ export function DeployPage() {
       </div>
 
       <div className="deploy-form">
+      {noGitTargets && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '12px 16px', marginBottom: 16,
+          background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.3)',
+          borderRadius: 8, fontSize: 13,
+        }}>
+          <span style={{ color: 'var(--amber)', fontSize: 16, flexShrink: 0 }}>⚠</span>
+          <span style={{ color: 'var(--text)' }}>
+            No git targets configured. Portainer Run requires a git repository to commit manifests and source files before deploying.{' '}
+            <Link to={ROUTES.gitTargets} style={{ color: 'var(--accent)' }}>Set one up in Git Targets</Link> first.
+          </span>
+        </div>
+      )}
+
         <Stepper current={step} />
 
         {/* ── Step 1: Target ── */}

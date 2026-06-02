@@ -169,6 +169,14 @@ export function GitTargetsPage() {
                     )}
                   </div>
                 )}
+                {testResults[conn.id]?.ok && testResults[conn.id]?.isEmpty && (
+                  <div style={{ marginTop: 8 }}>
+                    <EmptyRepoWarning
+                      id={conn.id}
+                      onInitialized={() => setTestResults((t) => ({ ...t, [conn.id]: { ...t[conn.id], isEmpty: false } }))}
+                    />
+                  </div>
+                )}
               </div>
               <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
                 <button type="button" className="btn btn-ghost btn-sm"

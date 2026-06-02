@@ -128,12 +128,15 @@ export async function connectWithToken(token) {
     )
     st().setConnected(true)
 
-    await loadDisabledEnvs(tok, st().environments)
-    st().setCache((c) => {
-      const pruned = visibleDeployments(useAppStore.getState())
-      return { ...c, fetching: false, deployments: pruned }
-    })
-    await refreshCache(false)
+    // Fire background tasks without awaiting — don't block bootstrap on cache refresh
+    st().setAuthChecking(false)
+    void loadDisabledEnvs(tok, st().environments).then(() => {
+      st().setCache((c) => {
+        const pruned = visibleDeployments(useAppStore.getState())
+        return { ...c, fetching: false, deployments: pruned }
+      })
+      return refreshCache(false)
+    }).catch(() => {})
     return true
   } catch (e) {
     st().setConnectError('Network error. Proxy not responding. ' + (e && e.message))
@@ -185,6 +188,15 @@ export async function tryAutoConnect() {
     return
   }
 
+  // Optimistic auth — restore session immediately from stored token so the UI
+  // renders at once, then validate in the background. If validation fails,
+  // disconnect and the user is redirected to the connect screen.
   if (url) st().setPortainerBaseUrl(url)
-  await connectWithToken(saved)
+  st().setToken(saved)
+  st().setConnected(true)
+
+  // Background validation
+  void connectWithToken(saved).then((ok) => {
+    if (!ok) disconnect()
+  })
 }

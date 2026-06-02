@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { ROUTES } from '../lib/routes.js'
+import { listGitTargets } from '../lib/gitTargets.js'
 import { useAppStore, visibleEnvironments, isEnvDisabled } from '../store/useAppStore.js'
 import { fetchNamespaceOptions } from '../lib/deployK8s.js'
 import { checkEnvPermissions } from '../lib/envPermissions.js'
@@ -310,6 +311,11 @@ export function VibeDeploy() {
 
   // ---- Step tracking ----
   // 1=files, 2=runtime, 3=envvars, 4=deployconfig, 5=gitops
+  const [noGitTargets, setNoGitTargets] = useState(false)
+  useEffect(() => {
+    listGitTargets().then((r) => setNoGitTargets(!r || r.length === 0)).catch(() => {})
+  }, [])
+
   const [step, setStep] = useState(1)
 
   // ---- Step 1: files ----
@@ -643,6 +649,20 @@ export function VibeDeploy() {
       </div>
 
       <div className="deploy-form">
+      {noGitTargets && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '12px 16px', marginBottom: 16,
+          background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.3)',
+          borderRadius: 8, fontSize: 13,
+        }}>
+          <span style={{ color: 'var(--amber)', fontSize: 16, flexShrink: 0 }}>⚠</span>
+          <span style={{ color: 'var(--text)' }}>
+            No git targets configured. Portainer Run requires a git repository to commit manifests and source files before deploying.{' '}
+            <Link to={ROUTES.gitTargets} style={{ color: 'var(--accent)' }}>Set one up in Git Targets</Link> first.
+          </span>
+        </div>
+      )}
         {/* Stepper */}
         <div className="mb-stepper">
           {visibleSteps.map((s, i) => {

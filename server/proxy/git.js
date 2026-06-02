@@ -51,12 +51,15 @@ export async function ensureBranch(payload, branch) {
   if (branches.includes(branch)) return { ok: true, created: false }
 
   if (provider === 'github') {
-    const repoData = await request('GET', `https://api.github.com/repos/${repo}`, headers)
+    const base = 'https://api.github.com'
+    const repoData = await request('GET', `${base}/repos/${repo}`, headers)
     const defaultBranch = repoData.default_branch
-    const refData = await request('GET', `https://api.github.com/repos/${repo}/git/ref/heads/${defaultBranch}`, headers)
-    await request('POST', `https://api.github.com/repos/${repo}/git/refs`, headers, {
+    const refData = await request('GET', `${base}/repos/${repo}/git/ref/heads/${defaultBranch}`, headers)
+    const sha = refData.object.sha
+    if (branch === defaultBranch) return { ok: true, created: false }
+    await request('POST', `${base}/repos/${repo}/git/refs`, headers, {
       ref: `refs/heads/${branch}`,
-      sha: refData.object.sha,
+      sha,
     })
     return { ok: true, created: true }
   }
@@ -477,9 +480,11 @@ export async function testGitConnection(payload) {
       }
     }
 
+    const branches = await getBranches(payload).catch(() => [])
     return {
       ok: true,
       message: `GitHub repository accessible`,
+      isEmpty: branches.length === 0,
       permissions: { canRead: true, canWrite, canAdmin },
       details: [
         `Read: yes`,
@@ -503,9 +508,11 @@ export async function testGitConnection(payload) {
     const canWrite = level >= 30
     const canAdmin = level >= 40
     const levelLabel = level >= 50 ? 'Owner' : level >= 40 ? 'Maintainer' : level >= 30 ? 'Developer' : level >= 20 ? 'Reporter' : level >= 10 ? 'Guest' : 'None'
+    const branches = await getBranches(payload).catch(() => [])
     return {
       ok: true,
       message: `GitLab repository accessible`,
+      isEmpty: branches.length === 0,
       permissions: { canRead, canWrite, canAdmin },
       details: [
         `Access level: ${levelLabel} (${level})`,
@@ -523,9 +530,11 @@ export async function testGitConnection(payload) {
   const canRead  = true
   const canWrite = Boolean(p.push || p.admin)
   const canAdmin = Boolean(p.admin)
+  const branches = await getBranches(payload).catch(() => [])
   return {
     ok: true,
     message: `Gitea repository accessible`,
+    isEmpty: branches.length === 0,
     permissions: { canRead, canWrite, canAdmin },
     details: [
       `Read: ${canRead ? 'yes' : 'no'}`,

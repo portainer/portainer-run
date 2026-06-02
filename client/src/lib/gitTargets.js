@@ -61,6 +61,10 @@ export function deleteGitTarget(id) {
 }
 
 /** Test a saved connection. @param {string} id */
+export function initializeGitTarget(id) {
+  return serverFetch(`/api/connections/${id}/initialize`, { method: 'POST' })
+}
+
 export function testGitTarget(id) {
   return serverFetch(`/api/connections/${id}/test`, { method: 'POST' })
 }
