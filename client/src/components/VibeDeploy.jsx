@@ -916,8 +916,9 @@ export function VibeDeploy() {
                 <label>Expose as</label>
                 <select value={exposeType} onChange={(e) => setExposeType(e.target.value)}>
                   <option value="none">Internal only (ClusterIP)</option>
-                  <option value="NodePort">NodePort</option>
-                  <option value="Ingress">Ingress</option>
+                  <option value="NodePort">NodePort — expose on cluster node IP + port</option>
+                  <option value="LoadBalancer">LoadBalancer — provision external load balancer</option>
+                  <option value="Ingress">Ingress — route via ingress controller</option>
                 </select>
               </div>
               {exposeType === 'Ingress' && (
