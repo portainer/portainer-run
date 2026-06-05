@@ -512,7 +512,9 @@ export function VibeDeploy() {
     if (!resolvedNs) { pushToast('Select or enter a namespace', 'err'); return }
 
     // Build deploy params for GitOpsStep dry-run + actual deploy
-    const portValue = detectedRuntime?.port ? parseInt(String(svcPort || detectedRuntime.port), 10) : 80
+    // Priority: user-entered svcPort > PORT env var > runtime default
+    const portEnvVar = envVars.find((v) => v.key === 'PORT')?.value
+    const portValue = parseInt(String(svcPort || portEnvVar || detectedRuntime?.port || 80), 10)
     const resolvedPort = isNaN(portValue) ? 80 : portValue
 
     // Build a single-container spec representing the vibe deploy
