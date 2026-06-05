@@ -4,7 +4,7 @@ A simplified self-service operations portal for Kubernetes, backed by the Portai
 
 ## Quick Start
 
-Deploy Portainer-Run then access it via `[http|https]://your-ip-address/`.
+Deploy Portainer-Run then access it via `https://your-ip-address/`.
 
 ### Kubernetes
 Refer to [deploy/kubernetes.yaml](deploy/kubernetes.yaml).
@@ -444,7 +444,7 @@ The Assistant is scoped to container operations only and will decline unrelated 
 
 ## Notes on scope
 
-BY design, Portainer Run only surfaces deployments it created. It tags every Deployment, Service, PVC, and Ingress with `managed-by=portainer-run` and filters all views to that label. Workloads deployed through Portainer's own UI or `kubectl` will not appear. Secrets are an exception — the Secrets page and the secret picker in the Deploy form show all secrets in the namespace regardless of origin, because referencing externally-managed secrets is a normal operational requirement.
+By design, Portainer Run only surfaces deployments it created. It tags every Deployment, Service, PVC, and Ingress with `managed-by=portainer-run` and filters all views to that label. Workloads deployed through Portainer's own UI or `kubectl` will not appear. Secrets are an exception — the Secrets page and the secret picker in the Deploy form show all secrets in the namespace regardless of origin, because referencing externally-managed secrets is a normal operational requirement.
 
 Persistent storage volumes cannot be modified after deployment. PVCs are created at deploy time and are not touched by the Edit tab.
 
