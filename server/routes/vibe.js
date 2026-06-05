@@ -375,6 +375,8 @@ async function handleVibeDeploy(req, res) {
 
   const safeApp = sanitizeStackName(appName)
   const safePrefix = sanitizeGitPath(pathPrefix || conn.payload.pathPrefix || '')
+  const gitToken = conn.payload.token || ''
+  const gitUsername = conn.payload.username || ''
 
   // Source files go to: <prefix>/<ns>/<appName>/src/
   const sourcePath = sanitizeGitPath([safePrefix, ns, safeApp, 'src'].filter(Boolean).join('/'))
@@ -420,8 +422,8 @@ async function handleVibeDeploy(req, res) {
       gitRepoUrl: repoUrl,
       gitBranch: branch,
       gitSourcePath: sourcePath,
-      gitUsername: conn.payload.username || '',
-      gitToken: conn.payload.token || '',
+      gitUsername,
+      gitToken,
     })
 
     // 4. Serialize and commit manifests
@@ -459,8 +461,8 @@ async function handleVibeDeploy(req, res) {
       repoUrl,
       branch,
       filePath: manifestPath,
-      username: conn.payload.username || '',
-      token: conn.payload.token || '',
+      username: gitUsername,
+      token: gitToken,
       authType: conn.payload.authType || 'pat',
       pollInterval: interval,
     })
