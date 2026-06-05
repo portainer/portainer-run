@@ -50,7 +50,7 @@ services:
       # ── Persistent session cache ──────────────────────────────────────────
       # Without this, the cache is lost on container restart.
       # Uncomment and ensure the host path exists before starting.
-      # - /data/portainer-run:/app/data
+       - portainer-run-dataa:/app/data
 
       # ── Real TLS certificates ─────────────────────────────────────────────
       # Mount your cert directory and set SSL_CERT / SSL_KEY below.
@@ -75,3 +75,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+
+volumes:
+  portainer-run-data:
