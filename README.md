@@ -322,7 +322,7 @@ docker run -d \
   -p 80:80 \
   -e PORTAINER_URL=https://portainer.example.com:9443 \
   -e ANTHROPIC_API_KEY=sk-ant-... \
-  -e ENCRYPTION_KEY=<change-me-to-a-rand-32-string> \
+  -e ENCRYPTION_KEY=change-me-to-a-rand-32-string \
   --name portainer-run \
   portainer-run
 ```
@@ -335,7 +335,7 @@ docker run -d \
   -p 80:80 \
   -e PORTAINER_URL=https://portainer.example.com:9443 \
   -e OPENAI_API_KEY=sk-... \
-  -e ENCRYPTION_KEY=<change-me-to-a-rand-32-string> \
+  -e ENCRYPTION_KEY=change-me-to-a-rand-32-string \
   --name portainer-run \
   portainer-run
 ```
@@ -349,7 +349,7 @@ docker run -d \
   -v /path/to/certs:/certs \
   -e PORTAINER_URL=https://portainer.example.com:9443 \
   -e ANTHROPIC_API_KEY=sk-ant-... \
-  -e ENCRYPTION_KEY=<change-me-to-a-rand-32-string> \
+  -e ENCRYPTION_KEY=change-me-to-a-rand-32-string \
   -e SSL_CERT=/certs/fullchain.pem \
   -e SSL_KEY=/certs/privkey.pem \
   --name portainer-run \
@@ -365,7 +365,7 @@ docker run -d \
   -v /data/portainer-run:/app/data \
   -e PORTAINER_URL=https://portainer.example.com:9443 \
   -e ANTHROPIC_API_KEY=sk-ant-... \
-  -e ENCRYPTION_KEY=<change-me-to-a-rand-32-string> \
+  -e ENCRYPTION_KEY=change-me-to-a-rand-32-string \
   --name portainer-run \
   portainer-run
 ```
@@ -377,7 +377,7 @@ docker run -d \
   -p 443:443 \
   -p 80:80 \
   -e PORTAINER_URL=https://portainer.example.com:9443 \
-  -e ENCRYPTION_KEY=<change-me-to-a-rand-32-string> \
+  -e ENCRYPTION_KEY=change-me-to-a-rand-32-string \
   -e TEMPLATE_URL=https://your-server.com/templates.json \
   --name portainer-run \
   portainer-run
@@ -390,7 +390,7 @@ docker run -d \
   -p 8443:8443 \
   -p 8080:8080 \
   -e PORTAINER_URL=https://portainer.example.com:9443 \
-  -e ENCRYPTION_KEY=<change-me-to-a-rand-32-string> \
+  -e ENCRYPTION_KEY=change-me-to-a-rand-32-string \
   -e PORT=8443 \
   -e HTTP_PORT=8080 \
   --name portainer-run \

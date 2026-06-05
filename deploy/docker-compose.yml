@@ -1,6 +1,6 @@
 # Portainer Run — Docker Compose deployment
 #
-# Required: set PORTAINER_URL before starting.
+# Required: set PORTAINER_URL and ENCRYPTION_KEY before starting.
 # Optional components are commented out with instructions below.
 #
 # Quick start:
@@ -24,6 +24,8 @@ services:
     environment:
       # ── Required ──────────────────────────────────────────────────────────
       - PORTAINER_URL=https://portainer.example.com:9443
+      # Encrypts stored Git target credentials. Min 32 chars. Generate: openssl rand -hex 32
+      - ENCRYPTION_KEY=change-me-to-a-rand-32-string
 
       # ── AI provider (choose one) ───────────────────────────────────────────
       # Anthropic (Claude):
@@ -50,7 +52,7 @@ services:
       # ── Persistent session cache ──────────────────────────────────────────
       # Without this, the cache is lost on container restart.
       # Uncomment and ensure the host path exists before starting.
-       - portainer-run-dataa:/app/data
+       - portainer-run-data:/app/data
 
       # ── Real TLS certificates ─────────────────────────────────────────────
       # Mount your cert directory and set SSL_CERT / SSL_KEY below.
