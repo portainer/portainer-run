@@ -5,6 +5,7 @@ import {
   commitFiles,
   ensureBranch,
   buildRepoHttpsUrl,
+  fetchFile,
 } from '../proxy/git.js'
 import { buildManifests, serializeManifests, buildManifestPath } from '../lib/manifestSerialize.js'
 import { resolvePortainerTarget } from '../resolve-portainer.js'
@@ -46,6 +47,14 @@ export async function handleVibe(req, res, pathname) {
 
   if (pathname === '/api/vibe/update' && req.method === 'POST') {
     return handleVibeUpdate(req, res)
+  }
+
+  if (pathname === '/api/vibe/update-exposure' && req.method === 'POST') {
+    return handleVibeUpdateExposure(req, res)
+  }
+
+  if (pathname === '/api/vibe/manifest-exposure' && req.method === 'GET') {
+    return handleVibeManifestExposure(req, res)
   }
 
   return null
@@ -284,19 +293,10 @@ function buildVibeManifests({
     },
   }
 
-  // Git credentials Secret — only when token is present
-  const gitSecret = gitToken ? {
-    apiVersion: 'v1',
-    kind: 'Secret',
-    metadata: { name: secretName, namespace: ns, labels, annotations },
-    type: 'Opaque',
-    stringData: {
-      username: gitUsername || 'oauth2',
-      token: gitToken,
-    },
-  } : null
-
-  const manifests = [gitSecret, pvc, deployment].filter(Boolean)
+  // Note: the git credentials Secret is NOT committed to git.
+  // It is created directly via the Kubernetes API after stack creation
+  // so the token never appears in the repository.
+  const manifests = [pvc, deployment].filter(Boolean)
 
   // Service
   if (exposeType !== 'none') {
@@ -434,7 +434,23 @@ async function handleVibeDeploy(req, res) {
       [{ path: manifestPath, content: yamlContent }],
     )
 
-    // 5. Create Portainer GitOps stack
+    // 5. Create the git credentials Secret in Kubernetes.
+    //    Done after the manifest commit but before stack creation — Portainer
+    //    won't start reconciling until the stack exists, so the Secret is
+    //    guaranteed to be present before the init container runs.
+    if (gitToken) {
+      await createKubernetesSecret(req, {
+        envId,
+        ns,
+        name: `${safeApp}-git-credentials`,
+        data: {
+          username: gitUsername || 'oauth2',
+          token: gitToken,
+        },
+      })
+    }
+
+    // 6. Create Portainer GitOps stack
     const interval = sanitizePollInterval(pollInterval)
     const stackResult = await createPortainerGitOpsStack(req, {
       envId,
@@ -460,6 +476,56 @@ async function handleVibeDeploy(req, res) {
   } catch (err) {
     console.error('[vibe deploy error]', err.message || err)
     return json(res, 500, { error: err.message || 'Deploy failed' })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Kubernetes Secret creation via Portainer proxy
+// ---------------------------------------------------------------------------
+
+/**
+ * Creates (or replaces) a Kubernetes Secret via the Portainer Kubernetes proxy.
+ * The Secret never touches git.
+ */
+async function createKubernetesSecret(req, { envId, ns, name, data }) {
+  const target = resolvePortainerTarget(req)
+  if (!target) throw new Error('Cannot resolve Portainer target')
+  const userToken = req.headers['x-api-key'] || ''
+
+  // Base64-encode the secret values (Kubernetes Secret data must be base64)
+  const encodedData = {}
+  for (const [k, v] of Object.entries(data)) {
+    encodedData[k] = Buffer.from(String(v)).toString('base64')
+  }
+
+  const secret = {
+    apiVersion: 'v1',
+    kind: 'Secret',
+    metadata: { name, namespace: ns },
+    type: 'Opaque',
+    data: encodedData,
+  }
+
+  const body = JSON.stringify(secret)
+
+  // Try create first; if it already exists (409), use replace
+  try {
+    await portainerRequest(
+      target, userToken, 'POST',
+      `/api/endpoints/${envId}/kubernetes/api/v1/namespaces/${ns}/secrets`,
+      body,
+    )
+  } catch (e) {
+    if (e.message && e.message.includes('409')) {
+      // Already exists — replace it
+      await portainerRequest(
+        target, userToken, 'PUT',
+        `/api/endpoints/${envId}/kubernetes/api/v1/namespaces/${ns}/secrets/${name}`,
+        body,
+      )
+    } else {
+      throw e
+    }
   }
 }
 
@@ -605,5 +671,169 @@ async function handleVibeUpdate(req, res) {
   } catch (err) {
     console.error('[vibe update error]', err.message || err)
     return json(res, 500, { error: err.message || 'Update failed' })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Vibe Update Exposure handler
+// ---------------------------------------------------------------------------
+
+/**
+ * POST /api/vibe/update-exposure
+ * Body: {
+ *   gitTargetId, branch, gitPath, appName, ns,
+ *   exposeType: 'none' | 'NodePort' | 'LoadBalancer' | 'Ingress',
+ *   port: number,
+ *   ingress?: { host, path, ingressClass }
+ * }
+ *
+ * Fetches the existing manifest from git, replaces the Service and Ingress
+ * documents with a regenerated version matching the new exposure settings,
+ * and commits the updated file back.
+ */
+async function handleVibeUpdateExposure(req, res) {
+  const body = await readBody(req)
+  const data = parseJson(body)
+  if (!data) return json(res, 400, { error: 'Invalid request body' })
+
+  const { gitTargetId, branch, gitPath, appName, ns, exposeType, port, ingress } = data
+  if (!gitTargetId || !branch || !gitPath || !appName || !ns) {
+    return json(res, 400, { error: 'gitTargetId, branch, gitPath, appName and ns are required' })
+  }
+
+  const conn = getConnectionById(gitTargetId)
+  if (!conn) return json(res, 404, { error: 'Git target not found' })
+
+  try {
+    // Fetch current manifest
+    const current = await fetchFile(conn.payload, branch, gitPath)
+    if (!current) return json(res, 404, { error: 'Manifest file not found in git' })
+
+    // Split multi-document YAML, strip Service and Ingress docs, keep the rest
+    const docs = current.split(/^---\s*$/m).map((d) => d.trim()).filter(Boolean)
+    const kept = docs.filter((d) => {
+      const kindMatch = d.match(/^kind:\s*(\S+)/m)
+      const kind = kindMatch ? kindMatch[1] : ''
+      return kind !== 'Service' && kind !== 'Ingress'
+    })
+
+    // Build new Service and Ingress docs if needed
+    const safeApp = sanitizeStackName(appName)
+    const svcPort = Number(port) || 80
+    const labels = { app: safeApp, 'managed-by': 'portainer-run' }
+
+    const newDocs = [...kept]
+
+    if (exposeType !== 'none') {
+      const svcType = exposeType === 'LoadBalancer' ? 'LoadBalancer'
+        : exposeType === 'NodePort' ? 'NodePort'
+        : 'ClusterIP'
+
+      const svc = {
+        apiVersion: 'v1',
+        kind: 'Service',
+        metadata: { name: safeApp, namespace: ns, labels },
+        spec: {
+          type: svcType,
+          selector: { app: safeApp },
+          ports: [{ port: svcPort, targetPort: svcPort, protocol: 'TCP' }],
+        },
+      }
+      newDocs.push(serializeManifests([svc]).trim())
+
+      if (exposeType === 'Ingress' && ingress?.host) {
+        const ing = {
+          apiVersion: 'networking.k8s.io/v1',
+          kind: 'Ingress',
+          metadata: {
+            name: safeApp,
+            namespace: ns,
+            labels,
+            ...(ingress.ingressClass ? { annotations: { 'kubernetes.io/ingress.class': ingress.ingressClass } } : {}),
+          },
+          spec: {
+            rules: [{
+              host: ingress.host,
+              http: { paths: [{ path: ingress.path || '/', pathType: 'Prefix', backend: { service: { name: safeApp, port: { number: svcPort } } } }] },
+            }],
+          },
+        }
+        newDocs.push(serializeManifests([ing]).trim())
+      }
+    }
+
+    const updatedYaml = newDocs.join('\n---\n') + '\n'
+
+    await commitFiles(conn.payload, branch, `vibe: update exposure for ${safeApp}`, [
+      { path: gitPath, content: updatedYaml },
+    ])
+
+    return json(res, 200, { ok: true })
+  } catch (err) {
+    console.error('[vibe update-exposure error]', err.message || err)
+    return json(res, 500, { error: err.message || 'Update failed' })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Vibe manifest exposure reader
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/vibe/manifest-exposure?gitTargetId=&branch=&gitPath=
+ *
+ * Fetches the manifest YAML from git and parses the current Service
+ * exposure settings so the edit form can pre-populate correctly.
+ */
+async function handleVibeManifestExposure(req, res) {
+  const url = new URL(req.url, 'http://localhost')
+  const gitTargetId = url.searchParams.get('gitTargetId')
+  const branch = url.searchParams.get('branch')
+  const gitPath = url.searchParams.get('gitPath')
+
+  if (!gitTargetId || !branch || !gitPath) {
+    return json(res, 400, { error: 'gitTargetId, branch and gitPath are required' })
+  }
+
+  const conn = getConnectionById(gitTargetId)
+  if (!conn) return json(res, 404, { error: 'Git target not found' })
+
+  try {
+    const content = await fetchFile(conn.payload, branch, gitPath)
+    if (!content) return json(res, 404, { error: 'Manifest not found' })
+
+    // Find the Service document
+    const docs = content.split(/^---\s*$/m).map((d) => d.trim()).filter(Boolean)
+    const svcDoc = docs.find((d) => /^kind:\s*Service/m.test(d))
+    const ingDoc = docs.find((d) => /^kind:\s*Ingress/m.test(d))
+
+    if (!svcDoc) return json(res, 200, { exposeType: 'none' })
+
+    // Parse type and port from the Service doc using regex (no YAML parser needed)
+    const typeMatch = svcDoc.match(/^\s+type:\s*(\S+)/m)
+    const portMatch = svcDoc.match(/^\s+port:\s*(\d+)/m)
+    const svcType = typeMatch ? typeMatch[1] : 'ClusterIP'
+    const port = portMatch ? Number(portMatch[1]) : 80
+
+    let exposeType = 'none'
+    if (svcType === 'NodePort') exposeType = 'NodePort'
+    else if (svcType === 'LoadBalancer') exposeType = 'LoadBalancer'
+    else if (svcType === 'ClusterIP' && ingDoc) exposeType = 'Ingress'
+
+    const result = { exposeType, port }
+
+    if (ingDoc) {
+      const hostMatch = ingDoc.match(/^\s+host:\s*(\S+)/m)
+      const pathMatch = ingDoc.match(/^\s+path:\s*(\S+)/m)
+      const classMatch = ingDoc.match(/kubernetes\.io\/ingress\.class:\s*(\S+)/m)
+      if (hostMatch) result.ingHost = hostMatch[1]
+      if (pathMatch) result.ingPath = pathMatch[1]
+      if (classMatch) result.ingClass = classMatch[1]
+    }
+
+    return json(res, 200, result)
+  } catch (err) {
+    console.error('[vibe manifest-exposure error]', err.message || err)
+    return json(res, 500, { error: err.message || 'Failed to read manifest' })
   }
 }
