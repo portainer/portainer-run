@@ -17,7 +17,7 @@ function defaultPayload() {
 export function GitTargetForm({ initial, onSaved, onCancel }) {
   const [name, setName] = useState(initial?.name || '')
   const [payload, setPayload] = useState(initial?.payload || defaultPayload())
-  const [savedId, setSavedId] = useState(editTarget?.id || null)
+  const [savedId, setSavedId] = useState(initial?.id || null)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -54,7 +54,8 @@ export function GitTargetForm({ initial, onSaved, onCancel }) {
       } else {
         result = await createGitTarget({ name: name.trim(), payload })
       }
-      onSaved(result.connection)
+      setSavedId(result?.connection?.id || initial?.id)
+    onSaved(result.connection)
     } catch (e) {
       setError(e.message || 'Save failed')
     } finally {
