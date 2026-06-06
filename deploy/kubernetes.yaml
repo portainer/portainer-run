@@ -2,7 +2,7 @@
 #
 # Deploys Portainer Run as a single pod in the portainer-run namespace.
 #
-# Required: update PORTAINER_URL in the ConfigMap before applying.
+# Required: update PORTAINER_URL and ENCRYPTION_KEY in the ConfigMap before applying.
 # Optional components are commented out with instructions below.
 #
 # Apply:
@@ -47,6 +47,8 @@ data:
 # Secret — sensitive values
 # Add your AI provider key before applying.
 # To encode a value:  echo -n 'your-key-here' | base64
+# Add your ENCRYPTION_KEY and AI provider key before applying.
+# To encode a value:  echo -n 'your-value-here' | base64
 apiVersion: v1
 kind: Secret
 metadata:
@@ -54,6 +56,11 @@ metadata:
   namespace: portainer-run
 type: Opaque
 data:
+  # ── Required: encryption key ────────────────────────────────────────────────
+  # Encrypts stored Git target credentials at rest. Min 32 chars.
+  # Generate: openssl rand -hex 32 | base64
+  ENCRYPTION_KEY: ""
+
   # ── Anthropic (Claude) ──────────────────────────────────────────────────────
   # Base64-encode your key: echo -n 'sk-ant-...' | base64
   ANTHROPIC_API_KEY: ""
@@ -112,6 +119,13 @@ spec:
             - configMapRef:
                 name: portainer-run-config
           env:
+            # ── Encryption key (required) ─────────────────────────────────────
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: portainer-run-secret
+                  key: ENCRYPTION_KEY
+
             # ── Anthropic API key ─────────────────────────────────────────────
             - name: ANTHROPIC_API_KEY
               valueFrom:
