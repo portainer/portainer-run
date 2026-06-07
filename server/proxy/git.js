@@ -375,11 +375,19 @@ async function deleteDirectoryGitHub(payload, branch, dirPath, message) {
 
   // 3. Get the full recursive tree
   const treeData = await request('GET', `${base}/repos/${repo}/git/trees/${treeSha}?recursive=1`, headers)
-  const remaining = treeData.tree.filter((entry) => !entry.path.startsWith(prefix))
+  console.log('[deleteDirectory] tree entries:', (treeData.tree || []).length, 'truncated:', treeData.truncated)
+  console.log('[deleteDirectory] prefix:', prefix)
+  console.log('[deleteDirectory] sample paths:', (treeData.tree || []).slice(0, 5).map(e => e.path + ' (' + e.type + ')'))
 
-  if (remaining.length === treeData.tree.length) return { ok: true, deleted: 0 } // nothing to delete
+  // Only keep blob (file) entries — Git reconstructs tree (directory) objects automatically.
+  // Keeping stale tree-type entries would pass old tree SHAs that still contain the deleted files.
+  const allBlobs = treeData.tree.filter((e) => e.type === 'blob')
+  const remaining = allBlobs.filter((entry) => !entry.path.startsWith(prefix))
+  console.log('[deleteDirectory] allBlobs:', allBlobs.length, 'remaining:', remaining.length)
 
-  // 4. Create a new tree with only the remaining entries
+  if (remaining.length === allBlobs.length) return { ok: true, deleted: 0 } // nothing to delete
+
+  // 4. Create a new tree with only the remaining blob entries
   const newTree = await request('POST', `${base}/repos/${repo}/git/trees`, headers, {
     tree: remaining.map((e) => ({ path: e.path, mode: e.mode, type: e.type, sha: e.sha })),
   })
@@ -447,9 +455,10 @@ async function deleteDirectoryGitea(payload, branch, dirPath, message) {
 
   // 3. Get the full recursive tree
   const treeData = await request('GET', `${base}/api/v1/repos/${repo}/git/trees/${treeSha}?recursive=true`, headers)
-  const remaining = (treeData.tree || []).filter((entry) => !entry.path.startsWith(prefix))
+  const allBlobs = (treeData.tree || []).filter((e) => e.type === 'blob')
+  const remaining = allBlobs.filter((entry) => !entry.path.startsWith(prefix))
 
-  if (remaining.length === (treeData.tree || []).length) return { ok: true, deleted: 0 }
+  if (remaining.length === allBlobs.length) return { ok: true, deleted: 0 }
 
   // 4-6. Create new tree, commit, update ref
   const newTree = await request('POST', `${base}/api/v1/repos/${repo}/git/trees`, headers, {
