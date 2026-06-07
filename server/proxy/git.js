@@ -375,15 +375,11 @@ async function deleteDirectoryGitHub(payload, branch, dirPath, message) {
 
   // 3. Get the full recursive tree
   const treeData = await request('GET', `${base}/repos/${repo}/git/trees/${treeSha}?recursive=1`, headers)
-  console.log('[deleteDirectory] tree entries:', (treeData.tree || []).length, 'truncated:', treeData.truncated)
-  console.log('[deleteDirectory] prefix:', prefix)
-  console.log('[deleteDirectory] sample paths:', (treeData.tree || []).slice(0, 5).map(e => e.path + ' (' + e.type + ')'))
 
   // Only keep blob (file) entries — Git reconstructs tree (directory) objects automatically.
   // Keeping stale tree-type entries would pass old tree SHAs that still contain the deleted files.
   const allBlobs = treeData.tree.filter((e) => e.type === 'blob')
   const remaining = allBlobs.filter((entry) => !entry.path.startsWith(prefix))
-  console.log('[deleteDirectory] allBlobs:', allBlobs.length, 'remaining:', remaining.length)
 
   if (remaining.length === allBlobs.length) return { ok: true, deleted: 0 } // nothing to delete
 
