@@ -356,7 +356,7 @@ async function handleVibeDeploy(req, res) {
   const data = parseJson(body)
   if (!data) return json(res, 400, { error: 'Invalid request body' })
 
-  const { gitTargetId, branch, pathPrefix, pollInterval, envId, deployParams, vibeParams } = data
+  const { gitTargetId, branch, pathPrefix, pollInterval, envId, envName, deployParams, vibeParams } = data
 
   if (!gitTargetId || !branch || !envId || !deployParams || !vibeParams) {
     return json(res, 400, { error: 'gitTargetId, branch, envId, deployParams, and vibeParams are required' })
@@ -378,13 +378,14 @@ async function handleVibeDeploy(req, res) {
 
   const safeApp = sanitizeStackName(appName)
   const safePrefix = sanitizeGitPath(pathPrefix || conn.payload.pathPrefix || '')
+  const safeEnvName = sanitizeGitPath((envName || String(envId)).toLowerCase().replace(/[^a-z0-9-]/g, '-'))
   const gitToken = conn.payload.token || ''
   const gitUsername = conn.payload.username || ''
 
-  // Source files go to: <prefix>/<ns>/<appName>/src/
-  const sourcePath = sanitizeGitPath([safePrefix, ns, safeApp, 'src'].filter(Boolean).join('/'))
-  // Manifest goes to: <prefix>/<ns>/<appName>.yaml
-  const manifestPath = sanitizeGitPath(buildManifestPath({ pathPrefix: safePrefix, ns, appName: safeApp }))
+  // Paths: <prefix>/<envName>/<ns>/<appName>.yaml and <prefix>/<envName>/<ns>/<appName>/src/
+  const envPrefix = [safePrefix, safeEnvName].filter(Boolean).join('/')
+  const sourcePath = sanitizeGitPath([envPrefix, ns, safeApp, 'src'].filter(Boolean).join('/'))
+  const manifestPath = sanitizeGitPath(buildManifestPath({ pathPrefix: envPrefix, ns, appName: safeApp }))
 
   try {
     // 1. Ensure branch exists
