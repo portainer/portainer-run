@@ -263,6 +263,8 @@ function buildVibeManifests({
   }
 
   // Main container — use shell form (sh -c) to handle quoted args like nginx -g 'daemon off;'
+  // Env vars are passed both as Kubernetes env (process.env) and written to .env by vibe-env
+  // init container so apps work whether or not they use dotenv.
   const mainContainer = {
     name: safeApp,
     image: runtimeImage || 'node:20-alpine',
@@ -270,6 +272,7 @@ function buildVibeManifests({
     workingDir: workDirSafe,
     ports: [{ containerPort: port, protocol: 'TCP' }],
     volumeMounts: [{ name: 'app-data', mountPath: workDirSafe }],
+    ...(containerEnv.length > 0 ? { env: containerEnv } : {}),
   }
   // Remove undefined command
   if (!mainContainer.command) delete mainContainer.command
