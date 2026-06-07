@@ -531,6 +531,7 @@ export function VibeDeploy() {
       appName: appName.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-'),
       ns: resolvedNs,
       envId,
+      envName: environments.find((e) => String(e.Id) === String(envId))?.Name || String(envId),
       instances,
       containerSpecs: [containerSpec],
       containerRowIds: ['vibe-0'],
@@ -588,6 +589,7 @@ export function VibeDeploy() {
           pathPrefix,
           pollInterval,
           envId: stagedParams.envId,
+          envName: stagedParams.envName,
           vibeParams: stagedParams.vibeParams,
           deployParams: {
             appName: stagedParams.appName,
