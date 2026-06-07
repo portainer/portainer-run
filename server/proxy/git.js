@@ -353,71 +353,119 @@ export async function deleteDirectory(payload, branch, dirPath, message) {
   return deleteDirectoryGitea(payload, branch, dirPath, message)
 }
 
-async function listFilesGitHub(payload, branch, path) {
+/**
+ * GitHub: delete a directory in a single commit using the Git Data API tree approach.
+ * Fetches the full recursive tree, filters out all entries under dirPath,
+ * creates a new tree and commit, then updates the branch ref.
+ * This matches what the GitHub UI 'Delete directory' button does.
+ */
+async function deleteDirectoryGitHub(payload, branch, dirPath, message) {
   const { repo } = payload
   const headers = buildHeaders(payload)
-  const data = await request('GET', `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}`, headers)
-  // If array, it's a directory listing; if object with sha, it's a file
-  if (!Array.isArray(data)) return [data]
-  const files = []
-  for (const item of data) {
-    if (item.type === 'file') files.push(item)
-    else if (item.type === 'dir') files.push(...await listFilesGitHub(payload, branch, item.path))
-  }
-  return files
+  const base = 'https://api.github.com'
+  const prefix = dirPath.replace(/\/$/, '') + '/'
+
+  // 1. Get current branch commit SHA
+  const refData = await request('GET', `${base}/repos/${repo}/git/ref/heads/${branch}`, headers)
+  const commitSha = refData.object.sha
+
+  // 2. Get the current commit to find the tree SHA and parent
+  const commitData = await request('GET', `${base}/repos/${repo}/git/commits/${commitSha}`, headers)
+  const treeSha = commitData.tree.sha
+
+  // 3. Get the full recursive tree
+  const treeData = await request('GET', `${base}/repos/${repo}/git/trees/${treeSha}?recursive=1`, headers)
+  const remaining = treeData.tree.filter((entry) => !entry.path.startsWith(prefix))
+
+  if (remaining.length === treeData.tree.length) return { ok: true, deleted: 0 } // nothing to delete
+
+  // 4. Create a new tree with only the remaining entries
+  const newTree = await request('POST', `${base}/repos/${repo}/git/trees`, headers, {
+    tree: remaining.map((e) => ({ path: e.path, mode: e.mode, type: e.type, sha: e.sha })),
+  })
+
+  // 5. Create a new commit
+  const newCommit = await request('POST', `${base}/repos/${repo}/git/commits`, headers, {
+    message,
+    tree: newTree.sha,
+    parents: [commitSha],
+  })
+
+  // 6. Update the branch ref
+  await request('PATCH', `${base}/repos/${repo}/git/refs/heads/${branch}`, headers, {
+    sha: newCommit.sha,
+    force: false,
+  })
+
+  return { ok: true, deleted: treeData.tree.length - remaining.length }
 }
 
-async function deleteDirectoryGitHub(payload, branch, dirPath, message) {
-  const files = await listFilesGitHub(payload, branch, dirPath)
-  if (!files.length) return { ok: true, deleted: 0 }
-  for (const file of files) {
-    await deleteFileGitHub(payload, branch, file.path, message)
-  }
-  return { ok: true, deleted: files.length }
-}
-
-async function listFilesGitLab(payload, branch, path) {
+/**
+ * GitLab: delete a directory in a single commit using the commits API
+ * with multiple delete actions in one request.
+ */
+async function deleteDirectoryGitLab(payload, branch, dirPath, message) {
   const { repo, url: baseUrl } = payload
   const base = baseUrl || 'https://gitlab.com'
   const encoded = encodeURIComponent(repo)
   const headers = buildHeaders(payload)
-  // GitLab tree API lists contents recursively with recursive=true
-  const items = await request('GET',
-    `${base}/api/v4/projects/${encoded}/repository/tree?path=${encodeURIComponent(path)}&ref=${branch}&recursive=true&per_page=100`,
-    headers)
-  return items.filter((i) => i.type === 'blob')
-}
 
-async function deleteDirectoryGitLab(payload, branch, dirPath, message) {
-  const files = await listFilesGitLab(payload, branch, dirPath)
+  // List all files under the directory
+  const items = await request('GET',
+    `${base}/api/v4/projects/${encoded}/repository/tree?path=${encodeURIComponent(dirPath)}&ref=${branch}&recursive=true&per_page=100`,
+    headers)
+  const files = items.filter((i) => i.type === 'blob')
   if (!files.length) return { ok: true, deleted: 0 }
-  for (const file of files) {
-    await deleteFileGitLab(payload, branch, file.path, message)
-  }
+
+  // Single commit with all delete actions
+  await request('POST', `${base}/api/v4/projects/${encoded}/repository/commits`, headers, {
+    branch,
+    commit_message: message,
+    actions: files.map((f) => ({ action: 'delete', file_path: f.path })),
+  })
+
   return { ok: true, deleted: files.length }
 }
 
-async function listFilesGitea(payload, branch, path) {
+/**
+ * Gitea: uses the same Git Data API tree approach as GitHub
+ * (Gitea mirrors the GitHub API surface).
+ */
+async function deleteDirectoryGitea(payload, branch, dirPath, message) {
   const { repo, url: baseUrl } = payload
   const base = baseUrl || ''
   const headers = buildHeaders(payload)
-  const data = await request('GET', `${base}/api/v1/repos/${repo}/contents/${path}?ref=${branch}`, headers)
-  if (!Array.isArray(data)) return [data]
-  const files = []
-  for (const item of data) {
-    if (item.type === 'file') files.push(item)
-    else if (item.type === 'dir') files.push(...await listFilesGitea(payload, branch, item.path))
-  }
-  return files
-}
+  const prefix = dirPath.replace(/\/$/, '') + '/'
 
-async function deleteDirectoryGitea(payload, branch, dirPath, message) {
-  const files = await listFilesGitea(payload, branch, dirPath)
-  if (!files.length) return { ok: true, deleted: 0 }
-  for (const file of files) {
-    await deleteFileGitea(payload, branch, file.path, message)
-  }
-  return { ok: true, deleted: files.length }
+  // 1. Get current branch commit SHA
+  const refData = await request('GET', `${base}/api/v1/repos/${repo}/branches/${branch}`, headers)
+  const commitSha = refData.commit.id
+
+  // 2. Get the tree SHA from the commit
+  const commitData = await request('GET', `${base}/api/v1/repos/${repo}/git/commits/${commitSha}`, headers)
+  const treeSha = commitData.tree?.sha || commitData.commit?.tree?.sha
+
+  // 3. Get the full recursive tree
+  const treeData = await request('GET', `${base}/api/v1/repos/${repo}/git/trees/${treeSha}?recursive=true`, headers)
+  const remaining = (treeData.tree || []).filter((entry) => !entry.path.startsWith(prefix))
+
+  if (remaining.length === (treeData.tree || []).length) return { ok: true, deleted: 0 }
+
+  // 4-6. Create new tree, commit, update ref
+  const newTree = await request('POST', `${base}/api/v1/repos/${repo}/git/trees`, headers, {
+    tree: remaining.map((e) => ({ path: e.path, mode: e.mode, type: e.type, sha: e.sha })),
+  })
+  const newCommit = await request('POST', `${base}/api/v1/repos/${repo}/git/commits`, headers, {
+    message,
+    tree: newTree.sha,
+    parents: [commitSha],
+  })
+  await request('PATCH', `${base}/api/v1/repos/${repo}/git/refs/heads/${branch}`, headers, {
+    sha: newCommit.sha,
+    force: false,
+  })
+
+  return { ok: true, deleted: (treeData.tree || []).length - remaining.length }
 }
 
 /**
