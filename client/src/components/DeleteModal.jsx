@@ -59,20 +59,17 @@ export function DeleteModal() {
         ),
       ])
 
-      // 5. Optionally delete git entries — manifest and source files (if vibe deploy) together
+      // 5. Optionally delete git entries — run sequentially to avoid branch ref race condition
+      //    (parallel commits with the same parent SHA cause non-fast-forward errors)
       if (isGitOps && deleteManifest) {
-        const gitDeletions = [
-          gitOpsDeleteManifest({ gitTargetId, branch: gitBranch, gitPath, appName: name }),
-          ...(isVibeDeploy && vibeSourcePath
-            ? [gitOpsDeleteManifest({ gitTargetId, branch: gitBranch, gitPath: vibeSourcePath, appName: name })]
-            : []),
-        ]
-        const gitResults = await Promise.allSettled(gitDeletions)
-        const gitFailures = gitResults.filter((r) => r.status === 'rejected')
-        if (gitFailures.length > 0) {
-          const msg = gitFailures[0].reason?.message || 'unknown error'
+        try {
+          await gitOpsDeleteManifest({ gitTargetId, branch: gitBranch, gitPath, appName: name })
+          if (isVibeDeploy && vibeSourcePath) {
+            await gitOpsDeleteManifest({ gitTargetId, branch: gitBranch, gitPath: vibeSourcePath, appName: name })
+          }
+        } catch (e) {
           useAppStore.getState().pushToast(
-            `Deployment deleted but Git cleanup failed: ${msg} — check the token has write access to the repository`,
+            `Deployment deleted but Git cleanup failed: ${e?.message || 'unknown error'} — check the token has write access to the repository`,
             'warn',
           )
         }
