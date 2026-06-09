@@ -378,7 +378,12 @@ async function handleVibeDeploy(req, res) {
 
   const safeApp = sanitizeStackName(appName)
   const safePrefix = sanitizeGitPath(pathPrefix || conn.payload.pathPrefix || '')
-  const safeEnvName = sanitizeGitPath((envName || String(envId)).toLowerCase().replace(/[^a-z0-9-]/g, '-'))
+  const safeEnvName = sanitizeGitPath(
+    (envName || String(envId))
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')   // collapse runs of non-alphanumeric to single hyphen
+      .replace(/^-+|-+$/g, '')        // trim leading/trailing hyphens
+  )
   const gitToken = conn.payload.token || ''
   const gitUsername = conn.payload.username || ''
 
@@ -395,7 +400,8 @@ async function handleVibeDeploy(req, res) {
     const gitopsAnnotations = { gitTargetId, gitBranch: branch, gitPath: manifestPath }
 
     // 2. Commit source files to git
-    const sourceCommits = sourceFiles
+    const { runtime } = vibeParams
+    let sourceCommits = sourceFiles
       .filter((f) => f.path && typeof f.content === 'string')
       .map((f) => ({
         path: `${sourcePath}/${sanitizeGitPath(f.path)}`,
@@ -404,6 +410,21 @@ async function handleVibeDeploy(req, res) {
 
     if (sourceCommits.length === 0) {
       return json(res, 400, { error: 'No valid source files to commit' })
+    }
+
+    // For nginx (static sites), if there is exactly one HTML file and it is not
+    // named index.html, rename it — nginx will serve a 403 otherwise.
+    if (runtime === 'nginx') {
+      const hasIndex = sourceCommits.some((f) => f.path.endsWith('/index.html'))
+      if (!hasIndex) {
+        const htmlFiles = sourceCommits.filter((f) => f.path.match(/\.html?$/i))
+        if (htmlFiles.length === 1) {
+          const dir = htmlFiles[0].path.replace(/\/[^/]+$/, '')
+          sourceCommits = sourceCommits.map((f) =>
+            f === htmlFiles[0] ? { ...f, path: `${dir}/index.html` } : f
+          )
+        }
+      }
     }
 
     await commitFiles(
