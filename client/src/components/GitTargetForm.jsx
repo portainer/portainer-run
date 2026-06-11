@@ -91,6 +91,17 @@ export function GitTargetForm({ initial, onSaved, onCancel }) {
             placeholder="https://git.internal.example.com" mono />
         )}
 
+        {payload.provider === 'github' && (
+          <>
+            <Field label="GitHub server URL (optional)" value={payload.url} onChange={(v) => set('url', v)}
+              placeholder="https://github.your-company.com" mono />
+            <div className="hint">
+              Leave blank for github.com. For GitHub Enterprise Server, enter your host — the
+              GitHub-compatible API at <code>/api/v3</code> is used automatically.
+            </div>
+          </>
+        )}
+
         <Field label="Repository (owner/repo)" value={payload.repo} onChange={(v) => set('repo', v)}
           placeholder="myorg/kubernetes-manifests" mono />
 
