@@ -103,6 +103,8 @@ The Test button on each git target checks connectivity and reports read and writ
 
 For GitHub fine-grained PATs, the token requires Contents (read and write) permission on the target repository. Classic PATs require the `repo` scope.
 
+For **GitHub Enterprise Server**, keep the provider set to GitHub and enter your server host (e.g. `https://github.your-company.com`) in the GitHub server URL field. Portainer Run uses the GitHub-compatible REST API at `/api/v3` on that host. Do not use the "Other" provider for GitHub Enterprise — that path targets the Gitea API (`/api/v1`), which a GitHub Enterprise host does not expose.
+
 ## Catalogue
 
 The Catalogue provides a library of pre-configured application stacks that can be deployed in two clicks. Each template card shows the application name, category, container images, and primary port. Clicking **Deploy Wizard** opens a two-step modal.
