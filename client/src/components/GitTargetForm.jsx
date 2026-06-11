@@ -102,6 +102,17 @@ export function GitTargetForm({ initial, onSaved, onCancel }) {
           </>
         )}
 
+        {payload.provider === 'gitlab' && (
+          <>
+            <Field label="GitLab server URL (optional)" value={payload.url} onChange={(v) => set('url', v)}
+              placeholder="https://gitlab.your-company.com" mono />
+            <div className="hint">
+              Leave blank for gitlab.com. For self-hosted GitLab, enter your host — the
+              GitLab API at <code>/api/v4</code> is used automatically.
+            </div>
+          </>
+        )}
+
         <Field label="Repository (owner/repo)" value={payload.repo} onChange={(v) => set('repo', v)}
           placeholder="myorg/kubernetes-manifests" mono />
 
