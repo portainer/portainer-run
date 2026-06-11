@@ -123,7 +123,7 @@ function resolveStatusReason(pod) {
 
 function resolveUrl(appName, svcs, ings, nodeIp) {
   for (const ing of ings.filter(
-    (i) => i.metadata?.labels?.app === appName || (i.spec?.rules || []).length
+    (i) => i.metadata?.labels?.app === appName || i.metadata?.name === appName
   )) {
     for (const rule of ing.spec?.rules || []) {
       const host = rule.host
