@@ -25,7 +25,8 @@ export async function getBranches(payload) {
   const headers = buildHeaders(payload)
 
   if (provider === 'github') {
-    const data = await request('GET', `https://api.github.com/repos/${repo}/branches`, headers)
+    const base = githubApiBase(payload)
+    const data = await request('GET', `${base}/repos/${repo}/branches`, headers)
     return data.map((b) => b.name)
   }
   if (provider === 'gitlab') {
@@ -51,7 +52,7 @@ export async function ensureBranch(payload, branch) {
   if (branches.includes(branch)) return { ok: true, created: false }
 
   if (provider === 'github') {
-    const base = 'https://api.github.com'
+    const base = githubApiBase(payload)
     const repoData = await request('GET', `${base}/repos/${repo}`, headers)
     const defaultBranch = repoData.default_branch
     const refData = await request('GET', `${base}/repos/${repo}/git/ref/heads/${defaultBranch}`, headers)
@@ -90,7 +91,7 @@ export async function ensureBranch(payload, branch) {
 async function commitGitHub(payload, branch, message, files) {
   const { repo } = payload
   const headers = buildHeaders(payload)
-  const base = 'https://api.github.com'
+  const base = githubApiBase(payload)
 
   // Get branch SHA — gracefully handle empty/new repos
   let baseSha = null
@@ -207,6 +208,22 @@ async function commitGitea(payload, branch, message, files) {
 
 // --- helpers ---
 
+/**
+ * GitHub REST API base URL for a connection.
+ * - github.com (no url): https://api.github.com
+ * - GitHub Enterprise Server (url set): https://<host>/api/v3
+ * @param {object} payload
+ * @returns {string}
+ */
+function githubApiBase(payload) {
+  const url = (payload.url || '').trim().replace(/\/+$/, '')
+  if (!url) return 'https://api.github.com'
+  // Accept either the web host (https://ghe.example.com) or a full
+  // api base already ending in /api/v3.
+  if (/\/api\/v3$/.test(url)) return url
+  return `${url}/api/v3`
+}
+
 function buildHeaders(payload) {
   if (payload.provider === 'github') {
     const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'portainer-run' }
@@ -289,7 +306,7 @@ export async function deleteFile(payload, branch, filePath, message) {
 async function deleteFileGitHub(payload, branch, filePath, message) {
   const { repo } = payload
   const headers = buildHeaders(payload)
-  const base = 'https://api.github.com'
+  const base = githubApiBase(payload)
 
   // Get current file SHA — required by GitHub delete API
   const fileData = await request('GET', `${base}/repos/${repo}/contents/${filePath}?ref=${branch}`, headers)
@@ -362,7 +379,7 @@ export async function deleteDirectory(payload, branch, dirPath, message) {
 async function deleteDirectoryGitHub(payload, branch, dirPath, message) {
   const { repo } = payload
   const headers = buildHeaders(payload)
-  const base = 'https://api.github.com'
+  const base = githubApiBase(payload)
   const prefix = dirPath.replace(/\/$/, '') + '/'
 
   // 1. Get current branch commit SHA
@@ -480,7 +497,10 @@ async function deleteDirectoryGitea(payload, branch, dirPath, message) {
  */
 export function buildRepoHttpsUrl(payload) {
   const { provider, repo, url: baseUrl } = payload
-  if (provider === 'github') return `https://github.com/${repo}`
+  if (provider === 'github') {
+    const host = (baseUrl || '').trim().replace(/\/+$/, '').replace(/\/api\/v3$/, '')
+    return host ? `${host}/${repo}` : `https://github.com/${repo}`
+  }
   if (provider === 'gitlab') {
     const base = (baseUrl || 'https://gitlab.com').replace(/\/$/, '')
     return `${base}/${repo}`
@@ -498,7 +518,7 @@ export async function testGitConnection(payload) {
   const headers = buildHeaders(payload)
 
   if (provider === 'github') {
-    const base = 'https://api.github.com'
+    const base = githubApiBase(payload)
 
     // 1. Confirm repo is accessible
     const repoData = await request('GET', `${base}/repos/${repo}`, headers)
@@ -615,7 +635,8 @@ export async function fetchFile(payload, branch, filePath) {
 async function fetchFileGitHub(payload, branch, filePath) {
   const { repo } = payload
   const headers = buildHeaders(payload)
-  const data = await request('GET', `https://api.github.com/repos/${repo}/contents/${filePath}?ref=${branch}`, headers)
+  const base = githubApiBase(payload)
+  const data = await request('GET', `${base}/repos/${repo}/contents/${filePath}?ref=${branch}`, headers)
   if (!data.content) throw new Error('File content not found in GitHub response')
   return Buffer.from(data.content.replace(/\n/g, ''), 'base64').toString('utf8')
 }
