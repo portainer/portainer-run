@@ -105,6 +105,8 @@ For GitHub fine-grained PATs, the token requires Contents (read and write) permi
 
 For **GitHub Enterprise Server**, keep the provider set to GitHub and enter your server host (e.g. `https://github.your-company.com`) in the GitHub server URL field. Portainer Run uses the GitHub-compatible REST API at `/api/v3` on that host. Do not use the "Other" provider for GitHub Enterprise — that path targets the Gitea API (`/api/v1`), which a GitHub Enterprise host does not expose.
 
+For **self-hosted GitLab**, keep the provider set to GitLab and enter your server host (e.g. `https://gitlab.your-company.com`) in the GitLab server URL field. Leave it blank for gitlab.com. Portainer Run uses the GitLab API at `/api/v4` on that host.
+
 ## Catalogue
 
 The Catalogue provides a library of pre-configured application stacks that can be deployed in two clicks. Each template card shows the application name, category, container images, and primary port. Clicking **Deploy Wizard** opens a two-step modal.

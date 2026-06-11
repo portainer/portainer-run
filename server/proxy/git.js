@@ -30,7 +30,7 @@ export async function getBranches(payload) {
     return data.map((b) => b.name)
   }
   if (provider === 'gitlab') {
-    const base = baseUrl || 'https://gitlab.com'
+    const base = gitlabApiBase(payload)
     const encoded = encodeURIComponent(repo)
     const data = await request('GET', `${base}/api/v4/projects/${encoded}/repository/branches`, headers)
     return data.map((b) => b.name)
@@ -66,7 +66,7 @@ export async function ensureBranch(payload, branch) {
   }
 
   if (provider === 'gitlab') {
-    const base = baseUrl || 'https://gitlab.com'
+    const base = gitlabApiBase(payload)
     const encoded = encodeURIComponent(repo)
     const projData = await request('GET', `${base}/api/v4/projects/${encoded}`, headers)
     await request('POST', `${base}/api/v4/projects/${encoded}/repository/branches`, headers, {
@@ -149,8 +149,8 @@ async function commitGitHub(payload, branch, message, files) {
 }
 
 async function commitGitLab(payload, branch, message, files) {
-  const { repo, url: baseUrl } = payload
-  const base = baseUrl || 'https://gitlab.com'
+  const { repo } = payload
+  const base = gitlabApiBase(payload)
   const encoded = encodeURIComponent(repo)
   const headers = buildHeaders(payload)
 
@@ -222,6 +222,19 @@ function githubApiBase(payload) {
   // api base already ending in /api/v3.
   if (/\/api\/v3$/.test(url)) return url
   return `${url}/api/v3`
+}
+
+/**
+ * GitLab host base URL for a connection.
+ * - gitlab.com (no url): https://gitlab.com
+ * - Self-hosted GitLab (url set): https://<host> (trailing slash trimmed)
+ * The /api/v4 path is appended by each call site.
+ * @param {object} payload
+ * @returns {string}
+ */
+function gitlabApiBase(payload) {
+  const url = (payload.url || '').trim().replace(/\/+$/, '')
+  return url || 'https://gitlab.com'
 }
 
 function buildHeaders(payload) {
@@ -322,8 +335,8 @@ async function deleteFileGitHub(payload, branch, filePath, message) {
 }
 
 async function deleteFileGitLab(payload, branch, filePath, message) {
-  const { repo, url: baseUrl } = payload
-  const base = baseUrl || 'https://gitlab.com'
+  const { repo } = payload
+  const base = gitlabApiBase(payload)
   const encoded = encodeURIComponent(repo)
   const encodedPath = encodeURIComponent(filePath)
   const headers = buildHeaders(payload)
@@ -426,8 +439,8 @@ async function deleteDirectoryGitHub(payload, branch, dirPath, message) {
  * with multiple delete actions in one request.
  */
 async function deleteDirectoryGitLab(payload, branch, dirPath, message) {
-  const { repo, url: baseUrl } = payload
-  const base = baseUrl || 'https://gitlab.com'
+  const { repo } = payload
+  const base = gitlabApiBase(payload)
   const encoded = encodeURIComponent(repo)
   const headers = buildHeaders(payload)
 
@@ -502,7 +515,7 @@ export function buildRepoHttpsUrl(payload) {
     return host ? `${host}/${repo}` : `https://github.com/${repo}`
   }
   if (provider === 'gitlab') {
-    const base = (baseUrl || 'https://gitlab.com').replace(/\/$/, '')
+    const base = gitlabApiBase(payload)
     return `${base}/${repo}`
   }
   const base = (baseUrl || '').replace(/\/$/, '')
@@ -570,7 +583,7 @@ export async function testGitConnection(payload) {
   }
 
   if (provider === 'gitlab') {
-    const base = baseUrl || 'https://gitlab.com'
+    const base = gitlabApiBase(payload)
     const encoded = encodeURIComponent(repo)
     const data = await request('GET', `${base}/api/v4/projects/${encoded}`, headers)
     // access_level: 50=owner, 40=maintainer, 30=developer(push), 20=reporter(read), 10=guest
@@ -642,8 +655,8 @@ async function fetchFileGitHub(payload, branch, filePath) {
 }
 
 async function fetchFileGitLab(payload, branch, filePath) {
-  const { repo, url: baseUrl } = payload
-  const base = baseUrl || 'https://gitlab.com'
+  const { repo } = payload
+  const base = gitlabApiBase(payload)
   const encoded = encodeURIComponent(repo)
   const encodedPath = encodeURIComponent(filePath)
   const headers = buildHeaders(payload)
