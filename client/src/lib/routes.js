@@ -1,7 +1,7 @@
 export const ROUTES = {
   connect: '/connect',
   dashboard: '/dashboard',
-  services: '/services',
+  services: '/applications',
   deploy: '/deploy/simple',
   deployManifest: '/deploy/manifest',
   deployVibe: '/deploy/vibe',

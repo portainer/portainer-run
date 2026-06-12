@@ -42,9 +42,11 @@ Portainer Run sits in that gap. The container image (or source folder) is alread
 
 Portainer Run connects to your Portainer instance using a personal access token. Access is governed entirely by your Portainer RBAC role. Once connected it provides a unified view across all Kubernetes environments your account can reach.
 
-**Dashboard** shows a live health summary across all environments: total services, running, degraded, and unavailable counts, with a per-environment breakdown. The cache refreshes every 30 seconds automatically and after any deploy, scale, or delete action.
+**Applications** is the primary operational view and the landing page after login. It lists all deployments tagged `managed-by=portainer-run` with a traffic light status per row, sortable by name, environment, health, or creation date. Status reasons are fetched from pod state and shown in plain English: "App keeps crashing (4 restarts)", "Can't download the image", "No node has enough resources", and so on. The exposure column shows a clickable address. Each row has Logs, Restart, and Delete actions. A **+ Deploy** button in the page header adapts to enabled features: if only one deploy feature is enabled it navigates directly; if multiple are enabled it shows a dropdown listing the available options.
 
-**Services** is the primary operational view. It lists all deployments tagged `managed-by=portainer-run` with a traffic light status per row. Status reasons are fetched from pod state and shown in plain English: "App keeps crashing (4 restarts)", "Can't download the image", "No node has enough resources", and so on. The exposure column shows a clickable address. Each row has Logs, Restart, and Delete actions.
+There is no separate Dashboard page. Applications serves that role.
+
+
 
 **Vibe Deploy** is the deployment path designed for source files produced by AI coding tools. Drop the files Claude or another AI tool generated, and Portainer Run handles runtime detection, dependency installation, git commit, and Kubernetes deployment automatically. No Dockerfile, no CI pipeline, no container registry required.
 
@@ -319,7 +321,7 @@ Sessions persist across page refreshes and are cleared on disconnect.
 
 ## Notes on scope
 
-Portainer Run only surfaces deployments it created. It tags every Deployment, Service, PVC, and Ingress with `managed-by=portainer-run` and filters all views to that label. Workloads deployed through Portainer's own UI or `kubectl` will not appear. Secrets are an exception — the Secrets page and secret picker show all secrets in the namespace regardless of origin.
+Portainer Run only surfaces deployments it created. It tags every Deployment, Service, PVC, and Ingress with `managed-by=portainer-run` and filters the Applications page to that label. Workloads deployed through Portainer's own UI or `kubectl` will not appear. Secrets are an exception — the Secrets page and secret picker show all secrets in the namespace regardless of origin.
 
 Persistent storage volumes cannot be modified after deployment. PVCs are created at deploy time and are not touched by the Edit tab.
 

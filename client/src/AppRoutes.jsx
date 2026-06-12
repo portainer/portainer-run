@@ -19,7 +19,7 @@ import { ROUTES, getSafeAppPath } from './lib/routes.js'
 
 function RootRedirect() {
   const c = useAppStore((s) => s.connected)
-  if (c) return <Navigate to={ROUTES.dashboard} replace />
+  if (c) return <Navigate to={ROUTES.services} replace />
   return <Navigate to={ROUTES.connect} replace />
 }
 
@@ -27,7 +27,7 @@ function ConnectPage() {
   const c = useAppStore((s) => s.connected)
   const loc = useLocation()
   if (c) {
-    const to = getSafeAppPath(loc.state?.from) || ROUTES.dashboard
+    const to = getSafeAppPath(loc.state?.from) || ROUTES.services
     return <Navigate to={to} replace />
   }
   return <ConnectScreen />
@@ -51,7 +51,7 @@ function AuthedLayout() {
 /** Redirects to dashboard if a feature flag is disabled. */
 function FeatureGate({ flag, children }) {
   const features = useAppStore((s) => s.features)
-  if (features[flag] === false) return <Navigate to={ROUTES.dashboard} replace />
+  if (features[flag] === false) return <Navigate to={ROUTES.services} replace />
   return children
 }
 
@@ -61,14 +61,14 @@ export function AppRoutes() {
       <Route path="/" element={<RootRedirect />} />
       <Route path="connect" element={<ConnectPage />} />
       <Route element={<AuthedLayout />}>
-        <Route path="dashboard" element={<DashboardPage />} />
-        <Route path="services" element={<ServicesPage />} />
+        <Route path="dashboard" element={<Navigate to={ROUTES.services} replace />} />
+        <Route path="applications" element={<ServicesPage />} />
         <Route
-          path="services/:envId/:namespace/:name"
+          path="applications/:envId/:namespace/:name"
           element={<ServiceDetailIndexRedirect />}
         />
         <Route
-          path="services/:envId/:namespace/:name/:tab"
+          path="applications/:envId/:namespace/:name/:tab"
           element={<ServiceDetailPage />}
         />
         <Route path="deploy" element={<Navigate to={ROUTES.deploy} replace />} />
@@ -79,7 +79,7 @@ export function AppRoutes() {
         <Route path="secrets" element={<FeatureGate flag="secrets"><SecretsPage /></FeatureGate>} />
         <Route path="readiness" element={<ReadinessPage />} />
         <Route path="git-targets" element={<GitTargetsPage />} />
-        <Route path="*" element={<Navigate to={ROUTES.dashboard} replace />} />
+        <Route path="*" element={<Navigate to={ROUTES.services} replace />} />
       </Route>
     </Routes>
   )

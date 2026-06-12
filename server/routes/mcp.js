@@ -290,7 +290,7 @@ async function toolDeployVibeApp(req, args, caller) {
     appName: data.appName || appName,
     namespace,
     envId,
-    message: `${data.appName || appName} deployed successfully to ${namespace}`,
+    message: `${data.appName || appName} deployed to ${namespace} successfully — view it in the Applications page`,
   }
 }
 
@@ -315,7 +315,7 @@ async function toolGetAppStatus(req, args) {
   )
 
   if (!dep) {
-    return { found: false, message: `No deployment found for ${appName} in ${namespace}` }
+    return { found: false, message: `No application found for ${appName} in ${namespace}` }
   }
 
   return {

@@ -135,7 +135,7 @@ export function DeleteModal() {
               gap: 10,
             }}>
               <div style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'var(--mono)' }}>
-                This service was deployed via GitOps.
+                This application was deployed via GitOps.
               </div>
 
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>

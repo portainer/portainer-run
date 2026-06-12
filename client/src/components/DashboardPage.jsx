@@ -28,9 +28,9 @@ const STATUS_GROUP_INFO = {
 }
 
 const STATUS_SUBFILTER_EMPTY = {
-  workloads_down: 'No environments with down (unavailable) services.',
-  workloads_degraded: 'No environments with degraded services.',
-  workloads_running: 'No environments with running services (all replicas at desired).',
+  workloads_down: 'No environments with unavailable applications.',
+  workloads_degraded: 'No environments with degraded applications.',
+  workloads_running: 'No environments with running applications.',
   no_workloads: 'No environments with only idle or no active workloads in this view.',
 }
 
@@ -252,7 +252,7 @@ export function DashboardPage() {
           activeSegmentId={activeSummarySegmentId}
           onSelect={onSummarySegmentSelect}
           segments={[
-            { id: 't', type: 'total', value: String(summary.total), label: 'Total services' },
+            { id: 't', type: 'total', value: String(summary.total), label: 'Total applications' },
             {
               id: 'r',
               type: 'status-healthy',
