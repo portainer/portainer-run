@@ -60,6 +60,21 @@ function resolveTemplateUrl() {
 export const TEMPLATE_URL = resolveTemplateUrl()
 export const BASE_DOMAIN = process.env.BASE_DOMAIN || ''
 export const CACHE_FILE = path.join(CACHE_DIR, 'cache.json')
+
+// ---------------------------------------------------------------------------
+// Feature flags — default all on; set to 'false' to disable
+// ---------------------------------------------------------------------------
+function flag(name, def = true) {
+  const v = process.env[name]
+  if (!v) return def
+  return v.toLowerCase() !== 'false' && v !== '0'
+}
+
+export const FEATURE_VIBE_DEPLOY      = flag('FEATURE_VIBE_DEPLOY')
+export const FEATURE_SIMPLE_DEPLOY    = flag('FEATURE_SIMPLE_DEPLOY')
+export const FEATURE_MANIFEST_BUILDER = flag('FEATURE_MANIFEST_BUILDER')
+export const FEATURE_CATALOGUE        = flag('FEATURE_CATALOGUE')
+export const FEATURE_SECRETS          = flag('FEATURE_SECRETS')
 export const DIST_DIR = path.join(projectRoot, 'client', 'dist')
 export const LEGACY_HTML = path.join(
   projectRoot,

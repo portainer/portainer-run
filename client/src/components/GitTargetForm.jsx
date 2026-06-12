@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { createGitTarget, updateGitTarget, testGitTargetPayload, initializeGitTarget } from '../lib/gitTargets.js'
 import EmptyRepoWarning from './EmptyRepoWarning.jsx'
+import { useAppStore } from '../store/useAppStore.js'
 
 const PROVIDERS = ['github', 'gitlab', 'gitea', 'other']
 
@@ -15,8 +16,10 @@ function defaultPayload() {
  * @param {() => void} props.onCancel
  */
 export function GitTargetForm({ initial, onSaved, onCancel }) {
+  const isAdmin = useAppStore((s) => s.isAdmin)
   const [name, setName] = useState(initial?.name || '')
   const [payload, setPayload] = useState(initial?.payload || defaultPayload())
+  const [shared, setShared] = useState(initial?.shared || false)
   const [savedId, setSavedId] = useState(initial?.id || null)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState(null)
@@ -50,9 +53,9 @@ export function GitTargetForm({ initial, onSaved, onCancel }) {
     try {
       let result
       if (initial?.id) {
-        result = await updateGitTarget(initial.id, { name: name.trim(), payload })
+        result = await updateGitTarget(initial.id, { name: name.trim(), payload, shared })
       } else {
-        result = await createGitTarget({ name: name.trim(), payload })
+        result = await createGitTarget({ name: name.trim(), payload, shared })
       }
       setSavedId(result?.connection?.id || initial?.id)
     onSaved(result.connection)
@@ -204,6 +207,20 @@ export function GitTargetForm({ initial, onSaved, onCancel }) {
 
         {error && (
           <div style={{ color: 'var(--red)', fontSize: 13 }}>{error}</div>
+        )}
+
+        {isAdmin && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13 }}>
+            <input
+              type="checkbox"
+              checked={shared}
+              onChange={(e) => setShared(e.target.checked)}
+            />
+            <div>
+              <span style={{ color: 'var(--text-bright)', fontWeight: 500 }}>Shared target</span>
+              <span style={{ color: 'var(--text-dim)', marginLeft: 8 }}>Visible to all users in deploy flows</span>
+            </div>
+          </label>
         )}
 
         <div className="form-actions" style={{ justifyContent: 'flex-start', gap: 8 }}>

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 // Folder traversal helpers (mirrors VibeDeploy.jsx)
 function readFileEntry(entry) {
@@ -52,6 +52,75 @@ export default function VibeEditTab({ d, envId, namespace, name, gitOpsInfo, onS
   const [error, setError] = useState('')
   const folderRef = useRef(null)
   const filesRef = useRef(null)
+
+  // Exposure state — populated from git manifest on mount
+  const [exposeType, setExposeType] = useState('none')
+  const [svcPort, setSvcPort] = useState(80)
+  const [ingHost, setIngHost] = useState('')
+  const [ingPath, setIngPath] = useState('/')
+  const [ingClass, setIngClass] = useState('')
+  const [savingExposure, setSavingExposure] = useState(false)
+  const [exposureError, setExposureError] = useState('')
+
+  const gitPath = gitOpsInfo?.gitPath || ''
+
+  useEffect(() => {
+    if (!gitOpsInfo?.gitTargetId || !gitOpsInfo?.gitBranch || !gitPath) return
+    const h = { 'X-API-Key': token }
+    const u = (portainerBaseUrl || '').trim()
+    if (u && !portainerFromServer) h['X-Portainer-URL'] = u
+    fetch(`/api/vibe/manifest-exposure?gitTargetId=${gitOpsInfo.gitTargetId}&branch=${encodeURIComponent(gitOpsInfo.gitBranch)}&gitPath=${encodeURIComponent(gitPath)}`, { headers: h })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (!data) return
+        if (data.exposeType) setExposeType(data.exposeType)
+        if (data.port) setSvcPort(data.port)
+        if (data.ingHost) setIngHost(data.ingHost)
+        if (data.ingPath) setIngPath(data.ingPath)
+        if (data.ingClass) setIngClass(data.ingClass)
+      })
+      .catch(() => {})
+  }, [gitOpsInfo?.gitTargetId, gitOpsInfo?.gitBranch, gitPath])
+
+  function serverHeaders() {
+    const h = { 'Content-Type': 'application/json', 'X-API-Key': token }
+    const u = (portainerBaseUrl || '').trim()
+    if (u && !portainerFromServer) h['X-Portainer-URL'] = u
+    return h
+  }
+
+  async function handleSaveExposure() {
+    if (!gitOpsInfo?.gitTargetId || !gitPath) {
+      setExposureError('Missing git target information')
+      return
+    }
+    setSavingExposure(true)
+    setExposureError('')
+    try {
+      const res = await fetch('/api/vibe/update-exposure', {
+        method: 'POST',
+        headers: serverHeaders(),
+        body: JSON.stringify({
+          gitTargetId: gitOpsInfo.gitTargetId,
+          branch: gitOpsInfo.gitBranch,
+          gitPath,
+          appName: name,
+          ns: namespace,
+          exposeType,
+          port: svcPort,
+          ingress: exposeType === 'Ingress' ? { host: ingHost, path: ingPath, ingressClass: ingClass } : undefined,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
+      pushToast('Exposure updated — Portainer will reconcile shortly', 'ok')
+      setExposureError('')
+    } catch (e) {
+      setExposureError(e?.message || 'Update failed')
+    } finally {
+      setSavingExposure(false)
+    }
+  }
 
   // Read current runtime from live deployment
   const containers = d?.spec?.template?.spec?.containers || []
@@ -175,6 +244,53 @@ export default function VibeEditTab({ d, envId, namespace, name, gitOpsInfo, onS
           <div className="hint" style={{ marginTop: 10 }}>
             New files will be committed to the source path above. The app will restart and pick them up automatically.
             Existing app data (databases, uploads) is preserved.
+          </div>
+        </div>
+      </div>
+
+      {/* Exposure */}
+      <div className="form-section" style={{ marginBottom: 16 }}>
+        <div className="form-section-head">Exposure</div>
+        <div className="form-section-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Expose service as</label>
+            <select value={exposeType} onChange={(e) => setExposeType(e.target.value)}>
+              <option value="none">None — internal only</option>
+              <option value="NodePort">NodePort — expose on cluster node IP + port</option>
+              <option value="LoadBalancer">LoadBalancer — provision external load balancer</option>
+              <option value="Ingress">Ingress — route via ingress controller</option>
+            </select>
+          </div>
+          {(exposeType === 'NodePort' || exposeType === 'LoadBalancer') && (
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Port</label>
+              <input type="number" value={svcPort} onChange={(e) => setSvcPort(Number(e.target.value))} style={{ width: 120 }} />
+            </div>
+          )}
+          {exposeType === 'Ingress' && (
+            <>
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label>Hostname</label>
+                <input type="text" value={ingHost} onChange={(e) => setIngHost(e.target.value)} placeholder="app.example.com" />
+              </div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+                  <label>Path</label>
+                  <input type="text" value={ingPath} onChange={(e) => setIngPath(e.target.value)} placeholder="/" />
+                </div>
+                <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+                  <label>Ingress class</label>
+                  <input type="text" value={ingClass} onChange={(e) => setIngClass(e.target.value)} placeholder="nginx" />
+                </div>
+              </div>
+            </>
+          )}
+          {exposureError && <div style={{ color: 'var(--red)', fontSize: 12, fontFamily: 'var(--mono)' }}>{exposureError}</div>}
+          <div>
+            <button type="button" className="btn btn-primary btn-sm"
+              onClick={() => void handleSaveExposure()} disabled={savingExposure}>
+              {savingExposure ? 'Saving…' : 'Save Exposure'}
+            </button>
           </div>
         </div>
       </div>

@@ -70,6 +70,8 @@ export async function connectWithToken(token) {
       if (meR.ok) {
         const me = await meR.json()
         isAdmin = me.Role === 1
+        st().setUserId(String(me.Id || ''))
+        st().setUsername(me.Username || me.username || '')
       }
     } catch {
       isAdmin = false
