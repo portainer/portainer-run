@@ -13,7 +13,8 @@ import { manualRefresh } from '../services/refreshDeployments.js'
 const SERVICE_LIST_SORT = [
   { value: 'name', label: 'Name' },
   { value: 'env', label: 'Environment' },
-  { value: 'status', label: 'Status' },
+  { value: 'status', label: 'Health' },
+  { value: 'age', label: 'Created' },
 ]
 
 const STATUS_SORT_ORDER = [
@@ -287,6 +288,13 @@ export function ServicesPage() {
         return a.d.metadata.name.localeCompare(b.d.metadata.name, undefined, { sensitivity: 'base' })
       })
     }
+    if (listSort === 'age') {
+      return [...base].sort((a, b) => {
+        const at = new Date(a.d.metadata?.creationTimestamp || 0).getTime()
+        const bt = new Date(b.d.metadata?.creationTimestamp || 0).getTime()
+        return bt - at // newest first
+      })
+    }
     return base
   }, [deps, listSort])
 
@@ -457,7 +465,7 @@ export function ServicesPage() {
               <path d="M8 21h8M12 17v4" />
             </svg>
             <h3>No deployments found</h3>
-            <p>Deploy a service to get started.</p>
+            <p>Deploy an application to get started.</p>
           </div>
         ) : null}
 
