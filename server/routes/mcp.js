@@ -16,6 +16,7 @@
  */
 
 import fs from 'node:fs'
+import crypto from 'node:crypto'
 import { readBody } from '../lib/http.js'
 import { CORS } from '../lib/cors.js'
 import { CACHE_FILE } from '../config.js'
@@ -164,6 +165,8 @@ async function toolListEnvironments(req) {
 async function toolListNamespaces(req, args) {
   const { envId } = args
   if (!envId) throw new Error('envId is required')
+  // Validate envId is numeric to prevent path injection into Portainer API
+  if (!/^\d+$/.test(String(envId))) throw new Error('envId must be a numeric environment ID')
   const token = extractToken(req)
   const target = resolvePortainerTarget(req)
   if (!target) throw new Error('Cannot resolve Portainer target')
@@ -294,14 +297,15 @@ async function toolDeployVibeApp(req, args, caller) {
 async function toolGetAppStatus(req, args) {
   const { appName, envId, namespace } = args
   const token = extractToken(req)
+  const target = resolvePortainerTarget(req)
 
-  // Read from the server-side deployment cache
+  // Compute cache key the same way server/cache.js does: sha256(token:target.key)
   let deployments = []
   try {
-    if (fs.existsSync(CACHE_FILE)) {
+    if (target && fs.existsSync(CACHE_FILE)) {
       const cache = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'))
-      const key = token.slice(-8) // cache is keyed by token suffix
-      const entry = cache[key] || Object.values(cache)[0] || {}
+      const cacheKey = crypto.createHash('sha256').update(token + ':' + target.key).digest('hex')
+      const entry = cache[cacheKey] || {}
       deployments = entry.deployments || []
     }
   } catch { /* cache miss */ }
