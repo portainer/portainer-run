@@ -17,18 +17,12 @@ function NavLinks({ onNav, isAdmin, features }) {
     <>
       <div className="nav-label">Workloads</div>
       <div className="nav-section">
-        <NavLink to={ROUTES.dashboard} className={navClass} end onClick={onNav}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
-            <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
-          </svg>
-          Dashboard
-        </NavLink>
+
         <NavLink to={ROUTES.services} className={navClass} onClick={onNav}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
             <rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" />
           </svg>
-          Services
+          Applications
         </NavLink>
         {features.catalogue && (
           <NavLink to={ROUTES.catalogue} className={navClass} onClick={onNav}>

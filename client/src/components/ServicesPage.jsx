@@ -31,10 +31,10 @@ const SVC_STATUS_GROUP = {
 }
 
 const SVC_STATUS_SUBFILTER_EMPTY = {
-  workloads_down: 'No unavailable services in this view.',
-  workloads_degraded: 'No degraded services in this view.',
-  workloads_running: 'No running services in this view.',
-  no_workloads: 'No services are scaled to zero in this view.',
+  workloads_down: 'No unavailable applications in this view.',
+  workloads_degraded: 'No degraded applications in this view.',
+  workloads_running: 'No running applications in this view.',
+  no_workloads: 'No applications are scaled to zero in this view.',
 }
 
 function rowClasses(d) {
@@ -236,6 +236,22 @@ export function ServicesPage() {
   const disabledEnvs = useAppStore((s) => s.disabledEnvs)
   const envStatusClientCache = useAppStore((s) => s.envStatusClientCache)
   const setDeleteTarget = useAppStore((s) => s.setDeleteTarget)
+  const features = useAppStore((s) => s.features)
+  const [deployMenuOpen, setDeployMenuOpen] = useState(false)
+
+  const enabledDeployFeatures = [
+    features.vibeDeploy      && { label: 'Vibe Deploy',       route: ROUTES.deployVibe },
+    features.simpleDeploy    && { label: 'Simple Deploy',     route: ROUTES.deploy },
+    features.manifestBuilder && { label: 'Manifest Builder',  route: ROUTES.deployManifest },
+  ].filter(Boolean)
+
+  function handleDeployClick() {
+    if (enabledDeployFeatures.length === 1) {
+      navigate(enabledDeployFeatures[0].route)
+    } else if (enabledDeployFeatures.length > 1) {
+      setDeployMenuOpen((o) => !o)
+    }
+  }
   const pushToast = useAppStore((s) => s.pushToast)
 
   const [listSort, setListSort] = useState('name')
@@ -322,10 +338,56 @@ export function ServicesPage() {
     <div className="page active">
       <div className="page-header">
         <div>
-          <div className="page-title">Services</div>
+          <div className="page-title">Applications</div>
           <div className="page-sub">Kubernetes deployments managed via Portainer</div>
         </div>
         <div className="page-header-aside">
+          {enabledDeployFeatures.length > 0 && (
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={handleDeployClick}
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                + Deploy
+                {enabledDeployFeatures.length > 1 && (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginLeft: 2 }}>
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                )}
+              </button>
+              {deployMenuOpen && enabledDeployFeatures.length > 1 && (
+                <>
+                  <div
+                    style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+                    onClick={() => setDeployMenuOpen(false)}
+                  />
+                  <div style={{
+                    position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 100,
+                    background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 6,
+                    overflow: 'hidden', minWidth: 180, boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+                  }}>
+                    {enabledDeployFeatures.map((f) => (
+                      <button key={f.route} type="button"
+                        onClick={() => { setDeployMenuOpen(false); navigate(f.route) }}
+                        style={{
+                          display: 'block', width: '100%', textAlign: 'left',
+                          padding: '9px 14px', fontSize: 13, fontFamily: 'var(--mono)',
+                          background: 'transparent', border: 'none', cursor: 'pointer',
+                          color: 'var(--text)', borderBottom: '1px solid var(--border2)',
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg3)'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           <div
             className="cache-header-status"
             title={cacheStatus === 'cached' ? 'Data was restored from your last session; fetching live data from the cluster' : undefined}
@@ -356,7 +418,7 @@ export function ServicesPage() {
           activeSegmentId={activeSummarySegmentId}
           onSelect={onSummarySegmentSelect}
           segments={[
-            { id: 't', type: 'total', value: String(summary.total), label: 'Total services' },
+            { id: 't', type: 'total', value: String(summary.total), label: 'Total applications' },
             {
               id: 'r',
               type: 'status-healthy',
@@ -445,11 +507,11 @@ export function ServicesPage() {
               onSubFilterChange={setListSubFilter}
               sortOptions={SERVICE_LIST_SORT}
               defaultSort="name"
-              searchPlaceholder="Filter services…"
-              emptyMessage="No services to show"
-              noResultsMessage="No services match"
+              searchPlaceholder="Filter applications…"
+              emptyMessage="No applications to show"
+              noResultsMessage="No applications match"
               includeZeroCountSubFilters
-              getSubFilterEmptyMessage={(key) => SVC_STATUS_SUBFILTER_EMPTY[key] || 'No services match this filter.'}
+              getSubFilterEmptyMessage={(key) => SVC_STATUS_SUBFILTER_EMPTY[key] || 'No applications match this filter.'}
               getItemGroup={({ d }, sortBy) => (sortBy === 'status' ? primaryServicePartition(d) : null)}
               getGroupInfo={(key) => SVC_STATUS_GROUP[key] || { name: String(key), description: '', icon: null }}
               getGroupOrder={(sortBy) => (sortBy === 'status' ? STATUS_SORT_ORDER : null)}
