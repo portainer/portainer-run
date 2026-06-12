@@ -201,7 +201,7 @@ Session: ${ctx}`,
     const deps = visibleDeployments(useAppStore.getState())
     const segs = location.pathname.split('/').filter(Boolean)
     const fromRoute =
-      segs[0] === 'services' && segs.length >= 4
+      segs[0] === 'applications' && segs.length >= 4
         ? deps.find(
             (d) =>
               d.metadata.name === segs[3] &&
@@ -261,8 +261,8 @@ PORTAINER RUN OVERVIEW:
 - All deployments go through GitOps. Portainer Run generates Kubernetes manifests, commits them to a user-configured Git target, and Portainer deploys via a GitOps stack that polls the repository for changes.
 ${deployFeatures}
 - Git Targets: repositories where manifests are committed. Each deployment references its own Git target. Credentials stored encrypted server-side.
-- Services page: lists all deployments tagged managed-by=portainer-run. Shows status, replicas, exposure, and age.
-- Editing a running service commits an updated manifest to Git — Portainer reconciles automatically on the next poll cycle.
+- Applications page: lists all deployments tagged managed-by=portainer-run. Shows status, replicas, exposure, and age.
+- Editing a running application commits an updated manifest to Git — Portainer reconciles automatically on the next poll cycle.
 
 SCOPE: Only answer questions about container operations, deployments, Kubernetes workloads, logs, metrics, application health, and Portainer Run features. Politely decline anything outside this scope.
 
@@ -545,7 +545,7 @@ ${deployInstructions}`
             <div className="chat-thinking">
               <div className="spinner" style={{ width: 10, height: 10, borderWidth: 2 }} />
               {thinking.phase === 'fetch'
-                ? 'Fetching diagnostics for ' + (thinking.name || 'service') + '...'
+                ? 'Fetching diagnostics for ' + (thinking.name || 'application') + '...'
                 : 'Analysing...'}
             </div>
           </div>

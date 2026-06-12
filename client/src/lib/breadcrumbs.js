@@ -27,7 +27,7 @@ export function getBreadcrumbItems(pathname) {
   }
 
   if (path === ROUTES.services) {
-    return [{ label: 'Services', current: true }]
+    return [{ label: 'Applications', current: true }]
   }
 
   const serviceMatch = matchPath(
@@ -40,12 +40,12 @@ export function getBreadcrumbItems(pathname) {
     const tabLabel = SERVICE_TAB_LABELS[tabKey] || tabKey
     if (tabKey === 'overview') {
       return [
-        { label: 'Services', to: ROUTES.services },
+        { label: 'Applications', to: ROUTES.services },
         { label: name, current: true },
       ]
     }
     return [
-      { label: 'Services', to: ROUTES.services },
+      { label: 'Applications', to: ROUTES.services },
       { label: name, to: serviceDetailPath(envId, namespace, name, 'overview') },
       { label: tabLabel, current: true },
     ]
