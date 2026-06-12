@@ -82,7 +82,7 @@ export async function handleConnections(req, res, pathname) {
       if (!isAdmin && conn.owner_id !== userId && !conn.shared) {
         return json(res, 403, { error: 'Forbidden' })
       }
-      return json(res, 200, { connection: conn })
+      return json(res, 200, { connection: sanitize(conn) })
     }
 
     // PUT /api/connections/:id

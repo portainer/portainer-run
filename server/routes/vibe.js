@@ -9,6 +9,7 @@ import {
 } from '../proxy/git.js'
 import { buildManifests, serializeManifests, buildManifestPath } from '../lib/manifestSerialize.js'
 import { resolvePortainerTarget } from '../resolve-portainer.js'
+import { resolveCallerIdentity } from '../lib/identity.js'
 import https from 'node:https'
 import http from 'node:http'
 
@@ -386,9 +387,20 @@ async function handleVibeDeploy(req, res) {
   const conn = getConnectionById(gitTargetId)
   if (!conn) return json(res, 404, { error: 'Git target not found' })
 
-  // For git source, load the source connection (may differ from manifests connection)
+  // Verify the caller can access the manifests git target (owner or shared)
+  const callerIdentity = await resolveCallerIdentity(req)
+  const callerId = callerIdentity?.userId || '_unknown'
+  const callerIsAdmin = callerIdentity?.isAdmin || false
+  if (!callerIsAdmin && conn.owner_id !== callerId && !conn.shared) {
+    return json(res, 403, { error: 'Forbidden — git target not accessible' })
+  }
+
+  // For git source, load the source connection and verify access separately
   const sourceConn = isGitSource ? getConnectionById(gitSource.gitTargetId) : conn
   if (!sourceConn) return json(res, 404, { error: 'Source git target not found' })
+  if (isGitSource && !callerIsAdmin && sourceConn.owner_id !== callerId && !sourceConn.shared) {
+    return json(res, 403, { error: 'Forbidden — source git target not accessible' })
+  }
 
   const safeApp = sanitizeStackName(appName)
   const safePrefix = sanitizeGitPath(pathPrefix || conn.payload.pathPrefix || '')
@@ -701,6 +713,10 @@ async function handleVibeUpdate(req, res) {
 
   const conn = getConnectionById(gitTargetId)
   if (!conn) return json(res, 404, { error: 'Git target not found' })
+  const viCaller1 = await resolveCallerIdentity(req)
+  if (!viCaller1?.isAdmin && conn.owner_id !== (viCaller1?.userId || '_unknown') && !conn.shared) {
+    return json(res, 403, { error: 'Forbidden — git target not accessible' })
+  }
 
   const safeSourcePath = sanitizeGitPath(sourcePath)
 
@@ -761,6 +777,10 @@ async function handleVibeUpdateExposure(req, res) {
 
   const conn = getConnectionById(gitTargetId)
   if (!conn) return json(res, 404, { error: 'Git target not found' })
+  const viCaller2 = await resolveCallerIdentity(req)
+  if (!viCaller2?.isAdmin && conn.owner_id !== (viCaller2?.userId || '_unknown') && !conn.shared) {
+    return json(res, 403, { error: 'Forbidden — git target not accessible' })
+  }
 
   try {
     // Fetch current manifest
@@ -855,6 +875,10 @@ async function handleVibeManifestExposure(req, res) {
 
   const conn = getConnectionById(gitTargetId)
   if (!conn) return json(res, 404, { error: 'Git target not found' })
+  const viCaller3 = await resolveCallerIdentity(req)
+  if (!viCaller3?.isAdmin && conn.owner_id !== (viCaller3?.userId || '_unknown') && !conn.shared) {
+    return json(res, 403, { error: 'Forbidden — git target not accessible' })
+  }
 
   try {
     const content = await fetchFile(conn.payload, branch, gitPath)

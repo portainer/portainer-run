@@ -1,6 +1,7 @@
 import { readBody } from '../lib/http.js'
 import { CORS } from '../lib/cors.js'
 import { getConnectionById } from '../models/connection.js'
+import { resolveCallerIdentity } from '../lib/identity.js'
 import { commitFiles, ensureBranch, buildRepoHttpsUrl, deleteFile, deleteDirectory, fetchFile } from '../proxy/git.js'
 import { buildManifests, serializeManifests, buildManifestPath } from '../lib/manifestSerialize.js'
 import { serializeManifestBuilder } from '../lib/manifestBuilderSerialize.js'
@@ -81,6 +82,22 @@ async function handleDeploy(req, res) {
 
   const conn = getConnectionById(gitTargetId)
   if (!conn) return json(res, 404, { error: 'Git target not found' })
+  const goCallerD = await resolveCallerIdentity(req)
+  if (!goCallerD?.isAdmin && conn.owner_id !== (goCallerD?.userId || '_unknown') && !conn.shared) {
+    return json(res, 403, { error: 'Forbidden — git target not accessible' })
+  }
+  const goCallerC = await resolveCallerIdentity(req)
+  if (!goCallerC?.isAdmin && conn.owner_id !== (goCallerC?.userId || '_unknown') && !conn.shared) {
+    return json(res, 403, { error: 'Forbidden — git target not accessible' })
+  }
+  const goCallerB = await resolveCallerIdentity(req)
+  if (!goCallerB?.isAdmin && conn.owner_id !== (goCallerB?.userId || '_unknown') && !conn.shared) {
+    return json(res, 403, { error: 'Forbidden — git target not accessible' })
+  }
+  const goCallerA = await resolveCallerIdentity(req)
+  if (!goCallerA?.isAdmin && conn.owner_id !== (goCallerA?.userId || '_unknown') && !conn.shared) {
+    return json(res, 403, { error: 'Forbidden — git target not accessible' })
+  }
 
   // Determine which deploy path to use
   const isManifestBuilder = Boolean(manifestBuilderParams)
