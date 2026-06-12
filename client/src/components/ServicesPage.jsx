@@ -347,7 +347,7 @@ export function ServicesPage() {
       <div className="page-header">
         <div>
           <div className="page-title">Applications</div>
-          <div className="page-sub">Kubernetes deployments managed via Portainer</div>
+          <div className="page-sub">Your deployed applications, across all environments</div>
         </div>
         <div className="page-header-aside">
           {enabledDeployFeatures.length > 0 && (
