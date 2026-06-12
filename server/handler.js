@@ -7,6 +7,11 @@ import {
   BASE_DOMAIN,
   OPENAI_KEY,
   PORTAINER_URL,
+  FEATURE_VIBE_DEPLOY,
+  FEATURE_SIMPLE_DEPLOY,
+  FEATURE_MANIFEST_BUILDER,
+  FEATURE_CATALOGUE,
+  FEATURE_SECRETS,
 } from './config.js'
 import { handleCache } from './cache.js'
 import { handleEnvStatus } from './env-status.js'
@@ -19,6 +24,7 @@ import { handleConnections } from './routes/connections.js'
 import { handleGitOps } from './routes/gitops.js'
 import { handleHelm } from './routes/helm.js'
 import { handleVibe } from './routes/vibe.js'
+import { handleMcp } from './routes/mcp.js'
 
 /**
  * @param {import('http').IncomingMessage} req
@@ -43,6 +49,13 @@ export async function handleRequest(req, res) {
         aiAvailable: !!(ANTHROPIC_KEY || OPENAI_KEY),
         aiProvider: AI_PROVIDER,
         baseDomain: BASE_DOMAIN,
+        features: {
+          vibeDeploy:      FEATURE_VIBE_DEPLOY,
+          simpleDeploy:    FEATURE_SIMPLE_DEPLOY,
+          manifestBuilder: FEATURE_MANIFEST_BUILDER,
+          catalogue:       FEATURE_CATALOGUE,
+          secrets:         FEATURE_SECRETS,
+        },
       }),
     )
     return
@@ -114,6 +127,12 @@ export async function handleRequest(req, res) {
   if (pathname.startsWith('/api/helm')) {
     const handled = await handleHelm(req, res, pathname)
     if (handled !== null) return
+  }
+
+  // MCP (Model Context Protocol) endpoint
+  if (pathname === '/mcp') {
+    await handleMcp(req, res)
+    return
   }
 
   if (tryServeStatic(pathname, res)) return

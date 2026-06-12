@@ -348,13 +348,6 @@ export function ServicesPage() {
             </svg>
             Refresh
           </button>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={() => navigate(ROUTES.deploy)}
-          >
-            + Deploy
-          </button>
         </div>
       </div>
 

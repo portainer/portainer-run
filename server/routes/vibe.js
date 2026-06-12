@@ -173,12 +173,14 @@ function buildVibeManifests({
     'managed-by': 'portainer-run',
   }
 
+  // For git source deployments, there are no source files in the manifests repo
+  // to clean up on delete — so the source path annotation is omitted.
   const annotations = {
     'portainer-run/deploy-type':      'vibe',
     'portainer-run/git-target-id':    gitopsAnnotations.gitTargetId,
     'portainer-run/git-branch':       gitopsAnnotations.gitBranch,
     'portainer-run/git-path':         gitopsAnnotations.gitPath,
-    'portainer-run/vibe-source-path': gitSourcePath,
+    ...(gitSourcePath ? { 'portainer-run/vibe-source-path': gitSourcePath } : {}),
   }
 
   // PVC
@@ -215,7 +217,9 @@ function buildVibeManifests({
         ? `git clone --depth 1 --branch ${gitBranch} https://${'${GIT_USERNAME}'}:${'${GIT_TOKEN}'}@${gitRepoUrl.replace(/^https?:\/\//, '')} /tmp/repo`
         : `git clone --depth 1 --branch ${gitBranch} ${gitRepoUrl} /tmp/repo`,
       `mkdir -p ${workDirSafe}`,
-      `cp -r /tmp/repo/${gitSourcePath}/. ${workDirSafe}/`,
+      gitSourcePath
+        ? `cp -r /tmp/repo/${gitSourcePath}/. ${workDirSafe}/`
+        : `cp -r /tmp/repo/. ${workDirSafe}/`,
       `rm -rf /tmp/repo`,
     ].join(' && '),
   ]
@@ -368,24 +372,37 @@ async function handleVibeDeploy(req, res) {
     return json(res, 400, { error: 'deployParams.appName and deployParams.ns are required' })
   }
 
-  const { sourceFiles } = vibeParams
-  if (!Array.isArray(sourceFiles) || sourceFiles.length === 0) {
+  const { sourceFiles, sourceType, gitSource } = vibeParams
+  const isGitSource = sourceType === 'git' && gitSource?.gitTargetId
+
+  // Validate source
+  if (!isGitSource && (!Array.isArray(sourceFiles) || sourceFiles.length === 0)) {
     return json(res, 400, { error: 'vibeParams.sourceFiles must be a non-empty array' })
+  }
+  if (isGitSource && (!gitSource.gitTargetId || !gitSource.branch)) {
+    return json(res, 400, { error: 'gitSource.gitTargetId and gitSource.branch are required' })
   }
 
   const conn = getConnectionById(gitTargetId)
   if (!conn) return json(res, 404, { error: 'Git target not found' })
+
+  // For git source, load the source connection (may differ from manifests connection)
+  const sourceConn = isGitSource ? getConnectionById(gitSource.gitTargetId) : conn
+  if (!sourceConn) return json(res, 404, { error: 'Source git target not found' })
 
   const safeApp = sanitizeStackName(appName)
   const safePrefix = sanitizeGitPath(pathPrefix || conn.payload.pathPrefix || '')
   const safeEnvName = sanitizeGitPath(
     (envName || String(envId))
       .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')   // collapse runs of non-alphanumeric to single hyphen
-      .replace(/^-+|-+$/g, '')        // trim leading/trailing hyphens
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
   )
   const gitToken = conn.payload.token || ''
   const gitUsername = conn.payload.username || ''
+  // Source credentials come from the source connection, not the manifests connection
+  const sourceGitToken = sourceConn.payload.token || ''
+  const sourceGitUsername = sourceConn.payload.username || ''
 
   // Paths: <prefix>/<envName>/<ns>/<appName>.yaml and <prefix>/<envName>/<ns>/<appName>/src/
   const envPrefix = [safePrefix, safeEnvName].filter(Boolean).join('/')
@@ -396,45 +413,61 @@ async function handleVibeDeploy(req, res) {
     // 1. Ensure branch exists
     await ensureBranch(conn.payload, branch)
 
-    const repoUrl = buildRepoHttpsUrl(conn.payload)
+    const repoUrl = isGitSource
+      ? buildRepoHttpsUrl(sourceConn.payload)
+      : buildRepoHttpsUrl(conn.payload)
     const gitopsAnnotations = { gitTargetId, gitBranch: branch, gitPath: manifestPath }
 
-    // 2. Commit source files to git
+    // 2. Commit source files to manifests git (upload mode only)
+    //    Git source mode: files stay in their own repo — no commit needed here.
     const { runtime } = vibeParams
-    let sourceCommits = sourceFiles
-      .filter((f) => f.path && typeof f.content === 'string')
-      .map((f) => ({
-        path: `${sourcePath}/${sanitizeGitPath(f.path)}`,
-        content: f.content,
-      }))
+    if (!isGitSource) {
+      let sourceCommits = sourceFiles
+        .filter((f) => f.path && typeof f.content === 'string')
+        .map((f) => ({
+          path: `${sourcePath}/${sanitizeGitPath(f.path)}`,
+          content: f.content,
+        }))
 
-    if (sourceCommits.length === 0) {
-      return json(res, 400, { error: 'No valid source files to commit' })
-    }
+      if (sourceCommits.length === 0) {
+        return json(res, 400, { error: 'No valid source files to commit' })
+      }
 
-    // For nginx (static sites), if there is exactly one HTML file and it is not
-    // named index.html, rename it — nginx will serve a 403 otherwise.
-    if (runtime === 'nginx') {
-      const hasIndex = sourceCommits.some((f) => f.path.endsWith('/index.html'))
-      if (!hasIndex) {
-        const htmlFiles = sourceCommits.filter((f) => f.path.match(/\.html?$/i))
-        if (htmlFiles.length === 1) {
-          const dir = htmlFiles[0].path.replace(/\/[^/]+$/, '')
-          sourceCommits = sourceCommits.map((f) =>
-            f === htmlFiles[0] ? { ...f, path: `${dir}/index.html` } : f
-          )
+      // For nginx, rename single non-index HTML file to index.html
+      if (runtime === 'nginx') {
+        const hasIndex = sourceCommits.some((f) => f.path.endsWith('/index.html'))
+        if (!hasIndex) {
+          const htmlFiles = sourceCommits.filter((f) => f.path.match(/\.html?$/i))
+          if (htmlFiles.length === 1) {
+            const dir = htmlFiles[0].path.replace(/\/[^/]+$/, '')
+            sourceCommits = sourceCommits.map((f) =>
+              f === htmlFiles[0] ? { ...f, path: `${dir}/index.html` } : f
+            )
+          }
         }
       }
+
+      await commitFiles(
+        conn.payload,
+        branch,
+        `vibe: commit source for ${safeApp}`,
+        sourceCommits,
+      )
     }
 
-    await commitFiles(
-      conn.payload,
-      branch,
-      `vibe: commit source for ${safeApp}`,
-      sourceCommits,
-    )
-
     // 3. Build Kubernetes manifests
+    // For git source: init container clones from the source repo directly.
+    // For upload: init container clones from the manifests repo source path.
+    const initCloneUrl = isGitSource
+      ? buildRepoHttpsUrl(sourceConn.payload)
+      : buildRepoHttpsUrl(conn.payload)
+    const initBranch = isGitSource ? gitSource.branch : branch
+    const initSourcePath = isGitSource
+      ? (gitSource.path ? sanitizeGitPath(gitSource.path) : '')
+      : sourcePath
+    const initCredToken = isGitSource ? sourceGitToken : gitToken
+    const initCredUsername = isGitSource ? sourceGitUsername : gitUsername
+
     const manifests = buildVibeManifests({
       appName: safeApp,
       ns,
@@ -444,11 +477,11 @@ async function handleVibeDeploy(req, res) {
       servicePorts: servicePorts || [3000],
       ingress: ingress || {},
       gitopsAnnotations,
-      gitRepoUrl: repoUrl,
-      gitBranch: branch,
-      gitSourcePath: sourcePath,
-      gitUsername,
-      gitToken,
+      gitRepoUrl: initCloneUrl,
+      gitBranch: initBranch,
+      gitSourcePath: initSourcePath,
+      gitUsername: initCredUsername,
+      gitToken: initCredToken,
     })
 
     // 4. Serialize and commit manifests
@@ -461,29 +494,27 @@ async function handleVibeDeploy(req, res) {
       [{ path: manifestPath, content: yamlContent }],
     )
 
-    // 5. Create the git credentials Secret in Kubernetes.
-    //    Done after the manifest commit but before stack creation — Portainer
-    //    won't start reconciling until the stack exists, so the Secret is
-    //    guaranteed to be present before the init container runs.
-    if (gitToken) {
+    // 5. Create the git credentials Secret in Kubernetes using SOURCE repo credentials.
+    //    The init container needs credentials for the repo it clones from.
+    if (initCredToken) {
       await createKubernetesSecret(req, {
         envId,
         ns,
         name: `${safeApp}-git-credentials`,
         data: {
-          username: gitUsername || 'oauth2',
-          token: gitToken,
+          username: initCredUsername || 'oauth2',
+          token: initCredToken,
         },
       })
     }
 
-    // 6. Create Portainer GitOps stack
+    // 6. Create Portainer GitOps stack (always uses manifests repo credentials)
     const interval = sanitizePollInterval(pollInterval)
     const stackResult = await createPortainerGitOpsStack(req, {
       envId,
       appName: safeApp,
       ns,
-      repoUrl,
+      repoUrl: buildRepoHttpsUrl(conn.payload),
       branch,
       filePath: manifestPath,
       username: gitUsername,

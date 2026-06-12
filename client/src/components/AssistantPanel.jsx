@@ -26,6 +26,7 @@ export function AssistantPanel({ open, onClose }) {
   const location = useLocation()
   const navigate = useNavigate()
   const token = useAppStore((s) => s.token)
+  const features = useAppStore((s) => s.features)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [rows, setRows] = useState(/** @type {Array<Record<string, unknown>>} */ ([]))
@@ -82,7 +83,11 @@ export function AssistantPanel({ open, onClose }) {
     addUser(text, isCompose ? displayText : text)
     historyRef.current = [...historyRef.current, { role: 'user', content: text }]
 
-    if (isCompose) {
+    if (isCompose && !features.simpleDeploy && !features.manifestBuilder) {
+      // Vibe Deploy only — compose files aren't applicable. Let the normal
+      // chat path handle it so the AI can explain that source files are needed.
+      setThinking({ phase: 'think' })
+    } else if (isCompose) {
       setThinking({ phase: 'analyse' })
       try {
         const ctx = buildAssistantContext(location.pathname)
@@ -150,7 +155,15 @@ Session: ${ctx}`,
                     label: 'Open in Deploy form',
                     secondary: false,
                     onClick: () => {
-                      navigate(ROUTES.deploy, { state: { deployConfigFromAssistant: cfg } })
+                      // Route to first enabled deploy feature
+                      const deployRoute = features.vibeDeploy
+                        ? ROUTES.deployVibe
+                        : features.simpleDeploy
+                        ? ROUTES.deploy
+                        : features.manifestBuilder
+                        ? ROUTES.deployManifest
+                        : ROUTES.dashboard
+                      navigate(deployRoute, { state: { deployConfigFromAssistant: cfg } })
                     },
                   },
                   { label: 'Cancel', secondary: true, onClick: () => {} },
@@ -213,24 +226,24 @@ Session: ${ctx}`,
     const diagnosticNote = diagnosticData
       ? 'LIVE DIAGNOSTIC DATA IS PROVIDED BELOW. You have direct access to the logs, events, and pod status. Analyse them and answer immediately. Do NOT say you lack access or ask the user to check anything themselves.'
       : ''
-    const systemPrompt = `You are the built-in assistant for Portainer Run — a lightweight Internal Developer Portal (IDP) for Kubernetes, backed by Portainer. You help users deploy, manage, and troubleshoot containerised applications.
+    const features = useAppStore.getState().features
+    const vibeOnly = features.vibeDeploy && !features.simpleDeploy && !features.manifestBuilder
 
-${diagnosticNote}
+    const deployFeatures = [
+      features.vibeDeploy      && '- Vibe Deploy: drop AI-generated source files (Node, Python, Ruby, PHP, static HTML) — runtime detected automatically, dependencies installed, deployed via GitOps. Best for apps from AI coding tools.',
+      features.simpleDeploy    && '- Simple Deploy: a simplified form for single-service workloads (one or more containers sharing a pod). Good for stateless apps with a container image.',
+      features.manifestBuilder && '- Manifest Builder: a guided form for any Kubernetes workload type — Deployments, StatefulSets, DaemonSets, CronJobs, Services, Ingresses, HPAs. Produces Kubernetes-native manifests committed to Git.',
+      features.catalogue       && '- Catalogue: pre-built templates in three formats — Run (simple deploy), Kubernetes (native manifest), and Helm charts.',
+    ].filter(Boolean).join('\n')
 
-PORTAINER RUN OVERVIEW:
-- All deployments go through GitOps. Portainer Run generates Kubernetes manifests, commits them to a user-configured Git target, and Portainer deploys via a GitOps stack that polls the repository for changes.
-- Simple Deploy: a simplified form for single-service workloads (one or more containers sharing a pod). Good for stateless apps.
-- Manifest Builder: a guided form for any Kubernetes workload type — Deployments, StatefulSets, DaemonSets, CronJobs, Services, Ingresses, HPAs. Produces Kubernetes-native manifests committed to Git.
-- Catalogue: pre-built templates in three formats — Run (simple deploy), Kubernetes (native manifest), and Helm (Bitnami-style Helm charts deployed via Portainer's Helm stack API).
-- Git Targets: repositories where manifests are committed. Each deployment references its own Git target. Credentials stored encrypted server-side.
-- Services page: lists all deployments tagged managed-by=portainer-run. Shows status, replicas, exposure, and age.
-- Editing a running service commits an updated manifest to Git — Portainer reconciles automatically on the next poll cycle.
-
-SCOPE: Only answer questions about container operations, deployments, Kubernetes workloads, logs, metrics, application health, and Portainer Run features. Politely decline anything outside this scope.
-
-Session context: ${ctx}${diagnosticData}
-
-IMPORTANT RULES:
+    const deployInstructions = vibeOnly
+      ? `IMPORTANT RULES:
+- If the user asks to deploy ANYTHING — an app, a service, wordpress, anything — do NOT attempt to generate a deployment config, search for docker-compose files, or suggest container images. Vibe Deploy is the only deployment method available on this instance.
+- Instead, respond with this exact message: "To deploy an app here, use an AI coding tool (like Claude) to build your application, then go to **Vibe Deploy** and upload the generated files — Portainer Run handles the rest automatically."
+- If the user asks what Vibe Deploy is or how it works, explain: it accepts source files (Node.js, Python, Ruby, PHP, or static HTML) generated by AI coding tools, detects the runtime automatically, installs dependencies, and deploys to Kubernetes via GitOps.
+- If the user asks about scaling, health, logs, or status of existing services, answer normally.
+- Never suggest using docker-compose, container images, or any other deployment method — they are not available.`
+      : `IMPORTANT RULES:
 - If the user asks to SCALE an existing service (e.g. "scale nginx to 3"), respond in plain English confirming what you will do. State clearly: "I'll scale [name] to [N] instances." Do NOT output a deploy-config block for scale requests.
 - If the user asks to DEPLOY a NEW service that does not exist yet: FIRST use the web_search tool to find the vendor's official docker-compose.yml. Search priority order: (1) the vendor's own GitHub repo (e.g. "wordpress docker-compose.yml site:github.com/docker"), (2) Docker Hub official image page (e.g. "mysql docker hub official docker-compose"), (3) the vendor's official documentation. Use the REAL volumes, env vars, ports, and image tags from that official source — do NOT invent them from memory. After searching, output ONLY a deploy-config JSON block using this exact format — the code fence tag must be exactly \`\`\`deploy-config with no trailing text, followed immediately by a newline, then the JSON, then a closing \`\`\` on its own line. No prose before or after the fence. ALWAYS populate the env arrays with the correct environment variables for each container — never leave env as an empty array [] for containers that require configuration. Include ALL volumes defined in the official compose file. Example (WordPress + MySQL, two containers, env vars fully populated, localhost rewrite applied):
 \`\`\`deploy-config
@@ -239,6 +252,23 @@ IMPORTANT RULES:
 Use NodePort exposure by default unless the user specifies otherwise. All containers share the same network namespace — inter-container hostnames MUST be rewritten to localhost: "mysql" → "localhost", "redis" → "localhost:6379", "rabbitmq" → "localhost", etc. Each container must have its own env array with only its own variables — never merge env vars across containers.
 - If LIVE DIAGNOSTIC DATA is provided above, you already have the logs, events, and pod status. Analyse them immediately and give a specific answer. NEVER ask the user to go check the logs or metrics themselves — you already have that data. NEVER output a JSON action plan. Just answer in plain English based on what you can see.
 - Never use Kubernetes jargon. Say "instances" not "replicas", "stopped" not "CrashLoopBackOff", "restarting" not "CrashLoopBackOff".`
+
+    const systemPrompt = `You are the built-in assistant for Portainer Run — a lightweight Internal Developer Portal (IDP) for Kubernetes, backed by Portainer. You help users deploy, manage, and troubleshoot containerised applications.
+
+${diagnosticNote}
+
+PORTAINER RUN OVERVIEW:
+- All deployments go through GitOps. Portainer Run generates Kubernetes manifests, commits them to a user-configured Git target, and Portainer deploys via a GitOps stack that polls the repository for changes.
+${deployFeatures}
+- Git Targets: repositories where manifests are committed. Each deployment references its own Git target. Credentials stored encrypted server-side.
+- Services page: lists all deployments tagged managed-by=portainer-run. Shows status, replicas, exposure, and age.
+- Editing a running service commits an updated manifest to Git — Portainer reconciles automatically on the next poll cycle.
+
+SCOPE: Only answer questions about container operations, deployments, Kubernetes workloads, logs, metrics, application health, and Portainer Run features. Politely decline anything outside this scope.
+
+Session context: ${ctx}${diagnosticData}
+
+${deployInstructions}`
 
     const messages = diagnosticData
       ? historyRef.current.slice(-2)
@@ -249,8 +279,8 @@ Use NodePort exposure by default unless the user specifies otherwise. All contai
     setThinking(null)
 
     // Deploy requests use web search so the model can find official docker-compose files.
-    // Health/diagnostic requests don't need it (we already supply live data).
-    const isDeployRequest = !isScaleQ && !isHealthQ && !diagnosticData
+    // Not applicable in vibe-only mode — no deploy-config generation happens there.
+    const isDeployRequest = !vibeOnly && !isScaleQ && !isHealthQ && !diagnosticData
     const toolsPayload = isDeployRequest
       ? [{ type: 'web_search_20250305', name: 'web_search' }]
       : undefined
@@ -291,7 +321,7 @@ Use NodePort exposure by default unless the user specifies otherwise. All contai
       })
 
       // Lenient regex: optional whitespace after tag name, closing fence may have no preceding newline
-      const deployMatch = fullText.match(/```deploy-config[^\n`]*\n?([\s\S]*?)```/)
+      const deployMatch = !vibeOnly && fullText.match(/```deploy-config[^\n`]*\n?([\s\S]*?)```/)
       if (deployMatch) {
         let cfg = null
         let parseErr = null

@@ -11,8 +11,8 @@ function navClass({ isActive }) {
   return `nav-item${isActive ? ' active' : ''}`
 }
 
-function NavLinks({ onNav, isAdmin }) {
-  const wrap = (fn) => () => { fn?.() }
+function NavLinks({ onNav, isAdmin, features }) {
+  const username = useAppStore((s) => s.username)
   return (
     <>
       <div className="nav-label">Workloads</div>
@@ -30,44 +30,58 @@ function NavLinks({ onNav, isAdmin }) {
           </svg>
           Services
         </NavLink>
-        <NavLink to={ROUTES.catalogue} className={navClass} onClick={onNav}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
-            <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
-          </svg>
-          Catalogue
-        </NavLink>
-        <NavLink to={ROUTES.secrets} className={navClass} onClick={onNav}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
-          </svg>
-          Secrets
-        </NavLink>
+        {features.catalogue && (
+          <NavLink to={ROUTES.catalogue} className={navClass} onClick={onNav}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
+            </svg>
+            Catalogue
+          </NavLink>
+        )}
+        {features.secrets && (
+          <NavLink to={ROUTES.secrets} className={navClass} onClick={onNav}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            Secrets
+          </NavLink>
+        )}
       </div>
 
-      <div className="nav-label" style={{ marginTop: 16 }}>Deploy</div>
-      <div className="nav-section">
-        <NavLink to={ROUTES.deploy} className={navClass} onClick={onNav}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <path d="M12 5v14M5 12l7-7 7 7" />
-          </svg>
-          Simple Deploy
-        </NavLink>
-        <NavLink to={ROUTES.deployManifest} className={navClass} onClick={onNav}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-            <line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
-          </svg>
-          Manifest Builder
-        </NavLink>
-        <NavLink to={ROUTES.deployVibe} className={navClass} onClick={onNav}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-          </svg>
-          Vibe Deploy
-        </NavLink>
-      </div>
+      {(features.simpleDeploy || features.manifestBuilder || features.vibeDeploy) && (
+        <>
+          <div className="nav-label" style={{ marginTop: 16 }}>Deploy</div>
+          <div className="nav-section">
+            {features.simpleDeploy && (
+              <NavLink to={ROUTES.deploy} className={navClass} onClick={onNav}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M12 5v14M5 12l7-7 7 7" />
+                </svg>
+                Simple Deploy
+              </NavLink>
+            )}
+            {features.manifestBuilder && (
+              <NavLink to={ROUTES.deployManifest} className={navClass} onClick={onNav}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
+                </svg>
+                Manifest Builder
+              </NavLink>
+            )}
+            {features.vibeDeploy && (
+              <NavLink to={ROUTES.deployVibe} className={navClass} onClick={onNav}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                </svg>
+                Vibe Deploy
+              </NavLink>
+            )}
+          </div>
+        </>
+      )}
 
       <div className="nav-label" style={{ marginTop: 16 }}>GitOps</div>
       <div className="nav-section">
@@ -96,6 +110,27 @@ function NavLinks({ onNav, isAdmin }) {
 
       <div className="nav-label" style={{ marginTop: 16 }}>Session</div>
       <div className="nav-section">
+        {username && (
+          <div style={{
+            padding: '6px 10px', marginBottom: 4,
+            fontSize: 12, fontFamily: 'var(--mono)',
+            color: 'var(--text-dim)',
+            display: 'flex', alignItems: 'center', gap: 7,
+          }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" style={{ flexShrink: 0 }}>
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {username}
+            </span>
+            {isAdmin && (
+              <span style={{ fontSize: 9, background: 'rgba(14,165,233,0.15)', color: 'var(--accent)', border: '1px solid rgba(14,165,233,0.3)', borderRadius: 3, padding: '1px 5px', flexShrink: 0 }}>
+                admin
+              </span>
+            )}
+          </div>
+        )}
         <div className="nav-item" role="button" tabIndex={0}
           onClick={() => { onNav?.(); disconnect() }}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNav?.(); disconnect() } }}
@@ -114,6 +149,7 @@ export function MainLayout() {
   const environments = useAppStore((s) => s.environments)
   const disabledEnvs = useAppStore((s) => s.disabledEnvs)
   const isAdmin = useAppStore((s) => s.isAdmin)
+  const features = useAppStore((s) => s.features)
   const isAiAvailable = useAppStore((s) => s.isAiAvailable)
   const setChatOpen = useAppStore((s) => s.setChatOpen)
   const chatOpen = useAppStore((s) => s.chatOpen)
@@ -211,7 +247,7 @@ export function MainLayout() {
       {isMobile && menuOpen && (
         <div className="mobile-nav-overlay" onClick={(e) => { if (e.target === e.currentTarget) setMenuOpen(false) }}>
           <nav className="mobile-nav-drawer">
-            <NavLinks onNav={() => setMenuOpen(false)} isAdmin={isAdmin} />
+            <NavLinks onNav={() => setMenuOpen(false)} isAdmin={isAdmin} features={features} />
           </nav>
         </div>
       )}
@@ -219,7 +255,7 @@ export function MainLayout() {
       <div id="mainApp" className="main" style={{ display: 'grid' }}>
         {!isMobile && (
           <nav>
-            <NavLinks isAdmin={isAdmin} />
+            <NavLinks isAdmin={isAdmin} features={features} />
           </nav>
         )}
         <div className="content">

@@ -32,62 +32,95 @@ function decrypt(stored) {
   return JSON.parse(decrypted.toString('utf8'))
 }
 
+function rowToConn(conn) {
+  return {
+    id: conn.id,
+    name: conn.name,
+    type: conn.type,
+    shared: Boolean(conn.shared),
+    owner_id: conn.owner_id,
+    created_at: conn.created_at,
+    payload: decrypt(conn.encrypted_payload),
+  }
+}
+
 /**
  * @param {string} name
- * @param {object} payload  { provider, repo, token, url, username, authType, defaultBranch, pathPrefix }
+ * @param {object} payload
+ * @param {string} ownerId   Portainer user ID of the creator
+ * @param {boolean} shared   Whether this target is visible to all users
  */
-export function createConnection(name, payload) {
+export function createConnection(name, payload, ownerId, shared = false) {
   const id = randomUUID()
   const encrypted_payload = encrypt(payload)
   db.prepare(`
-    INSERT INTO connections (id, name, type, encrypted_payload)
-    VALUES (?, ?, 'git', ?)
-  `).run(id, name, encrypted_payload)
+    INSERT INTO connections (id, name, type, encrypted_payload, owner_id, shared)
+    VALUES (?, ?, 'git', ?, ?, ?)
+  `).run(id, name, encrypted_payload, ownerId, shared ? 1 : 0)
   return getConnectionById(id)
 }
 
 /**
  * @param {string} id
- * @returns {{ id, name, type, created_at, payload } | null}
+ * @returns {{ id, name, type, shared, owner_id, created_at, payload } | null}
  */
 export function getConnectionById(id) {
   const conn = db.prepare('SELECT * FROM connections WHERE id = ?').get(id)
   if (!conn) return null
-  return { ...conn, payload: decrypt(conn.encrypted_payload), encrypted_payload: undefined }
+  return rowToConn(conn)
 }
 
 /**
- * Returns all connections with payload decrypted.
- * For list views, callers should strip sensitive fields (token, sshKey).
+ * Returns connections visible to a given user:
+ * their own targets plus all shared targets.
+ * @param {string} userId
+ */
+export function getConnectionsForUser(userId) {
+  const rows = db.prepare(
+    'SELECT * FROM connections WHERE owner_id = ? OR shared = 1 ORDER BY shared DESC, created_at ASC'
+  ).all(userId)
+  return rows.map(rowToConn)
+}
+
+/**
+ * Returns ALL connections regardless of ownership — admin use only.
  */
 export function getAllConnections() {
   const rows = db.prepare('SELECT * FROM connections ORDER BY created_at ASC').all()
-  return rows.map((conn) => ({
-    id: conn.id,
-    name: conn.name,
-    type: conn.type,
-    created_at: conn.created_at,
-    payload: decrypt(conn.encrypted_payload),
-  }))
+  return rows.map(rowToConn)
 }
 
 /**
  * @param {string} id
  * @param {string} name
  * @param {object} payload
+ * @param {boolean} shared
+ * @param {string} callerId   Must match owner_id or be admin
+ * @param {boolean} isAdmin
  */
-export function updateConnection(id, name, payload) {
+export function updateConnection(id, name, payload, shared, callerId, isAdmin) {
+  const existing = getConnectionById(id)
+  if (!existing) return null
+  if (!isAdmin && existing.owner_id !== callerId) return 'forbidden'
+  // Non-admins cannot set shared
+  const newShared = isAdmin ? (shared ? 1 : 0) : existing.shared ? 1 : 0
   const encrypted_payload = encrypt(payload)
   const result = db
-    .prepare('UPDATE connections SET name = ?, encrypted_payload = ? WHERE id = ?')
-    .run(name, encrypted_payload, id)
+    .prepare('UPDATE connections SET name = ?, encrypted_payload = ?, shared = ? WHERE id = ?')
+    .run(name, encrypted_payload, newShared, id)
   if (result.changes === 0) return null
   return getConnectionById(id)
 }
 
 /**
  * @param {string} id
+ * @param {string} callerId
+ * @param {boolean} isAdmin
  */
-export function deleteConnection(id) {
-  return db.prepare('DELETE FROM connections WHERE id = ?').run(id)
+export function deleteConnection(id, callerId, isAdmin) {
+  const existing = getConnectionById(id)
+  if (!existing) return 'notfound'
+  if (!isAdmin && existing.owner_id !== callerId) return 'forbidden'
+  db.prepare('DELETE FROM connections WHERE id = ?').run(id)
+  return 'ok'
 }

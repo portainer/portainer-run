@@ -48,6 +48,13 @@ function AuthedLayout() {
   return <MainLayout />
 }
 
+/** Redirects to dashboard if a feature flag is disabled. */
+function FeatureGate({ flag, children }) {
+  const features = useAppStore((s) => s.features)
+  if (features[flag] === false) return <Navigate to={ROUTES.dashboard} replace />
+  return children
+}
+
 export function AppRoutes() {
   return (
     <Routes>
@@ -65,11 +72,11 @@ export function AppRoutes() {
           element={<ServiceDetailPage />}
         />
         <Route path="deploy" element={<Navigate to={ROUTES.deploy} replace />} />
-        <Route path="deploy/simple" element={<DeployPage />} />
-        <Route path="deploy/manifest" element={<ManifestBuilderPage />} />
-        <Route path="deploy/vibe" element={<VibeDeploy />} />
-        <Route path="catalogue" element={<CataloguePage />} />
-        <Route path="secrets" element={<SecretsPage />} />
+        <Route path="deploy/simple" element={<FeatureGate flag="simpleDeploy"><DeployPage /></FeatureGate>} />
+        <Route path="deploy/manifest" element={<FeatureGate flag="manifestBuilder"><ManifestBuilderPage /></FeatureGate>} />
+        <Route path="deploy/vibe" element={<FeatureGate flag="vibeDeploy"><VibeDeploy /></FeatureGate>} />
+        <Route path="catalogue" element={<FeatureGate flag="catalogue"><CataloguePage /></FeatureGate>} />
+        <Route path="secrets" element={<FeatureGate flag="secrets"><SecretsPage /></FeatureGate>} />
         <Route path="readiness" element={<ReadinessPage />} />
         <Route path="git-targets" element={<GitTargetsPage />} />
         <Route path="*" element={<Navigate to={ROUTES.dashboard} replace />} />
