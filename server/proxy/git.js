@@ -673,3 +673,65 @@ async function fetchFileGitea(payload, branch, filePath) {
   if (!data.content) throw new Error('File content not found in Gitea response')
   return Buffer.from(data.content.replace(/\n/g, ''), 'base64').toString('utf8')
 }
+
+// ---------------------------------------------------------------------------
+// List files — returns flat array of filenames at a given path in a repo.
+// Used by Vibe Deploy "Source from Git" to detect the runtime.
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns a flat list of { path, type } entries under dirPath.
+ * @param {object} payload
+ * @param {string} branch
+ * @param {string} dirPath  empty string or '/' for repo root
+ * @returns {Promise<Array<{ path: string, type: 'file'|'dir' }>>}
+ */
+export async function listFiles(payload, branch, dirPath = '') {
+  const { provider } = payload
+  if (provider === 'github') return listFilesGitHubFlat(payload, branch, dirPath)
+  if (provider === 'gitlab') return listFilesGitLabFlat(payload, branch, dirPath)
+  return listFilesGiteaFlat(payload, branch, dirPath)
+}
+
+async function listFilesGitHubFlat(payload, branch, dirPath) {
+  const { repo } = payload
+  const headers = buildHeaders(payload)
+  const base = githubApiBase(payload)
+  const pathSeg = dirPath ? `/${dirPath.replace(/^\/|\/$/g, '')}` : ''
+  try {
+    const data = await request('GET', `${base}/repos/${repo}/contents${pathSeg}?ref=${branch}`, headers)
+    if (!Array.isArray(data)) return []
+    return data.map((e) => ({ path: e.name, type: e.type === 'dir' ? 'dir' : 'file' }))
+  } catch {
+    return []
+  }
+}
+
+async function listFilesGitLabFlat(payload, branch, dirPath) {
+  const { repo } = payload
+  const base = gitlabApiBase(payload)
+  const encoded = encodeURIComponent(repo)
+  const headers = buildHeaders(payload)
+  const pathParam = dirPath ? `&path=${encodeURIComponent(dirPath.replace(/^\/|\/$/g, ''))}` : ''
+  try {
+    const items = await request('GET', `${base}/api/v4/projects/${encoded}/repository/tree?ref=${branch}${pathParam}&per_page=100`, headers)
+    if (!Array.isArray(items)) return []
+    return items.map((e) => ({ path: e.name, type: e.type === 'tree' ? 'dir' : 'file' }))
+  } catch {
+    return []
+  }
+}
+
+async function listFilesGiteaFlat(payload, branch, dirPath) {
+  const { repo, url: baseUrl } = payload
+  const base = baseUrl || ''
+  const headers = buildHeaders(payload)
+  const pathSeg = dirPath ? `/${dirPath.replace(/^\/|\/$/g, '')}` : ''
+  try {
+    const data = await request('GET', `${base}/api/v1/repos/${repo}/contents${pathSeg}?ref=${branch}`, headers)
+    if (!Array.isArray(data)) return []
+    return data.map((e) => ({ path: e.name, type: e.type === 'dir' ? 'dir' : 'file' }))
+  } catch {
+    return []
+  }
+}

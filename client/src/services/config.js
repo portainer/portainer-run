@@ -18,6 +18,13 @@ export async function loadServerConfig() {
           : 'Set your Portainer base URL below'
     )
     st().setAi(!!d.aiAvailable, d.aiProvider || 'anthropic', d.baseDomain || '')
+    if (d.features) st().setFeatures({
+      vibeDeploy:      d.features.vibeDeploy      !== false,
+      simpleDeploy:    d.features.simpleDeploy    !== false,
+      manifestBuilder: d.features.manifestBuilder !== false,
+      catalogue:       d.features.catalogue       !== false,
+      secrets:         d.features.secrets         !== false,
+    })
   } catch (e) {
     st().setPortainerFromServer(false)
     st().setServerLabel('API proxy not reachable — is the portainer-run server running?')

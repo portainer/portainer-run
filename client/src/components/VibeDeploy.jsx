@@ -312,14 +312,27 @@ export function VibeDeploy() {
   // ---- Step tracking ----
   // 1=files, 2=runtime, 3=envvars, 4=deployconfig, 5=gitops
   const [noGitTargets, setNoGitTargets] = useState(false)
+  const [gitTargetsList, setGitTargetsList] = useState([])
   useEffect(() => {
-    listGitTargets().then((r) => setNoGitTargets(!r || r.length === 0)).catch(() => {})
+    listGitTargets().then((r) => {
+      const list = r?.connections || []
+      setNoGitTargets(list.length === 0)
+      setGitTargetsList(list)
+    }).catch(() => {})
   }, [])
 
   const [step, setStep] = useState(1)
 
-  // ---- Step 1: files ----
+  // ---- Step 1: files or git source ----
+  const [sourceType, setSourceType] = useState('upload') // 'upload' | 'git'
   const [files, setFiles] = useState([])
+  // Git source fields
+  const [gitSourceTargetId, setGitSourceTargetId] = useState('')
+  const [gitSourceBranch, setGitSourceBranch] = useState('main')
+  const [gitSourcePath, setGitSourcePath] = useState('')
+  const [gitSourceBranches, setGitSourceBranches] = useState([])
+  const [gitSourceFetching, setGitSourceFetching] = useState(false)
+  const [gitSourceConfirmed, setGitSourceConfirmed] = useState(false)
 
   // ---- Step 2: runtime ----
   const [detectedRuntime, setDetectedRuntime] = useState(null)
@@ -488,8 +501,59 @@ export function VibeDeploy() {
   }
 
   function confirmFiles() {
-    if (!files.length) { pushToast('Add at least one file', 'err'); return }
-    setStep(2)
+    if (sourceType === 'upload') {
+      if (!files.length) { pushToast('Add at least one file', 'err'); return }
+      setStep(2)
+    } else {
+      // git source — already confirmed, runtime detected
+      if (!gitSourceConfirmed) { pushToast('Select a git source and fetch files', 'err'); return }
+      setStep(2)
+    }
+  }
+
+  async function fetchGitSourceFiles() {
+    if (!gitSourceTargetId || !gitSourceBranch) {
+      pushToast('Select a git target and branch', 'err'); return
+    }
+    setGitSourceFetching(true)
+    try {
+      const { token, portainerBaseUrl, portainerFromServer } = useAppStore.getState()
+      const headers = { 'X-API-Key': token }
+      const u = (portainerBaseUrl || '').trim()
+      if (u && !portainerFromServer) headers['X-Portainer-URL'] = u
+      const pathParam = gitSourcePath ? `&path=${encodeURIComponent(gitSourcePath)}` : ''
+      const r = await fetch(
+        `/api/connections/${gitSourceTargetId}/files?branch=${encodeURIComponent(gitSourceBranch)}${pathParam}`,
+        { headers }
+      )
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`)
+      // Run runtime detection against file names
+      const names = (data.files || []).filter((f) => f.type === 'file').map((f) => f.path)
+      const syntheticFiles = names.map((n) => ({ name: n, text: '' }))
+      const rt = detectRuntime(syntheticFiles)
+      setDetectedRuntime(rt)
+      setStartCmd(rt?.startCmd || '')
+      setGitSourceConfirmed(true)
+      pushToast(`Runtime detected: ${rt?.label || 'nginx'}`, 'ok')
+    } catch (e) {
+      pushToast(e?.message || 'Failed to fetch files from git', 'err')
+    } finally {
+      setGitSourceFetching(false)
+    }
+  }
+
+  async function loadGitSourceBranches(targetId) {
+    if (!targetId) return
+    try {
+      const { token, portainerBaseUrl, portainerFromServer } = useAppStore.getState()
+      const headers = { 'X-API-Key': token }
+      const u = (portainerBaseUrl || '').trim()
+      if (u && !portainerFromServer) headers['X-Portainer-URL'] = u
+      const r = await fetch(`/api/connections/${targetId}/branches`, { headers })
+      const data = await r.json().catch(() => ({}))
+      setGitSourceBranches(data.branches || [])
+    } catch { setGitSourceBranches([]) }
   }
 
   function confirmRuntime() {
@@ -559,7 +623,17 @@ export function VibeDeploy() {
         startCmd: startCmd.trim(),
         workDir: detectedRuntime?.workDir || '/app',
         envVars: envVars.filter((v) => v.key),
-        sourceFiles: files.map((f) => ({ path: f.webkitRelativePath || f.name, content: f.text })),
+        sourceType,
+        // Upload source
+        sourceFiles: sourceType === 'upload'
+          ? files.map((f) => ({ path: f.webkitRelativePath || f.name, content: f.text }))
+          : [],
+        // Git source
+        gitSource: sourceType === 'git' ? {
+          gitTargetId: gitSourceTargetId,
+          branch: gitSourceBranch,
+          path: gitSourcePath || '',
+        } : null,
       },
     }
 
@@ -688,68 +762,140 @@ export function VibeDeploy() {
           <div className="form-section">
             <div className="form-section-head">Step 1 — Files</div>
             <div className="form-section-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {files.length === 0 ? (
-                <DropZone onFiles={handleFilesAdded} />
-              ) : (
+
+              {/* Source type toggle */}
+              <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border2)', borderRadius: 6, overflow: 'hidden', alignSelf: 'flex-start' }}>
+                {[['upload', 'Upload files'], ['git', 'From Git repository']].map(([val, label]) => (
+                  <button key={val} type="button"
+                    onClick={() => { setSourceType(val); setGitSourceConfirmed(false); setDetectedRuntime(null) }}
+                    style={{
+                      padding: '7px 16px', fontSize: 12, fontFamily: 'var(--mono)', border: 'none', cursor: 'pointer',
+                      background: sourceType === val ? 'var(--accent)' : 'transparent',
+                      color: sourceType === val ? '#000' : 'var(--text)',
+                    }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Upload source */}
+              {sourceType === 'upload' && (
                 <>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span className="hint">{files.length} file{files.length !== 1 ? 's' : ''} selected</span>
-                    <button type="button" className="btn btn-ghost btn-xs"
-                      onClick={() => { setFiles([]); setRuntimeConfirmed(false); setEnvVarsConfirmed(false); setDeployConfigConfirmed(false); setStagedParams(null) }}>
-                      Remove all
-                    </button>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {files.map((f, i) => (
-                      <FileRow
-                        key={f.webkitRelativePath || f.name}
-                        file={f}
-                        tag={
-                          (f.name === 'package.json' || f.name === 'requirements.txt' || f.name === 'Gemfile') ? 'runtime'
-                          : (f.name === '.env.example' || f.name.endsWith('.env.example')) ? 'env'
-                          : null
-                        }
-                        onRemove={() => removeFile(i)}
-                      />
-                    ))}
-                  </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <input id="vibe-add-folder" type="file" webkitdirectory="" multiple style={{ display: 'none' }}
-                      onChange={(e) => { if (e.target.files.length) {
-                        const readers = Array.from(e.target.files).map((file) => new Promise((res) => {
-                          const r = new FileReader()
-                          r.onload = (ev) => res({ name: file.name, size: file.size, text: ev.target.result, webkitRelativePath: file.webkitRelativePath || file.name })
-                          r.onerror = () => res({ name: file.name, size: file.size, text: '', webkitRelativePath: file.webkitRelativePath || file.name })
-                          r.readAsText(file)
-                        }))
-                        Promise.all(readers).then(handleFilesAdded)
-                      }}}
-                    />
-                    <input id="vibe-add-files" type="file" multiple style={{ display: 'none' }}
-                      onChange={(e) => { if (e.target.files.length) {
-                        const readers = Array.from(e.target.files).map((file) => new Promise((res) => {
-                          const r = new FileReader()
-                          r.onload = (ev) => res({ name: file.name, size: file.size, text: ev.target.result, webkitRelativePath: file.webkitRelativePath || file.name })
-                          r.onerror = () => res({ name: file.name, size: file.size, text: '', webkitRelativePath: file.webkitRelativePath || file.name })
-                          r.readAsText(file)
-                        }))
-                        Promise.all(readers).then(handleFilesAdded)
-                      }}}
-                    />
-                    <button type="button" className="btn btn-ghost btn-sm"
-                      onClick={() => document.getElementById('vibe-add-folder')?.click()}>
-                      + Add folder
-                    </button>
-                    <button type="button" className="btn btn-ghost btn-sm"
-                      onClick={() => document.getElementById('vibe-add-files')?.click()}>
-                      + Add files
-                    </button>
-                  </div>
+                  {files.length === 0 ? (
+                    <DropZone onFiles={handleFilesAdded} />
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span className="hint">{files.length} file{files.length !== 1 ? 's' : ''} selected</span>
+                        <button type="button" className="btn btn-ghost btn-xs"
+                          onClick={() => { setFiles([]); setRuntimeConfirmed(false); setEnvVarsConfirmed(false); setDeployConfigConfirmed(false); setStagedParams(null) }}>
+                          Remove all
+                        </button>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {files.map((f, i) => (
+                          <FileRow
+                            key={f.webkitRelativePath || f.name}
+                            file={f}
+                            tag={
+                              (f.name === 'package.json' || f.name === 'requirements.txt' || f.name === 'Gemfile') ? 'runtime'
+                              : (f.name === '.env.example' || f.name.endsWith('.env.example')) ? 'env'
+                              : null
+                            }
+                            onRemove={() => removeFile(i)}
+                          />
+                        ))}
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input id="vibe-add-folder" type="file" webkitdirectory="" multiple style={{ display: 'none' }}
+                          onChange={(e) => { if (e.target.files.length) {
+                            const readers = Array.from(e.target.files).map((file) => new Promise((res) => {
+                              const r = new FileReader()
+                              r.onload = (ev) => res({ name: file.name, size: file.size, text: ev.target.result, webkitRelativePath: file.webkitRelativePath || file.name })
+                              r.onerror = () => res({ name: file.name, size: file.size, text: '', webkitRelativePath: file.webkitRelativePath || file.name })
+                              r.readAsText(file)
+                            }))
+                            Promise.all(readers).then(handleFilesAdded)
+                          }}}
+                        />
+                        <input id="vibe-add-files" type="file" multiple style={{ display: 'none' }}
+                          onChange={(e) => { if (e.target.files.length) {
+                            const readers = Array.from(e.target.files).map((file) => new Promise((res) => {
+                              const r = new FileReader()
+                              r.onload = (ev) => res({ name: file.name, size: file.size, text: ev.target.result, webkitRelativePath: file.webkitRelativePath || file.name })
+                              r.onerror = () => res({ name: file.name, size: file.size, text: '', webkitRelativePath: file.webkitRelativePath || file.name })
+                              r.readAsText(file)
+                            }))
+                            Promise.all(readers).then(handleFilesAdded)
+                          }}}
+                        />
+                        <button type="button" className="btn btn-ghost btn-sm"
+                          onClick={() => document.getElementById('vibe-add-folder')?.click()}>
+                          + Add folder
+                        </button>
+                        <button type="button" className="btn btn-ghost btn-sm"
+                          onClick={() => document.getElementById('vibe-add-files')?.click()}>
+                          + Add files
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </>
               )}
+
+              {/* Git source */}
+              {sourceType === 'git' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div className="field">
+                    <label>Git target</label>
+                    <select value={gitSourceTargetId} onChange={(e) => {
+                      setGitSourceTargetId(e.target.value)
+                      setGitSourceBranches([])
+                      setGitSourceBranch('main')
+                      setGitSourceConfirmed(false)
+                      if (e.target.value) loadGitSourceBranches(e.target.value)
+                    }}>
+                      <option value="">— Select —</option>
+                      {gitTargetsList.map((t) => (
+                        <option key={t.id} value={t.id}>{t.name}{t.shared ? ' (shared)' : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <div className="field" style={{ flex: 1 }}>
+                      <label>Branch</label>
+                      {gitSourceBranches.length > 0 ? (
+                        <select value={gitSourceBranch} onChange={(e) => { setGitSourceBranch(e.target.value); setGitSourceConfirmed(false) }}>
+                          {gitSourceBranches.map((b) => <option key={b} value={b}>{b}</option>)}
+                        </select>
+                      ) : (
+                        <input type="text" value={gitSourceBranch} onChange={(e) => { setGitSourceBranch(e.target.value); setGitSourceConfirmed(false) }} placeholder="main" />
+                      )}
+                    </div>
+                    <div className="field" style={{ flex: 1 }}>
+                      <label>Subfolder path <span className="hint" style={{ textTransform: 'none' }}>(optional, default: repo root)</span></label>
+                      <input type="text" value={gitSourcePath} onChange={(e) => { setGitSourcePath(e.target.value); setGitSourceConfirmed(false) }} placeholder="src / leave empty for root" />
+                    </div>
+                  </div>
+                  {gitSourceConfirmed ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 6, fontSize: 12, fontFamily: 'var(--mono)', color: 'var(--green)' }}>
+                      ✓ Runtime detected: <strong style={{ marginLeft: 4 }}>{detectedRuntime?.label || 'nginx'}</strong>
+                      <button type="button" className="btn btn-ghost btn-xs" style={{ marginLeft: 'auto' }} onClick={() => { setGitSourceConfirmed(false); setDetectedRuntime(null) }}>Re-fetch</button>
+                    </div>
+                  ) : (
+                    <button type="button" className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }}
+                      disabled={!gitSourceTargetId || !gitSourceBranch || gitSourceFetching}
+                      onClick={() => void fetchGitSourceFiles()}>
+                      {gitSourceFetching ? 'Fetching…' : 'Fetch & detect runtime'}
+                    </button>
+                  )}
+                </div>
+              )}
+
               <div className="form-actions">
                 <button type="button" className="btn btn-ghost" onClick={() => { setFiles([]); setRuntimeConfirmed(false); setEnvVarsConfirmed(false); setDeployConfigConfirmed(false); setStagedParams(null) }}>Cancel</button>
-                <button type="button" className="btn btn-primary" onClick={confirmFiles} disabled={files.length === 0}>
+                <button type="button" className="btn btn-primary" onClick={confirmFiles}
+                  disabled={sourceType === 'upload' ? files.length === 0 : !gitSourceConfirmed}>
                   Next →
                 </button>
               </div>

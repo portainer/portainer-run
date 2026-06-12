@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react'
 import { listGitTargets, deleteGitTarget, testGitTarget, getGitTarget } from '../lib/gitTargets.js'
 import { GitTargetForm } from './GitTargetForm.jsx'
+import { useAppStore } from '../store/useAppStore.js'
+import EmptyRepoWarning from './EmptyRepoWarning.jsx'
 
 export function GitTargetsPage() {
+  const isAdmin = useAppStore((s) => s.isAdmin)
+  const userId = useAppStore((s) => s.userId)
   const [connections, setConnections] = useState([])
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
@@ -123,8 +127,15 @@ export function GitTargetsPage() {
               gap: 16,
             }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-bright)', marginBottom: 3 }}>
-                  {conn.name}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                  <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-bright)' }}>
+                    {conn.name}
+                  </span>
+                  {conn.shared && (
+                    <span style={{ fontSize: 10, fontFamily: 'var(--mono)', background: 'rgba(14,165,233,0.12)', color: 'var(--accent)', border: '1px solid rgba(14,165,233,0.3)', borderRadius: 4, padding: '1px 6px' }}>
+                      shared
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-dim)', marginBottom: 2 }}>
                   {conn.summary}
@@ -183,14 +194,18 @@ export function GitTargetsPage() {
                   onClick={() => handleTest(conn.id)} disabled={testing[conn.id]}>
                   {testing[conn.id] ? 'Testing…' : 'Test'}
                 </button>
-                <button type="button" className="btn btn-ghost btn-sm"
-                  onClick={() => void handleEdit(conn)}>
-                  Edit
-                </button>
-                <button type="button" className="btn btn-danger btn-sm"
-                  onClick={() => void handleDelete(conn.id, conn.name)}>
-                  Delete
-                </button>
+                {(!conn.shared || isAdmin) && (
+                  <>
+                    <button type="button" className="btn btn-ghost btn-sm"
+                      onClick={() => void handleEdit(conn)}>
+                      Edit
+                    </button>
+                    <button type="button" className="btn btn-danger btn-sm"
+                      onClick={() => void handleDelete(conn.id, conn.name)}>
+                      Delete
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           ))}

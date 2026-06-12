@@ -1,12 +1,13 @@
 # Portainer Run
- 
-A simplified self-service operations portal for Kubernetes, backed by the Portainer API.
 
-## Quick Start
+A self-service deployment portal for Kubernetes, backed by the Portainer API. Portainer Run sits between people who can build applications with AI coding tools and the Kubernetes infrastructure those applications need to run on.
 
-Deploy Portainer-Run then access it via `https://your-ip-address/`.
+## Quick start
+
+Deploy Portainer Run then access it via `https://your-ip-address/`.
 
 ### Kubernetes
+
 Refer to [deploy/kubernetes.yaml](deploy/kubernetes.yaml).
 
 ### Docker Run
@@ -15,236 +16,156 @@ Refer to [deploy/kubernetes.yaml](deploy/kubernetes.yaml).
 docker run -d \
   -p 443:443 \
   -p 80:80 \
-  -v /path/to/data/directory:/app/data \
+  -v portainer-run-data:/app/data \
   -e PORTAINER_URL=https://portainer.example.com:9443 \
+  -e ENCRYPTION_KEY=$(openssl rand -hex 32) \
   -e ANTHROPIC_API_KEY=your-anthropic-api-key-here \
-  -e ENCRYPTION_KEY=change-me-to-a-rand-32-string \
   --name portainer-run \
-  portainer-run
+  portainer/portainer-run:latest
 ```
 
 ### Docker Compose
 
 Refer to [deploy/docker-compose.yml](deploy/docker-compose.yml).
- 
+
 ## Why this exists
- 
+
 AI has made everyone a developer. Not a software engineer, not a full-stack engineer... a developer. Someone who can take a business problem, describe it to an AI coding tool, and get a working application out the other side. The barrier to creation has effectively gone.
- 
+
 The best AI-assisted development tools know this. It's why they push hosting onto their own SaaS or PaaS; it's the only way to keep the experience seamless end to end. And it works, right up until the app needs to talk to something inside your network. An internal database. An on-prem API. A system that lives behind the firewall and isn't going anywhere. At that point the experience collapses, and the only path forward is a ticket to the platform team.
- 
-That platform team is already stretched. The influx of deployment requests coming from people who have never touched infrastructure (app owners, business developers, support staff, people who vibe-coded their first container last Tuesday) is a real and growing problem with no clean answer today. Buying an IDP that takes a year to configure before anyone can use it is not the answer.
- 
-Portainer Run sits in that gap. The container image is already an artefact AI coding tools can produce. Portainer Run is the "now run it, inside your environment" layer, with the platform team's guardrails baked in via Portainer's existing RBAC and policy controls. The platform team's role shifts from processing every deployment ticket to setting the rules once.
- 
-The embedded AI fits this persona specifically. When a business developer asks "why isn't my app connecting to the database," they don't need two months of metrics and autoscaling policy work. They need the right answer, fast, without filing a ticket. That's what the AI triage layer is for.
- 
-Portainer is the secure, policy-enforced gateway between the people doing the work and the infrastructure they're working on. Portainer Run is the interface on top of that gateway, designed for the people who have no idea what a Pod is and shouldn't need to.
- 
-It is intentionally narrow in scope. It does not replace Portainer. It does not try to serve the engineer who has full cluster access and wants a powerful agent with deep API reach, that's a different product for a different persona. Portainer Run surfaces one workflow (deploy, run, and operate a containerised workload) in the simplest interface we could build for it.
- 
-Optimised for desktop and laptop screen sizes.
+
+That platform team is already stretched. The influx of deployment requests coming from people who have never touched infrastructure is a real and growing problem with no clean answer today. Buying an IDP that takes a year to configure before anyone can use it is not the answer.
+
+Portainer Run sits in that gap. The container image (or source folder) is already an artifact AI coding tools can produce. Portainer Run is the "now run it, inside your environment" layer, with the platform team's guardrails baked in via Portainer's existing RBAC and policy controls. The platform team's role shifts from processing every deployment ticket to setting the rules once.
 
 ## What it does
 
 Portainer Run connects to your Portainer instance using a personal access token. Access is governed entirely by your Portainer RBAC role. Once connected it provides a unified view across all Kubernetes environments your account can reach.
 
-**Dashboard** shows a live health summary across all environments: total services, running, degraded, and unavailable counts, with a per-environment breakdown. The cache refreshes every 30 seconds automatically and after any deploy, scale, or delete action. On reconnect the last known state is shown immediately while live data loads in the background.
+**Dashboard** shows a live health summary across all environments: total services, running, degraded, and unavailable counts, with a per-environment breakdown. The cache refreshes every 30 seconds automatically and after any deploy, scale, or delete action.
 
-**Services** is the primary operational HUD. It lists all deployments tagged `managed-by=portainer-run` with a traffic light status indicator per row: a green dot for running, pulsing amber for starting up or partially available, pulsing red for not running. Status reasons are fetched from pod state and shown in plain English below the indicator; "App keeps crashing (4 restarts)", "Can't download the image", "No node has enough resources", "No compatible node found", and so on. OOMKilled is suppressed until three or more restarts to avoid surfacing transient pod recycling as a problem. The exposure column shows a clickable address (node IP:nodePort for NodePort, IP:port for LoadBalancer, FQDN for Ingress). Each row has Logs, Restart, and Delete actions. Restart triggers a rolling restart via annotation patch; pods are replaced one by one with no downtime. The page auto-refreshes every 30 seconds.
+**Services** is the primary operational view. It lists all deployments tagged `managed-by=portainer-run` with a traffic light status per row. Status reasons are fetched from pod state and shown in plain English: "App keeps crashing (4 restarts)", "Can't download the image", "No node has enough resources", and so on. The exposure column shows a clickable address. Each row has Logs, Restart, and Delete actions.
 
-**Deploy** provides a Cloud Run-style deployment form covering single-container and multi-container (sidecar) workloads, persistent storage (RWO via PVC), environment variables, Kubernetes Secrets references, resource limits including GPU, and service exposure (NodePort, LoadBalancer, Ingress). All deployments are tagged `managed-by=portainer-run`.
+**Vibe Deploy** is the deployment path designed for source files produced by AI coding tools. Drop the files Claude or another AI tool generated, and Portainer Run handles runtime detection, dependency installation, git commit, and Kubernetes deployment automatically. No Dockerfile, no CI pipeline, no container registry required.
 
-Environment variables can be set as plain values, as references to individual keys from a Kubernetes Secret (`valueFrom.secretKeyRef`), or as a full secret injection (`envFrom.secretRef`) that maps every key in a secret to an environment variable automatically. Any secret in the namespace is available regardless of whether it was created through Portainer Run.
+The runtime is detected from the file structure. A `package.json` maps to Node.js 20. A `requirements.txt` maps to Python 3.12. A `Gemfile` maps to Ruby 3.3. `.php` files map to PHP 8.3 with Apache. Everything else defaults to nginx for static HTML/CSS/JS.
 
-GPU support is per-container. Enabling the GPU toggle auto-detects the GPU resource type available on the selected environment's nodes (NVIDIA, AMD, Intel, or Habana) and sets the correct resource key in both requests and limits. A warning is shown if no GPU nodes are found in the environment.
+On deploy, three init containers run before the app starts: the first clones source files from git into a PersistentVolume, the second runs the dependency installer (`npm install`, `pip install`, etc.) in the correct runtime image, and the third writes a `.env` file from the entered environment variables. None of this requires a build step.
 
-**Vibe Deploy** is a deployment path for source files produced by AI coding tools. It accepts a folder of files directly — no container image, no CI pipeline, no Dockerfile required. Drop the files Claude or another AI tool gave you, and Portainer Run handles everything from there.
+If uploaded files include a `.env.example`, Portainer Run detects it and presents an editable list of keys before deploying. Keys matching common patterns (SECRET, TOKEN, KEY, PASSWORD) are masked in the form.
 
-The runtime is detected automatically from the file structure. A `package.json` maps to Node.js 20. A `requirements.txt` or `.py` file maps to Python 3.12. A `Gemfile` maps to Ruby 3.3. `.php` files map to PHP 8.3 with Apache. Everything else defaults to nginx for static HTML/CSS/JS sites.
+Vibe Deploy also supports deploying directly from an existing git repository. Instead of uploading files, select a configured git target, branch, and optional subfolder — Portainer Run fetches the file listing, detects the runtime, and clones directly from that source repository on every pod start.
 
-On deploy, three init containers run in sequence before the app starts. The first clones the committed source files from the git repository into a PersistentVolume. The second runs the appropriate dependency installer for the detected runtime (`npm install --production` for Node, `pip install -r requirements.txt` for Python, and so on) inside the same runtime image so native modules compile correctly. The third writes a `.env` file from the environment variables entered in the deploy form. None of this requires a build step or a registry.
+**Simple Deploy** provides a Cloud Run-style form for single-container and multi-container (sidecar) workloads, supporting persistent storage, environment variables, Kubernetes Secret references, resource limits including GPU, and all service exposure types.
 
-Git credentials used during source cloning are stored as a Kubernetes Secret (`appname-git-credentials`) and injected into the init container via `secretKeyRef`. The token never appears in the pod spec command.
+**Manifest Builder** provides a guided form for any Kubernetes workload type: Deployments, StatefulSets, DaemonSets, CronJobs, Services, Ingresses, and HPAs. All output is committed to git as a GitOps stack managed by Portainer.
 
-If the uploaded files include a `.env.example`, Portainer Run detects it and presents an editable list of the keys before deploying. Values are written to the PV at deploy time and never committed to git. Keys matching common patterns (SECRET, TOKEN, KEY, PASSWORD) are masked in the form.
+**Catalogue** provides one-click deployment of pre-configured application stacks from a JSON template library. Each template can be deployed immediately with defaults, or customized in the Deploy form first.
 
-Updating an app is handled from the Edit tab on the service detail page. Portainer Run shows a Vibe Deploy-specific editor rather than the standard container edit form. Drop the updated files, click Commit & Restart, and the init containers re-run on the next pod start, syncing the new source into the PV while leaving app data (databases, uploaded files, anything written to the data directory) untouched.
+**Secrets** provides a namespace-scoped view of Kubernetes Secrets with create and delete operations.
 
-**Catalogue** provides one-click deployment of pre-configured application stacks. See the Catalogue section below for full details.
+Clicking any service opens a detail panel with tabs for Overview, Containers, Metrics, Logs, Revisions, and Edit.
 
-**Secrets** provides a namespace-scoped view of Kubernetes Secrets. Secrets can be created with multiple key/value pairs (values are write-only — they are base64-encoded before storage and not displayed after saving), and deleted with a confirmation prompt. The create form targets a specific environment and namespace independently of the list filter. Any app using a secret is shown on the secret card.
+**Cluster Readiness** (admin only) checks each environment for ingress, LoadBalancer, storage, node health, and GPU availability, and allows administrators to disable environments from all deployment flows.
 
-Clicking any service opens a detail panel with six tabs.
-
-**Overview** shows live status, configuration, labels, and full exposure detail.
-
-**Containers** shows per-container configuration: image, ports, pull policy, resource limits, environment variables, and volume mounts.
-
-**Metrics** shows CPU and memory sparklines per container, polled every 15 seconds via `metrics.k8s.io`. Requires metrics-server on the cluster.
-
-**Logs** streams or fetches pod logs with per-container selection, severity filtering, and text search. The AI Analyse button gathers logs, pod conditions, and Kubernetes events from all three levels (Deployment, ReplicaSet, Pod) and sends them to the configured AI provider for triage. This covers failure modes where no logs exist yet (scheduling failures, image pull errors, resource constraints) because it reads from events rather than relying on application output.
-
-**Revisions** lists ReplicaSet history, most recent first, with a Rollback button per revision.
-
-**Edit** provides live editing of instance count, container images, environment variables, and exposed ports. One Save button patches the Deployment and Service in a single operation.
-
-**Assistant** is a persistent chat panel available on every page. It is context-aware of whatever you are looking at (current page, open service, environment) and can answer questions about your services in plain English, proactively fetch logs and events before responding to health questions, translate a Docker Compose file into a Portainer Run deployment, describe a deployment in natural language to pre-populate the deploy form, and detect scale requests to open the Edit tab pre-filled. The assistant never executes irreversible operations directly, it routes destructive actions to the existing UI. Session history is kept in memory only and cleared on disconnect.
-
-**Cluster Readiness** (admin only) checks each environment for ingress controller availability, LoadBalancer provisioning, storage class configuration, node health, and GPU node availability. Each check reports a plain-English result. Administrators can disable environments from this page; disabled environments are hidden from all dropdowns and views for non-admin users, and blocked from receiving new deployments for everyone. Disabled state is stored in a ConfigMap (`portainer-run-config` in `kube-system`) and persists across restarts. Non-admin users see a notice on the dashboard if environments have been hidden.
+**Assistant** is a persistent chat panel available on every page. It is context-aware, fetches live diagnostic data before answering health questions, can translate a Docker Compose file into a deployment configuration, and routes to the appropriate deploy flow. It never executes irreversible operations directly. When Vibe Deploy is the only enabled deploy feature, the assistant redirects all deployment questions to the Vibe Deploy workflow.
 
 ## Git targets
 
-Vibe Deploy and the GitOps-backed manifest deploy paths both require a git target. A git target is a stored, encrypted connection to a git repository where Portainer Run commits manifests and source files. Configure one under Git Targets before deploying.
+All deploy paths commit manifests and source files to a git repository. A git target is a stored, encrypted connection to a repository. Git targets are per-user: each user's targets are only visible to themselves. Administrators can additionally mark targets as shared, making them available to all users in deploy flows while remaining read-only for non-admins.
 
-Each target stores the provider (GitHub, GitLab, Gitea, or other), the repository in `owner/repo` form, a personal access token, an optional path prefix (manifests are committed to `prefix/namespace/appname.yaml`), and a default branch. Credentials are encrypted at rest.
+Manifests are committed to `<env-name>/<namespace>/<appname>.yaml` and source files to `<env-name>/<namespace>/<appname>/src/`. This structure keeps each deployment environment cleanly separated within the repository.
 
-The Test button on each git target checks connectivity and reports read and write permissions separately. For GitHub, the check uses the collaborator permissions API rather than the repository metadata response, which means it works correctly with fine-grained PATs (the modern GitHub default). The result is shown as green for full read/write access or amber if the token can read but not push — a read-only token will cause deploy to fail at the git commit step.
+Each target stores the provider (GitHub, GitLab, Gitea, or other), the repository in `owner/repo` form, a personal access token, an optional path prefix, and a default branch. Credentials are encrypted at rest using `ENCRYPTION_KEY`. This key must remain identical across deploys or stored targets become unreadable.
 
-For GitHub fine-grained PATs, the token requires Contents (read and write) permission on the target repository. Classic PATs require the `repo` scope.
+The Test button on each target checks connectivity and reports read and write permissions. For GitHub, the check uses the collaborator permissions API, which works correctly with fine-grained PATs. For GitHub fine-grained PATs, the token requires Contents (read and write) permission on the target repository. Classic PATs require the `repo` scope.
 
-For **GitHub Enterprise Server**, keep the provider set to GitHub and enter your server host (e.g. `https://github.your-company.com`) in the GitHub server URL field. Portainer Run uses the GitHub-compatible REST API at `/api/v3` on that host. Do not use the "Other" provider for GitHub Enterprise — that path targets the Gitea API (`/api/v1`), which a GitHub Enterprise host does not expose.
+For GitHub Enterprise Server, keep the provider set to GitHub and enter your server host in the GitHub server URL field. Portainer Run uses the GitHub-compatible REST API at `/api/v3` on that host. Do not use the "Other" provider for GitHub Enterprise — that path targets the Gitea API.
 
-For **self-hosted GitLab**, keep the provider set to GitLab and enter your server host (e.g. `https://gitlab.your-company.com`) in the GitLab server URL field. Leave it blank for gitlab.com. Portainer Run uses the GitLab API at `/api/v4` on that host.
+For self-hosted GitLab, keep the provider set to GitLab and enter your server host in the GitLab server URL field. Leave it blank for gitlab.com.
+
+Directory deletion on app removal uses the GitHub Git Data API tree approach: a single commit removes all files under a directory regardless of count, matching what the GitHub UI "Delete directory" button does. This is also implemented for GitLab (batch delete via the commits API) and Gitea.
+
+## Roles
+
+Portainer Run derives roles from Portainer. A user with Role 1 (admin) in Portainer is an admin in Portainer Run.
+
+Admins see the Admin section of the navigation, which contains Cluster Readiness and full git target management including the ability to mark targets as shared. Admins can edit and delete any git target, including shared ones.
+
+Non-admins see their own git targets plus any shared targets created by admins. Shared targets appear with a "shared" badge and are read-only for non-admins (Test is available, Edit and Delete are not).
+
+The logged-in Portainer username is shown in the Session section of the navigation with an "admin" badge for admin users.
+
+## Feature flags
+
+Each deploy feature can be independently disabled by environment variable. All features default to enabled. Set any flag to `false` to disable it.
+
+```
+FEATURE_VIBE_DEPLOY=false
+FEATURE_SIMPLE_DEPLOY=false
+FEATURE_MANIFEST_BUILDER=false
+FEATURE_CATALOGUE=false
+FEATURE_SECRETS=false
+```
+
+Disabled features are hidden from the navigation and their routes redirect to the dashboard if accessed directly. The AI assistant's system prompt adapts automatically: if only Vibe Deploy is enabled, the assistant directs all deployment questions to the Vibe Deploy workflow and does not attempt to generate container-based deployment configs.
+
+A common deployment pattern is Vibe Deploy only (`FEATURE_SIMPLE_DEPLOY=false FEATURE_MANIFEST_BUILDER=false`) to create a purpose-built landing pad for teams using AI coding tools, with all other deployment paths removed.
+
+## MCP endpoint
+
+Portainer Run exposes an MCP (Model Context Protocol) endpoint at `POST /mcp` that allows AI coding tools to deploy applications directly.
+
+Authentication uses either `Authorization: Bearer <portainer-token>` or `X-API-Key: <portainer-token>`. The token is validated against Portainer's `/users/me` endpoint on first use and cached for five minutes.
+
+Available tools:
+
+`list_environments` — returns Kubernetes environments accessible with the provided token.
+
+`list_namespaces` — returns namespaces in a given environment, filtered to exclude system namespaces.
+
+`list_git_targets` — returns git targets accessible to the caller (own targets plus shared targets).
+
+`deploy_vibe_app` — deploys source files to Kubernetes via the full Vibe Deploy pipeline. Accepts `appName`, `envId`, `namespace`, `gitTargetId`, `files` (array of `{ path, content }`), and optional `envVars`, `exposeType`, and `branch`. Auto-detects runtime and parses `.env.example` for environment variables if `envVars` is not supplied. Only available when `FEATURE_VIBE_DEPLOY` is enabled.
+
+`get_app_status` — returns the running status of a deployed application from the server-side cache.
+
+To connect Claude Desktop, add the following to `claude_desktop_config.json` (requires Node.js for `mcp-remote`):
+
+```json
+{
+  "mcpServers": {
+    "portainer-run": {
+      "command": "npx",
+      "args": [
+        "mcp-remote@latest",
+        "https://your-portainer-run/mcp",
+        "--header",
+        "Authorization: Bearer YOUR_PORTAINER_TOKEN"
+      ]
+    }
+  }
+}
+```
+
+Config file location: `%APPDATA%\Claude\claude_desktop_config.json` on Windows, `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS.
+
+To verify the endpoint is working before connecting a client:
+
+```bash
+curl -k -X POST https://your-portainer-run/mcp \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+```
 
 ## Catalogue
 
-The Catalogue provides a library of pre-configured application stacks that can be deployed in two clicks. Each template card shows the application name, category, container images, and primary port. Clicking **Deploy Wizard** opens a two-step modal.
-
-Step 1 selects the target environment and namespace. Namespaces are fetched live from the cluster and filtered to those the token can reach. Step 2 shows a confirmation summary: template name, environment, namespace, containers, exposure type, and a GPU REQUIRED notice if the template requests GPU resources. From step 2, **Deploy Now** fires the full deployment sequence directly (PVCs, Deployment, Service) without touching the Deploy form. **Customize** instead populates the Deploy form with the template's configuration, navigates to it, and pre-sets the environment and namespace; giving the user full control before deploying.
-
-The template library is fetched from `TEMPLATE_URL` and cached server-side for 5 minutes. The built-in default is the sample catalogue on the `develop` branch: `https://raw.githubusercontent.com/portainer/portainer-run/develop/templates.json` (GitHub raw URLs use `/{branch}/path`, not `refs/heads/...`). To use your own catalogue, set `TEMPLATE_URL` to any publicly accessible JSON file matching the format below.
-
-### Template file format
-
-Templates are served as a JSON file with the following structure:
-
-```json
-{
-  "version": "1",
-  "templates": [ ... ]
-}
-```
-
-Each template entry has these fields.
-
-`id` — unique string identifier, lowercase with hyphens.
-
-`name` — display name shown on the card and in the wizard.
-
-`description` — one or two sentences describing the application and its intended use.
-
-`category` — one of: `cms`, `database`, `web`, `monitoring`, `messaging`, `devtools`. Controls the filter pills on the Catalogue page.
-
-`icon` — string identifier for the application icon (reserved for future use).
-
-`manifest` — a Knative Service manifest (`apiVersion: serving.knative.dev/v1`, `kind: Service`). Portainer Run parses this to extract container images, environment variables, resource limits, volume requirements, and instance count. A Knative installation is not required — the manifest format is used as a convenient multi-container schema.
-
-The manifest is parsed as follows. `metadata.name` becomes the deployment name. `metadata.annotations["autoscaling.knative.dev/minScale"]` becomes the instance count. Each entry in `spec.template.spec.containers` becomes a container in the deployment. The first container's `ports[0].containerPort` determines the exposure port. `spec.template.spec.volumes` entries with `persistentVolumeClaim` become PVCs. GPU resources in container `resources.limits` (keys `nvidia.com/gpu`, `amd.com/gpu`, `gpu.intel.com/i915`, `habana.ai/gaudi`) are detected and surfaced in the wizard confirmation step.
-
-A minimal single-container template:
-
-```json
-{
-  "id": "nginx",
-  "name": "Nginx",
-  "description": "Nginx web server. Use as a static file server or reverse proxy.",
-  "category": "web",
-  "icon": "nginx",
-  "manifest": {
-    "apiVersion": "serving.knative.dev/v1",
-    "kind": "Service",
-    "metadata": {
-      "name": "nginx",
-      "annotations": { "autoscaling.knative.dev/minScale": "1" }
-    },
-    "spec": {
-      "template": {
-        "spec": {
-          "containers": [
-            {
-              "name": "nginx",
-              "image": "nginx:latest",
-              "ports": [{ "containerPort": 80 }],
-              "resources": {
-                "requests": { "cpu": "50m", "memory": "64Mi" },
-                "limits": { "cpu": "200m", "memory": "128Mi" }
-              }
-            }
-          ]
-        }
-      }
-    }
-  }
-}
-```
-
-A multi-container template with persistent volumes:
-
-```json
-{
-  "id": "wordpress-mysql",
-  "name": "WordPress + MySQL",
-  "description": "WordPress CMS with a MySQL 8 database.",
-  "category": "cms",
-  "icon": "wordpress",
-  "manifest": {
-    "apiVersion": "serving.knative.dev/v1",
-    "kind": "Service",
-    "metadata": {
-      "name": "wordpress",
-      "annotations": { "autoscaling.knative.dev/minScale": "1" }
-    },
-    "spec": {
-      "template": {
-        "spec": {
-          "containers": [
-            {
-              "name": "wordpress",
-              "image": "wordpress:latest",
-              "ports": [{ "containerPort": 80 }],
-              "env": [
-                { "name": "WORDPRESS_DB_HOST", "value": "localhost" },
-                { "name": "WORDPRESS_DB_PASSWORD", "value": "changeme" }
-              ],
-              "resources": {
-                "requests": { "cpu": "100m", "memory": "128Mi" },
-                "limits": { "cpu": "500m", "memory": "512Mi" }
-              },
-              "volumeMounts": [{ "name": "wordpress-data", "mountPath": "/var/www/html" }]
-            },
-            {
-              "name": "mysql",
-              "image": "mysql:8.0",
-              "env": [
-                { "name": "MYSQL_DATABASE", "value": "wordpress" },
-                { "name": "MYSQL_RANDOM_ROOT_PASSWORD", "value": "1" }
-              ],
-              "resources": {
-                "requests": { "cpu": "100m", "memory": "256Mi" },
-                "limits": { "cpu": "500m", "memory": "512Mi" }
-              },
-              "volumeMounts": [{ "name": "mysql-data", "mountPath": "/var/lib/mysql" }]
-            }
-          ],
-          "volumes": [
-            { "name": "wordpress-data", "persistentVolumeClaim": { "claimName": "wordpress-data" } },
-            { "name": "mysql-data", "persistentVolumeClaim": { "claimName": "mysql-data" } }
-          ]
-        }
-      }
-    }
-  }
-}
-```
-
-Default environment variable values in templates are applied as-is at deploy time. Users who select Customize instead of Deploy Now can change them in the Deploy form before deploying. Credentials in templates should be treated as defaults to replace, not production values.
+The Catalogue provides a library of pre-configured application stacks deployed in two clicks. Refer to the existing template format documentation in the previous README version for full template schema details. The default template library is fetched from `TEMPLATE_URL` and cached server-side for five minutes.
 
 ## Performance
 
-At scale (dozens of clusters, hundreds of workloads) the naive approach of firing individual pod, service, ingress, and node API calls per deployment would saturate both the browser and the Portainer proxy. Portainer Run uses an aggregated approach instead.
-
-The server exposes a `/env-status/:envId` endpoint that accepts the user's token and fans out to Kubernetes in parallel for a single environment (one call each for pods, services, ingresses, and nodes) then aggregates the results into a per-deployment status map (status reason and access URL) and caches the response for 20 seconds keyed by a hash of the token and environment ID. The browser fires one request per environment rather than one per deployment, with a client-side concurrency limit of 5 simultaneous environment fetches. A resourceVersion fingerprint per environment means that if nothing has changed since the last render, the cached result is applied to the DOM immediately with no network call.
+The server exposes a `/env-status/:envId` endpoint that fans out to Kubernetes in parallel for a single environment (pods, services, ingresses, and nodes in one batch) then aggregates results into a per-deployment status map cached for 20 seconds. The browser fires one request per environment with a client-side concurrency limit of 5. A resourceVersion fingerprint means unchanged environments return cached results immediately.
 
 ## Architecture
 
@@ -254,40 +175,40 @@ Browser → Node proxy (server.js) → Portainer API
                                   → OpenAI API     (if configured)
 ```
 
-Portainer Run is a single HTML file served by a small Node.js proxy. The proxy handles four things: it forwards Kubernetes API calls to Portainer (bypassing browser CORS), it relays AI requests to the configured provider (keeping the API key server-side), it serves the aggregated `/env-status/` endpoint, and it maintains a file-backed session cache keyed by a hash of the user's token.
+Portainer Run is a React/Vite frontend served by a Node.js proxy. The proxy forwards Kubernetes API calls to Portainer (bypassing browser CORS), relays AI requests to the configured provider (keeping the API key server-side), serves the aggregated `/env-status/` endpoint, exposes the `/mcp` MCP endpoint, and maintains a file-backed session cache.
 
-The user's credentials never appear in server logs. AI API keys never reach the browser.
+User credentials never appear in server logs. AI API keys never reach the browser.
 
-The proxy serves HTTPS on port 443 with a self-signed certificate by default. Port 80 redirects to HTTPS. Real certificates can be provided at runtime.
+HTTPS runs on port 443 with a self-signed certificate by default. Port 80 redirects to HTTPS. Real certificates can be provided at runtime.
 
-### Session cache
+### Session cache and data persistence
 
-The server maintains a file-backed cache at `data/cache.json` (configurable via `CACHE_DIR`). On reconnect, the last known deployment state is shown immediately while live data loads in the background. The cache is keyed by a SHA-256 hash of the user's token and cleared on disconnect. Mount `CACHE_DIR` as a Docker volume to persist the cache across container restarts.
+The server maintains a SQLite database at `data/portainer-run.db` for git target storage and a file-backed cache at `data/cache.json` for deployment state. Both live under `/app/data` inside the container.
 
-### Environment disable/enable
+Mount a named Docker volume at `/app/data` to persist data across restarts:
 
-Administrators can disable environments from the Cluster Readiness page. Disabled environments are hidden from all dropdowns and views for non-admin users, and blocked from receiving new deployments for everyone including admins. The disabled state is stored in a ConfigMap named `portainer-run-config` in the `kube-system` namespace and persists across Portainer Run restarts. The server tries each connected environment in turn to find one with access to `kube-system`; the first that succeeds is used for reads and writes.
+```yaml
+volumes:
+  - portainer-run-data:/app/data
 
-## Files
+volumes:
+  portainer-run-data:
+```
 
-`server/` — Node.js (or Bun) HTTPS proxy, static UI, env-status aggregator, and session cache. Entry: `server/server.js`.
-`client/` — Vite + React application (current UI).
-`old-implementation/` — archived monolith: `portainer-run.html` (original single-file frontend). The server can still fall back to the HTML if `client/dist` is not present.
+Do not mount to `/app` — that would override the application itself.
 
-`templates.json` (repo root) — sample application catalogue for the Catalogue and Deploy flows; the default `TEMPLATE_URL` points at this file on GitHub raw.
-`Dockerfile` — multi-stage build: `oven/bun:1-alpine` builds the client and runs the API; includes `openssl` for certificate generation.
-`.env.example` — environment variable reference.
+`ENCRYPTION_KEY` must be set to the same value on every deploy. Git target credentials are encrypted with this key at rest. A different or missing key on redeploy means existing targets cannot be decrypted and will appear gone.
 
 ## Local development
 
-The repo uses [Bun](https://bun.sh) for installs, scripts, and the Vite build (not npm).
+The repo uses [Bun](https://bun.sh) for installs, scripts, and the Vite build.
 
 ```bash
 bun install
 bun run dev
 ```
 
-Build the UI only: `bun run build:client` (or `cd client && bun run build`).
+Build the UI only: `bun run build:client`.
 
 ## Deployment
 
@@ -297,115 +218,71 @@ Build the UI only: `bun run build:client` (or `cd client && bun run build`).
 DOCKER_BUILDKIT=0 docker build -t portainer-run .
 ```
 
-### Build and run (local container)
+### Run examples
 
-From the repo root, builds the image and starts a detached container (default host ports **9443** → HTTPS, **9080** → HTTP redirect). If `.env` exists in the repo root, its variables are passed into the container with `docker run --env-file` (override the path with `ENV_FILE=...`).
-
-```bash
-./scripts/docker-run.sh
-# or: bun run docker:run
-```
-
-Override ports or image name if needed:
-
-```bash
-HOST_HTTPS=443 HOST_HTTP=80 IMAGE=portainer-run:local ./scripts/docker-run.sh
-```
-
-Pass extra `docker run` flags (e.g. env vars) via `DOCKER_RUN_EXTRA`:
-
-```bash
-DOCKER_RUN_EXTRA='-e PORTAINER_URL=https://portainer.example.com:9443' ./scripts/docker-run.sh
-```
-
-### Run (Anthropic, self-signed certificate)
+Minimal (Anthropic, self-signed certificate, persistent data):
 
 ```bash
 docker run -d \
   -p 443:443 \
   -p 80:80 \
+  -v portainer-run-data:/app/data \
   -e PORTAINER_URL=https://portainer.example.com:9443 \
+  -e ENCRYPTION_KEY=change-me-to-a-rand-32-string \
   -e ANTHROPIC_API_KEY=sk-ant-... \
-  -e ENCRYPTION_KEY=change-me-to-a-rand-32-string \
   --name portainer-run \
-  portainer-run
+  portainer/portainer-run:latest
 ```
 
-### Run (OpenAI)
+Vibe Deploy only (disables Simple Deploy and Manifest Builder):
 
 ```bash
 docker run -d \
   -p 443:443 \
   -p 80:80 \
+  -v portainer-run-data:/app/data \
   -e PORTAINER_URL=https://portainer.example.com:9443 \
-  -e OPENAI_API_KEY=sk-... \
   -e ENCRYPTION_KEY=change-me-to-a-rand-32-string \
-  --name portainer-run \
-  portainer-run
-```
-
-### Run (real certificates)
-
-```bash
-docker run -d \
-  -p 443:443 \
-  -p 80:80 \
-  -v /path/to/certs:/certs \
-  -e PORTAINER_URL=https://portainer.example.com:9443 \
   -e ANTHROPIC_API_KEY=sk-ant-... \
+  -e FEATURE_SIMPLE_DEPLOY=false \
+  -e FEATURE_MANIFEST_BUILDER=false \
+  --name portainer-run \
+  portainer/portainer-run:latest
+```
+
+Real TLS certificates:
+
+```bash
+docker run -d \
+  -p 443:443 \
+  -p 80:80 \
+  -v portainer-run-data:/app/data \
+  -v /etc/letsencrypt/live/portainer-run.example.com:/certs:ro \
+  -e PORTAINER_URL=https://portainer.example.com:9443 \
   -e ENCRYPTION_KEY=change-me-to-a-rand-32-string \
+  -e ANTHROPIC_API_KEY=sk-ant-... \
   -e SSL_CERT=/certs/fullchain.pem \
   -e SSL_KEY=/certs/privkey.pem \
   --name portainer-run \
-  portainer-run
+  portainer/portainer-run:latest
 ```
 
-### Run (persistent cache across restarts)
-
-```bash
-docker run -d \
-  -p 443:443 \
-  -p 80:80 \
-  -v /data/portainer-run:/app/data \
-  -e PORTAINER_URL=https://portainer.example.com:9443 \
-  -e ANTHROPIC_API_KEY=sk-ant-... \
-  -e ENCRYPTION_KEY=change-me-to-a-rand-32-string \
-  --name portainer-run \
-  portainer-run
-```
-
-### Run (custom template catalogue)
-
-```bash
-docker run -d \
-  -p 443:443 \
-  -p 80:80 \
-  -e PORTAINER_URL=https://portainer.example.com:9443 \
-  -e ENCRYPTION_KEY=change-me-to-a-rand-32-string \
-  -e TEMPLATE_URL=https://your-server.com/templates.json \
-  --name portainer-run \
-  portainer-run
-```
-
-### Run (custom ports)
+Custom ports:
 
 ```bash
 docker run -d \
   -p 8443:8443 \
   -p 8080:8080 \
+  -v portainer-run-data:/app/data \
   -e PORTAINER_URL=https://portainer.example.com:9443 \
   -e ENCRYPTION_KEY=change-me-to-a-rand-32-string \
   -e PORT=8443 \
   -e HTTP_PORT=8080 \
   --name portainer-run \
-  portainer-run
+  portainer/portainer-run:latest
 ```
 
-### DNS resolution issues
-
 If the container cannot resolve your Portainer hostname (error: `EAI_AGAIN`), add `--dns 8.8.8.8` to the run command.
-
-On first start the container generates a self-signed TLS certificate (3 year validity). The browser will warn about the certificate on first access; accept the exception to proceed.
 
 ## Environment variables
 
@@ -414,11 +291,16 @@ On first start the container generates a self-signed TLS certificate (3 year val
 | Variable | Default | Description |
 |---|---|---|
 | `PORTAINER_URL` | — | Full URL of your Portainer instance. Example: `https://portainer.example.com:9443` |
-| `ENCRYPTION_KEY` | — | Encrypts stored Git target credentials at rest. Must be at least 32 characters. Generate with: `openssl rand -hex 32` |
-| `ANTHROPIC_API_KEY` | — | Anthropic API key. Enables the Assistant and AI triage using Claude. |
-| `OPENAI_API_KEY` | — | OpenAI API key. Enables the Assistant and AI triage using GPT-4o. Set one or the other — not both. Anthropic takes priority if both are set. |
+| `ENCRYPTION_KEY` | — | Encrypts stored git target credentials at rest. Must be at least 32 characters and identical across deploys. Generate with: `openssl rand -hex 32` |
+| `ANTHROPIC_API_KEY` | — | Anthropic API key. Enables the Assistant using Claude. |
+| `OPENAI_API_KEY` | — | OpenAI API key. Enables the Assistant using GPT-4o. Set one or the other — not both. Anthropic takes priority if both are set. |
 | `AI_PROVIDER` | auto | Override AI provider: `anthropic` or `openai`. Auto-detected from whichever key is set. |
 | `OPENAI_MODEL` | `gpt-4o` | OpenAI model override. |
+| `FEATURE_VIBE_DEPLOY` | `true` | Enable or disable the Vibe Deploy feature. |
+| `FEATURE_SIMPLE_DEPLOY` | `true` | Enable or disable the Simple Deploy feature. |
+| `FEATURE_MANIFEST_BUILDER` | `true` | Enable or disable the Manifest Builder feature. |
+| `FEATURE_CATALOGUE` | `true` | Enable or disable the Catalogue feature. |
+| `FEATURE_SECRETS` | `true` | Enable or disable the Secrets feature. |
 | `TEMPLATE_URL` | (repo default) | URL of the template catalogue JSON file. Cached server-side for 5 minutes. |
 | `BASE_DOMAIN` | — | Base domain for Ingress exposure. If set, templates default to `appname.BASE_DOMAIN` as the Ingress host. |
 | `PORT` | `443` | HTTPS listen port inside the container. |
@@ -426,30 +308,19 @@ On first start the container generates a self-signed TLS certificate (3 year val
 | `SSL_CERT` | — | Path to TLS certificate file. Uses self-signed if not set. |
 | `SSL_KEY` | — | Path to TLS private key file. Uses self-signed if not set. |
 | `SSL_CERT_DIR` | `/app` | Directory for self-signed certificate storage. |
-| `CACHE_DIR` | `/app/data` | Directory for session cache file. Mount as a volume to persist across restarts. |
 
 ## Connecting
 
-Navigate to `https://<your-host>` and enter a Portainer personal access token. Generate one in Portainer under Account → Access Tokens. The token scope determines what Portainer Run can see and do — namespace-scoped tokens will require manual namespace entry on deploy; cluster-scoped tokens enumerate namespaces automatically.
+Navigate to `https://<your-host>` and enter a Portainer personal access token. Generate one in Portainer under Account → Access Tokens. The token scope determines what Portainer Run can see and do — namespace-scoped tokens require manual namespace entry on deploy; cluster-scoped tokens enumerate namespaces automatically.
 
-Portainer's RBAC applies in full. Users with admin role in Portainer see the Cluster Readiness page and environment disable/enable controls. Non-admin users see only enabled environments.
+Portainer's RBAC applies in full. Users with admin role in Portainer see the Admin section including Cluster Readiness and shared git target management. Non-admin users see only their own targets plus any shared targets an admin has created.
 
-Sessions persist across page refreshes and are cleared on disconnect or when the browser tab is closed.
-
-## Assistant
-
-The Assistant requires either `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` to be configured on the server. Without it the Assistant button is not shown.
-
-When answering health or performance questions the Assistant automatically fetches diagnostic data (logs, pod conditions, Kubernetes events) before generating a response. It does not ask you to check these yourself.
-
-Docker Compose files can be pasted directly into the Assistant input. It will translate the compose file into Portainer Run's deployment model (all services become containers in a single pod sharing localhost), show a preview, and populate the deploy form. Build directives and network aliases are flagged as unmappable.
-
-The Assistant is scoped to container operations only and will decline unrelated questions. Session history is kept in memory only and cleared on disconnect.
+Sessions persist across page refreshes and are cleared on disconnect.
 
 ## Notes on scope
 
-By design, Portainer Run only surfaces deployments it created. It tags every Deployment, Service, PVC, and Ingress with `managed-by=portainer-run` and filters all views to that label. Workloads deployed through Portainer's own UI or `kubectl` will not appear. Secrets are an exception — the Secrets page and the secret picker in the Deploy form show all secrets in the namespace regardless of origin, because referencing externally-managed secrets is a normal operational requirement.
+Portainer Run only surfaces deployments it created. It tags every Deployment, Service, PVC, and Ingress with `managed-by=portainer-run` and filters all views to that label. Workloads deployed through Portainer's own UI or `kubectl` will not appear. Secrets are an exception — the Secrets page and secret picker show all secrets in the namespace regardless of origin.
 
 Persistent storage volumes cannot be modified after deployment. PVCs are created at deploy time and are not touched by the Edit tab.
 
-OAuth authentication is not currently supported. Users in OAuth-configured Portainer deployments should generate a personal access token in Portainer under Account → Access Tokens.
+OAuth authentication is not supported. Users in OAuth-configured Portainer deployments should generate a personal access token in Portainer under Account → Access Tokens.
