@@ -18,7 +18,7 @@ export const ROUTES = {
  * @param {string} [tab]
  */
 export function serviceDetailPath(envId, namespace, name, tab = 'overview') {
-  return `/services/${encodeURIComponent(String(envId))}/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/${encodeURIComponent(tab)}`
+  return `/applications/${encodeURIComponent(String(envId))}/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/${encodeURIComponent(tab)}`
 }
 
 const APP_PATHS = new Set([
