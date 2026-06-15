@@ -34,6 +34,27 @@ import { handleVibe } from './vibe.js'
 const MCP_VERSION = '2024-11-05'
 const SERVER_INFO = { name: 'portainer-run', version: '1.0.0' }
 
+// Server-level guidance surfaced to the model by compliant MCP clients
+// (returned in the initialize response). This makes the deploy workflow
+// self-describing so the user does not have to prompt for it — the model
+// is told to gather the info the tool schema cannot enforce on its own.
+const SERVER_INSTRUCTIONS = [
+  'Portainer Run deploys applications to Kubernetes from source files via the deploy_vibe_app tool.',
+  '',
+  'Before calling deploy_vibe_app, gather and confirm the following with the user. Do not assume defaults silently — ask when anything is unknown or ambiguous:',
+  '1. Environment — call list_environments. If more than one is returned, ask which to use.',
+  '2. Namespace — call list_namespaces. If more than one is returned, ask which to use.',
+  '3. Git target — call list_git_targets. If none exist, tell the user to create one in the Portainer Run UI (git targets cannot be created via MCP) and stop. If several exist, ask which.',
+  '4. App name — propose one and confirm it with the user.',
+  '5. Exposure — explicitly ask how the app should be reachable: none, NodePort, LoadBalancer, or Ingress. Do not default to NodePort without asking.',
+  '6. Ingress (only if chosen) — call list_ingress_classes. If ingressHostRequired is true, ask the user for the full hostname. Confirm which ingress class to use.',
+  '7. Environment variables / secrets — if the app needs any, list them and ask the user for values.',
+  '',
+  'Port: deploy_vibe_app has no port parameter. The service port is inferred from the detected runtime (Node 3000, Python 8000, php/nginx 80, Ruby 9292). Make the app listen on that runtime default and bind 0.0.0.0. If the app must use a non-standard port, warn the user that the MCP deploy may expose the wrong port and the app could be unreachable.',
+  '',
+  'Always show a summary of the chosen settings and get explicit confirmation before calling deploy_vibe_app.',
+].join('\n')
+
 // ---------------------------------------------------------------------------
 // Tool definitions
 // ---------------------------------------------------------------------------
@@ -555,6 +576,7 @@ async function dispatch(method, params, req, caller) {
         protocolVersion: MCP_VERSION,
         capabilities: { tools: {} },
         serverInfo: SERVER_INFO,
+        instructions: SERVER_INSTRUCTIONS,
       }
 
     case 'tools/list':

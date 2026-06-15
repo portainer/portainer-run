@@ -120,6 +120,8 @@ Portainer Run exposes an MCP (Model Context Protocol) endpoint at `POST /mcp` th
 
 Authentication uses either `Authorization: Bearer <portainer-token>` or `X-API-Key: <portainer-token>`. The token is validated against Portainer's `/users/me` endpoint on first use and cached for five minutes.
 
+The server returns workflow guidance in the MCP `initialize` response (`instructions`). Compliant clients surface this to the model automatically, so it knows to gather the required deployment details (environment, namespace, git target, exposure, ingress host, port behaviour) and confirm them before deploying — without the user having to prompt for it.
+
 Available tools:
 
 `list_environments` — returns Kubernetes environments accessible with the provided token.
