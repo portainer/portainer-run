@@ -128,7 +128,9 @@ Available tools:
 
 `list_git_targets` — returns git targets accessible to the caller (own targets plus shared targets).
 
-`deploy_vibe_app` — deploys source files to Kubernetes via the full Vibe Deploy pipeline. Accepts `appName`, `envId`, `namespace`, `gitTargetId`, `files` (array of `{ path, content }`), and optional `envVars`, `exposeType`, and `branch`. Auto-detects runtime and parses `.env.example` for environment variables if `envVars` is not supplied. Only available when `FEATURE_VIBE_DEPLOY` is enabled.
+`list_ingress_classes` — returns the IngressClasses defined in an environment, including which one is the cluster default. Use it to pick an ingress class when deploying with `exposeType: "Ingress"`.
+
+`deploy_vibe_app` — deploys source files to Kubernetes via the full Vibe Deploy pipeline. Accepts `appName`, `envId`, `namespace`, `gitTargetId`, `files` (array of `{ path, content }`), and optional `envVars`, `exposeType`, `ingress` (`{ host, path, ingressClass }`), and `branch`. Auto-detects runtime and parses `.env.example` for environment variables if `envVars` is not supplied. When `exposeType` is `Ingress`, the host defaults to `<appName>.<BASE_DOMAIN>` if `BASE_DOMAIN` is set, and `ingressClass` defaults to the cluster's default IngressClass when not supplied. Only available when `FEATURE_VIBE_DEPLOY` is enabled.
 
 `get_app_status` — returns the running status of a deployed application from the server-side cache.
 

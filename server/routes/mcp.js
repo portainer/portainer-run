@@ -65,6 +65,21 @@ function buildTools() {
     inputSchema: { type: 'object', properties: {} },
   })
 
+  tools.push({
+    name: 'list_ingress_classes',
+    description:
+      'List the IngressClasses defined in a Kubernetes environment, including which one is the cluster default. ' +
+      'Call this when deploying with exposeType "Ingress" to choose the correct ingress class. If you omit ' +
+      'ingressClass on deploy_vibe_app, the cluster default (if any) is applied automatically.',
+    inputSchema: {
+      type: 'object',
+      required: ['envId'],
+      properties: {
+        envId: { type: 'string', description: 'Environment ID from list_environments' },
+      },
+    },
+  })
+
   if (FEATURE_VIBE_DEPLOY) {
     tools.push({
       name: 'deploy_vibe_app',
@@ -129,7 +144,7 @@ function buildTools() {
             properties: {
               host: { type: 'string', description: 'Ingress hostname, e.g. my-app.example.com' },
               path: { type: 'string', description: 'Ingress path. Default: /' },
-              ingressClass: { type: 'string', description: 'Ingress class name, e.g. nginx' },
+              ingressClass: { type: 'string', description: 'Ingress class name, e.g. nginx. Call list_ingress_classes to see options. If omitted, the cluster default IngressClass is applied automatically.' },
             },
           },
           branch: {
@@ -200,6 +215,38 @@ async function toolListGitTargets(req, caller) {
     defaultBranch: c.payload?.defaultBranch || 'main',
     shared: c.shared,
   }))
+}
+
+/**
+ * Fetches the IngressClasses defined in an environment via the Portainer
+ * Kubernetes proxy (same endpoint used by the Cluster Readiness check).
+ * Returns [{ name, controller, isDefault }].
+ */
+async function fetchIngressClasses(target, token, envId) {
+  const data = await portainerGet(
+    target, token,
+    `/api/endpoints/${envId}/kubernetes/apis/networking.k8s.io/v1/ingressclasses`,
+  )
+  const items = data?.items || []
+  return items
+    .map((c) => ({
+      name: c.metadata?.name,
+      controller: c.spec?.controller || '',
+      isDefault: c.metadata?.annotations?.['ingressclass.kubernetes.io/is-default-class'] === 'true',
+    }))
+    .filter((c) => c.name)
+}
+
+async function toolListIngressClasses(req, args) {
+  const { envId } = args
+  if (!envId) throw new Error('envId is required')
+  // Validate envId is numeric to prevent path injection into Portainer API
+  if (!/^\d+$/.test(String(envId))) throw new Error('envId must be a numeric environment ID')
+  const token = extractToken(req)
+  const target = resolvePortainerTarget(req)
+  if (!target) throw new Error('Cannot resolve Portainer target')
+
+  return fetchIngressClasses(target, token, envId)
 }
 
 // ---------------------------------------------------------------------------
@@ -327,6 +374,20 @@ async function toolDeployVibeApp(req, args, caller) {
 
   if (exposeType === 'Ingress' && !resolvedIngress.host) {
     throw new Error('exposeType "Ingress" requires ingress.host (or a configured BASE_DOMAIN)')
+  }
+
+  // When no class was supplied, fall back to the cluster's default IngressClass
+  // so the Ingress is actually claimed by a controller. Best effort — if the
+  // lookup fails or there's no default, deploy without an explicit class.
+  if (exposeType === 'Ingress' && !resolvedIngress.ingressClass) {
+    try {
+      const target = resolvePortainerTarget(req)
+      if (target) {
+        const classes = await fetchIngressClasses(target, extractToken(req), envId)
+        const def = classes.find((c) => c.isDefault)
+        if (def) resolvedIngress.ingressClass = def.name
+      }
+    } catch { /* no default available — continue without a class */ }
   }
 
   // Detect runtime, image, start command, working dir, and port from the files —
@@ -488,6 +549,9 @@ async function dispatch(method, params, req, caller) {
           break
         case 'list_git_targets':
           toolResult = await toolListGitTargets(req, caller)
+          break
+        case 'list_ingress_classes':
+          toolResult = await toolListIngressClasses(req, args)
           break
         case 'deploy_vibe_app':
           toolResult = await toolDeployVibeApp(req, args, caller)
