@@ -191,6 +191,104 @@ async function toolListGitTargets(req, caller) {
   }))
 }
 
+// ---------------------------------------------------------------------------
+// Runtime detection (server-side mirror of client/src/components/VibeDeploy.jsx)
+//
+// The browser UI fills runtime/runtimeImage/startCmd/workDir/port before calling
+// the deploy backend. The MCP path has no UI, so without this it would always
+// deploy a bare node:20-alpine image with no start command — which crashloops.
+// Keep this in sync with the RUNTIMES table in VibeDeploy.jsx.
+// ---------------------------------------------------------------------------
+
+const NGINX_RUNTIME = {
+  id: 'nginx',
+  image: 'nginx:alpine',
+  defaultCmd: () => "nginx -g 'daemon off;'",
+  port: 80,
+  workDir: '/usr/share/nginx/html',
+}
+
+const RUNTIMES = [
+  {
+    id: 'node',
+    image: 'node:20-alpine',
+    detect: (names) => names.includes('package.json'),
+    defaultCmd: (files) => {
+      const pkg = files.find((f) => f.name === 'package.json')
+      if (pkg) {
+        try {
+          const parsed = JSON.parse(pkg.text)
+          if (parsed?.scripts?.start) return 'npm start'
+        } catch { /* ignore */ }
+      }
+      const hasServerJs = files.some((f) => f.name === 'server.js' || f.name === 'index.js')
+      return hasServerJs ? `node ${files.find((f) => f.name === 'server.js') ? 'server.js' : 'index.js'}` : 'npm start'
+    },
+    port: 3000,
+    workDir: '/app',
+  },
+  {
+    id: 'python',
+    image: 'python:3.12-slim',
+    detect: (names) => names.includes('requirements.txt') || names.some((n) => n.endsWith('.py')),
+    defaultCmd: (files) => {
+      for (const candidate of ['main.py', 'app.py', 'server.py', 'run.py']) {
+        if (files.some((f) => f.name === candidate)) return `python ${candidate}`
+      }
+      return 'python app.py'
+    },
+    port: 8000,
+    workDir: '/app',
+  },
+  {
+    id: 'php',
+    image: 'php:8.3-apache',
+    detect: (names) => names.some((n) => n.endsWith('.php')),
+    defaultCmd: () => 'apache2-foreground',
+    port: 80,
+    workDir: '/var/www/html',
+  },
+  {
+    id: 'ruby',
+    image: 'ruby:3.3-alpine',
+    detect: (names) => names.includes('Gemfile') || names.some((n) => n.endsWith('.rb')),
+    defaultCmd: (files) => {
+      for (const candidate of ['app.rb', 'server.rb', 'config.ru']) {
+        if (files.some((f) => f.name === candidate)) {
+          return candidate === 'config.ru' ? 'bundle exec rackup -p 9292 -o 0.0.0.0' : `ruby ${candidate}`
+        }
+      }
+      return 'bundle exec ruby app.rb'
+    },
+    port: 9292,
+    workDir: '/app',
+  },
+]
+
+/**
+ * Detects the runtime from a list of MCP files ({ path, content }).
+ * Returns { id, image, startCmd, workDir, port }.
+ */
+function detectRuntimeForFiles(files) {
+  // Map MCP { path, content } → { name, text } used by the detection table.
+  const mapped = files.map((f) => ({
+    name: (f.path || '').split('/').pop(),
+    text: f.content,
+  }))
+  const names = mapped.map((f) => f.name)
+
+  // Static sites (all assets static) and the no-match case both default to nginx.
+  const rt = RUNTIMES.find((r) => r.detect(names)) || NGINX_RUNTIME
+
+  return {
+    id: rt.id,
+    image: rt.image,
+    startCmd: rt.defaultCmd(mapped),
+    workDir: rt.workDir,
+    port: rt.port,
+  }
+}
+
 async function toolDeployVibeApp(req, args, caller) {
   if (!FEATURE_VIBE_DEPLOY) throw new Error('Vibe Deploy is not enabled on this Portainer Run instance')
 
@@ -202,6 +300,10 @@ async function toolDeployVibeApp(req, args, caller) {
   if (!appName || !envId || !namespace || !gitTargetId || !files.length) {
     throw new Error('appName, envId, namespace, gitTargetId, and files are all required')
   }
+
+  // Detect runtime, image, start command, working dir, and port from the files —
+  // the UI does this client-side; without it the MCP deploy crashloops.
+  const detected = detectRuntimeForFiles(files)
 
   // Auto-detect env vars from .env.example if not provided
   let resolvedEnvVars = envVars
@@ -236,14 +338,14 @@ async function toolDeployVibeApp(req, args, caller) {
       ns: namespace,
       instances: 1,
       exposeType,
-      servicePorts: [3000],
+      servicePorts: [detected.port],
       ingress: {},
     },
     vibeParams: {
-      runtime: '',
-      runtimeImage: '',
-      startCmd: '',
-      workDir: '/app',
+      runtime: detected.id,
+      runtimeImage: detected.image,
+      startCmd: detected.startCmd,
+      workDir: detected.workDir,
       envVars: resolvedEnvVars,
       sourceType: 'upload',
       sourceFiles: files.map((f) => ({ path: f.path, content: f.content })),
