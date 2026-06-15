@@ -108,7 +108,7 @@ function buildTools() {
           },
           gitTargetId: {
             type: 'string',
-            description: 'Git target ID for manifest storage (from list_git_targets)',
+            description: 'Git target ID for manifest storage (from list_git_targets). Git targets cannot be created via MCP — if none exist, direct the user to add one in the Portainer Run UI first.',
           },
           files: {
             type: 'array',
@@ -209,7 +209,7 @@ async function toolListNamespaces(req, args) {
 
 async function toolListGitTargets(req, caller) {
   const conns = getConnectionsForUser(caller.userId)
-  return conns.map((c) => ({
+  const gitTargets = conns.map((c) => ({
     id: c.id,
     name: c.name,
     repo: c.payload?.repo,
@@ -217,6 +217,19 @@ async function toolListGitTargets(req, caller) {
     defaultBranch: c.payload?.defaultBranch || 'main',
     shared: c.shared,
   }))
+
+  const result = { gitTargets }
+  // A git target is required to deploy, and one cannot be created via MCP
+  // (that would require a Git credential to transit the chat). Make the
+  // dead-end explicit so the model directs the user to the UI instead of
+  // failing the deploy.
+  if (gitTargets.length === 0) {
+    result.message =
+      'No git targets are configured for this user. A git target is required to deploy, ' +
+      'and it cannot be created through MCP. Ask the user to add one in the Portainer Run UI ' +
+      '(Git Targets section), then call list_git_targets again.'
+  }
+  return result
 }
 
 /**

@@ -126,7 +126,7 @@ Available tools:
 
 `list_namespaces` — returns namespaces in a given environment, filtered to exclude system namespaces.
 
-`list_git_targets` — returns git targets accessible to the caller (own targets plus shared targets).
+`list_git_targets` — returns `{ gitTargets }` accessible to the caller (own targets plus shared targets). When none exist it also returns a `message` explaining that a git target is required and must be created in the Portainer Run UI (git targets cannot be created via MCP).
 
 `list_ingress_classes` — returns the IngressClasses defined in an environment (including which one is the cluster default), plus `baseDomain` and `ingressHostRequired`. Use it to pick an ingress class when deploying with `exposeType: "Ingress"`. When `ingressHostRequired` is `true` no base domain is configured, so a full `ingress.host` must be supplied.
 
