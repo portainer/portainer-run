@@ -70,7 +70,9 @@ function buildTools() {
     description:
       'List the IngressClasses defined in a Kubernetes environment, including which one is the cluster default. ' +
       'Call this when deploying with exposeType "Ingress" to choose the correct ingress class. If you omit ' +
-      'ingressClass on deploy_vibe_app, the cluster default (if any) is applied automatically.',
+      'ingressClass on deploy_vibe_app, the cluster default (if any) is applied automatically. ' +
+      'The response also reports baseDomain and ingressHostRequired: when ingressHostRequired is true there is ' +
+      'no base domain to derive a hostname from, so you must supply a full ingress.host — ask the user for it.',
     inputSchema: {
       type: 'object',
       required: ['envId'],
@@ -142,7 +144,7 @@ function buildTools() {
             description:
               'Ingress settings, used only when exposeType is "Ingress". If host is omitted and a base domain is configured, defaults to <appName>.<baseDomain>.',
             properties: {
-              host: { type: 'string', description: 'Ingress hostname, e.g. my-app.example.com' },
+              host: { type: 'string', description: 'Full ingress hostname, e.g. my-app.example.com. Required when exposeType is "Ingress" unless the server has a base domain configured (check list_ingress_classes — ingressHostRequired). If no base domain is configured, ask the user for the hostname.' },
               path: { type: 'string', description: 'Ingress path. Default: /' },
               ingressClass: { type: 'string', description: 'Ingress class name, e.g. nginx. Call list_ingress_classes to see options. If omitted, the cluster default IngressClass is applied automatically.' },
             },
@@ -246,7 +248,15 @@ async function toolListIngressClasses(req, args) {
   const target = resolvePortainerTarget(req)
   if (!target) throw new Error('Cannot resolve Portainer target')
 
-  return fetchIngressClasses(target, token, envId)
+  const classes = await fetchIngressClasses(target, token, envId)
+  // Tell the model whether a host can be derived server-side. When no base
+  // domain is configured, there is nothing to derive — the caller must supply
+  // a full ingress.host (and should ask the user for it).
+  return {
+    classes,
+    baseDomain: BASE_DOMAIN || null,
+    ingressHostRequired: !BASE_DOMAIN,
+  }
 }
 
 // ---------------------------------------------------------------------------
