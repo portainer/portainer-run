@@ -24,6 +24,7 @@ import {
   FEATURE_VIBE_DEPLOY,
   FEATURE_SIMPLE_DEPLOY,
   FEATURE_MANIFEST_BUILDER,
+  BASE_DOMAIN,
 } from '../config.js'
 import { resolveCallerIdentity, extractToken, portainerGet } from '../lib/identity.js'
 import { resolvePortainerTarget } from '../resolve-portainer.js'
@@ -32,6 +33,27 @@ import { handleVibe } from './vibe.js'
 
 const MCP_VERSION = '2024-11-05'
 const SERVER_INFO = { name: 'portainer-run', version: '1.0.0' }
+
+// Server-level guidance surfaced to the model by compliant MCP clients
+// (returned in the initialize response). This makes the deploy workflow
+// self-describing so the user does not have to prompt for it — the model
+// is told to gather the info the tool schema cannot enforce on its own.
+const SERVER_INSTRUCTIONS = [
+  'Portainer Run deploys applications to Kubernetes from source files via the deploy_vibe_app tool.',
+  '',
+  'Before calling deploy_vibe_app, gather and confirm the following with the user. Do not assume defaults silently — ask when anything is unknown or ambiguous:',
+  '1. Environment — call list_environments. If more than one is returned, ask which to use.',
+  '2. Namespace — call list_namespaces. If more than one is returned, ask which to use.',
+  '3. Git target — call list_git_targets. If none exist, tell the user to create one in the Portainer Run UI (git targets cannot be created via MCP) and stop. If several exist, ask which.',
+  '4. App name — propose one and confirm it with the user.',
+  '5. Exposure — explicitly ask how the app should be reachable: none, NodePort, LoadBalancer, or Ingress. Do not default to NodePort without asking.',
+  '6. Ingress (only if chosen) — call list_ingress_classes. If ingressHostRequired is true, ask the user for the full hostname. Confirm which ingress class to use.',
+  '7. Environment variables / secrets — if the app needs any, list them and ask the user for values.',
+  '',
+  'Port: deploy_vibe_app has no port parameter. The service port is inferred from the detected runtime (Node 3000, Python 8000, php/nginx 80, Ruby 9292). Make the app listen on that runtime default and bind 0.0.0.0. If the app must use a non-standard port, warn the user that the MCP deploy may expose the wrong port and the app could be unreachable.',
+  '',
+  'Always show a summary of the chosen settings and get explicit confirmation before calling deploy_vibe_app.',
+].join('\n')
 
 // ---------------------------------------------------------------------------
 // Tool definitions
@@ -64,6 +86,23 @@ function buildTools() {
     inputSchema: { type: 'object', properties: {} },
   })
 
+  tools.push({
+    name: 'list_ingress_classes',
+    description:
+      'List the IngressClasses defined in a Kubernetes environment, including which one is the cluster default. ' +
+      'Call this when deploying with exposeType "Ingress" to choose the correct ingress class. If you omit ' +
+      'ingressClass on deploy_vibe_app, the cluster default (if any) is applied automatically. ' +
+      'The response also reports baseDomain and ingressHostRequired: when ingressHostRequired is true there is ' +
+      'no base domain to derive a hostname from, so you must supply a full ingress.host — ask the user for it.',
+    inputSchema: {
+      type: 'object',
+      required: ['envId'],
+      properties: {
+        envId: { type: 'string', description: 'Environment ID from list_environments' },
+      },
+    },
+  })
+
   if (FEATURE_VIBE_DEPLOY) {
     tools.push({
       name: 'deploy_vibe_app',
@@ -90,7 +129,7 @@ function buildTools() {
           },
           gitTargetId: {
             type: 'string',
-            description: 'Git target ID for manifest storage (from list_git_targets)',
+            description: 'Git target ID for manifest storage (from list_git_targets). Git targets cannot be created via MCP — if none exist, direct the user to add one in the Portainer Run UI first.',
           },
           files: {
             type: 'array',
@@ -120,6 +159,16 @@ function buildTools() {
             type: 'string',
             enum: ['none', 'NodePort', 'LoadBalancer', 'Ingress'],
             description: 'How to expose the app externally. Default: NodePort.',
+          },
+          ingress: {
+            type: 'object',
+            description:
+              'Ingress settings, used only when exposeType is "Ingress". If host is omitted and a base domain is configured, defaults to <appName>.<baseDomain>.',
+            properties: {
+              host: { type: 'string', description: 'Full ingress hostname, e.g. my-app.example.com. Required when exposeType is "Ingress" unless the server has a base domain configured (check list_ingress_classes — ingressHostRequired). If no base domain is configured, ask the user for the hostname.' },
+              path: { type: 'string', description: 'Ingress path. Default: /' },
+              ingressClass: { type: 'string', description: 'Ingress class name, e.g. nginx. Call list_ingress_classes to see options. If omitted, the cluster default IngressClass is applied automatically.' },
+            },
           },
           branch: {
             type: 'string',
@@ -151,15 +200,51 @@ function buildTools() {
 // Tool implementations — reuse existing server logic directly
 // ---------------------------------------------------------------------------
 
+/**
+ * Reads the set of environments an admin has disabled from deploy flows.
+ * Stored as a JSON map (keyed by string env Id, truthy = disabled) in the
+ * `portainer-run-config` ConfigMap in kube-system — the same source the UI
+ * uses. The map is global, so the first environment that returns it wins.
+ * Returns {} when no config exists (nothing disabled).
+ */
+async function fetchDisabledEnvs(target, token, envIds) {
+  for (const id of envIds) {
+    try {
+      const cm = await portainerGet(
+        target, token,
+        `/api/endpoints/${id}/kubernetes/api/v1/namespaces/kube-system/configmaps/portainer-run-config`,
+      )
+      const raw = cm?.data?.disabledEnvs
+      if (!raw) continue
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') {
+        const map = {}
+        for (const [k, v] of Object.entries(parsed)) map[String(k)] = v
+        return map
+      }
+    } catch { /* unreachable env or no config — try the next */ }
+  }
+  return {}
+}
+
 async function toolListEnvironments(req) {
   const token = extractToken(req)
   const target = resolvePortainerTarget(req)
   if (!target) throw new Error('Cannot resolve Portainer target — ensure PORTAINER_URL is set or send X-Portainer-URL header')
 
   const eps = await portainerGet(target, token, '/api/endpoints')
-  const K8S_TYPES = [1, 7]
+  // Portainer EndpointType: 1=Docker, 2=Agent-on-Docker, 3=Azure, 4=Edge-agent-on-Docker,
+  // 5=Kubernetes (local), 6=agent-on-Kubernetes, 7=Edge-on-Kubernetes. This app is
+  // Kubernetes-only, so include 5–7 (matches the UI in services/session.js).
+  const K8S_TYPES = [5, 6, 7]
+  const TYPE_LABELS = { 5: 'local', 6: 'agent', 7: 'edge' }
   const k8sEnvs = (Array.isArray(eps) ? eps : []).filter((e) => K8S_TYPES.includes(e.Type))
-  return k8sEnvs.map((e) => ({ id: String(e.Id), name: e.Name, type: e.Type === 7 ? 'agent' : 'local' }))
+
+  // Hide environments an admin has disabled from deploy flows (matches the UI).
+  const disabled = await fetchDisabledEnvs(target, token, k8sEnvs.map((e) => e.Id))
+  return k8sEnvs
+    .filter((e) => !disabled[String(e.Id)])
+    .map((e) => ({ id: String(e.Id), name: e.Name, type: TYPE_LABELS[e.Type] || 'kubernetes' }))
 }
 
 async function toolListNamespaces(req, args) {
@@ -181,7 +266,7 @@ async function toolListNamespaces(req, args) {
 
 async function toolListGitTargets(req, caller) {
   const conns = getConnectionsForUser(caller.userId)
-  return conns.map((c) => ({
+  const gitTargets = conns.map((c) => ({
     id: c.id,
     name: c.name,
     repo: c.payload?.repo,
@@ -189,6 +274,157 @@ async function toolListGitTargets(req, caller) {
     defaultBranch: c.payload?.defaultBranch || 'main',
     shared: c.shared,
   }))
+
+  const result = { gitTargets }
+  // A git target is required to deploy, and one cannot be created via MCP
+  // (that would require a Git credential to transit the chat). Make the
+  // dead-end explicit so the model directs the user to the UI instead of
+  // failing the deploy.
+  if (gitTargets.length === 0) {
+    result.message =
+      'No git targets are configured for this user. A git target is required to deploy, ' +
+      'and it cannot be created through MCP. Ask the user to add one in the Portainer Run UI ' +
+      '(Git Targets section), then call list_git_targets again.'
+  }
+  return result
+}
+
+/**
+ * Fetches the IngressClasses defined in an environment via the Portainer
+ * Kubernetes proxy (same endpoint used by the Cluster Readiness check).
+ * Returns [{ name, controller, isDefault }].
+ */
+async function fetchIngressClasses(target, token, envId) {
+  const data = await portainerGet(
+    target, token,
+    `/api/endpoints/${envId}/kubernetes/apis/networking.k8s.io/v1/ingressclasses`,
+  )
+  const items = data?.items || []
+  return items
+    .map((c) => ({
+      name: c.metadata?.name,
+      controller: c.spec?.controller || '',
+      isDefault: c.metadata?.annotations?.['ingressclass.kubernetes.io/is-default-class'] === 'true',
+    }))
+    .filter((c) => c.name)
+}
+
+async function toolListIngressClasses(req, args) {
+  const { envId } = args
+  if (!envId) throw new Error('envId is required')
+  // Validate envId is numeric to prevent path injection into Portainer API
+  if (!/^\d+$/.test(String(envId))) throw new Error('envId must be a numeric environment ID')
+  const token = extractToken(req)
+  const target = resolvePortainerTarget(req)
+  if (!target) throw new Error('Cannot resolve Portainer target')
+
+  const classes = await fetchIngressClasses(target, token, envId)
+  // Tell the model whether a host can be derived server-side. When no base
+  // domain is configured, there is nothing to derive — the caller must supply
+  // a full ingress.host (and should ask the user for it).
+  return {
+    classes,
+    baseDomain: BASE_DOMAIN || null,
+    ingressHostRequired: !BASE_DOMAIN,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Runtime detection (server-side mirror of client/src/components/VibeDeploy.jsx)
+//
+// The browser UI fills runtime/runtimeImage/startCmd/workDir/port before calling
+// the deploy backend. The MCP path has no UI, so without this it would always
+// deploy a bare node:20-alpine image with no start command — which crashloops.
+// Keep this in sync with the RUNTIMES table in VibeDeploy.jsx.
+// ---------------------------------------------------------------------------
+
+const NGINX_RUNTIME = {
+  id: 'nginx',
+  image: 'nginx:alpine',
+  defaultCmd: () => "nginx -g 'daemon off;'",
+  port: 80,
+  workDir: '/usr/share/nginx/html',
+}
+
+const RUNTIMES = [
+  {
+    id: 'node',
+    image: 'node:20-alpine',
+    detect: (names) => names.includes('package.json'),
+    defaultCmd: (files) => {
+      const pkg = files.find((f) => f.name === 'package.json')
+      if (pkg) {
+        try {
+          const parsed = JSON.parse(pkg.text)
+          if (parsed?.scripts?.start) return 'npm start'
+        } catch { /* ignore */ }
+      }
+      const hasServerJs = files.some((f) => f.name === 'server.js' || f.name === 'index.js')
+      return hasServerJs ? `node ${files.find((f) => f.name === 'server.js') ? 'server.js' : 'index.js'}` : 'npm start'
+    },
+    port: 3000,
+    workDir: '/app',
+  },
+  {
+    id: 'python',
+    image: 'python:3.12-slim',
+    detect: (names) => names.includes('requirements.txt') || names.some((n) => n.endsWith('.py')),
+    defaultCmd: (files) => {
+      for (const candidate of ['main.py', 'app.py', 'server.py', 'run.py']) {
+        if (files.some((f) => f.name === candidate)) return `python ${candidate}`
+      }
+      return 'python app.py'
+    },
+    port: 8000,
+    workDir: '/app',
+  },
+  {
+    id: 'php',
+    image: 'php:8.3-apache',
+    detect: (names) => names.some((n) => n.endsWith('.php')),
+    defaultCmd: () => 'apache2-foreground',
+    port: 80,
+    workDir: '/var/www/html',
+  },
+  {
+    id: 'ruby',
+    image: 'ruby:3.3-alpine',
+    detect: (names) => names.includes('Gemfile') || names.some((n) => n.endsWith('.rb')),
+    defaultCmd: (files) => {
+      for (const candidate of ['app.rb', 'server.rb', 'config.ru']) {
+        if (files.some((f) => f.name === candidate)) {
+          return candidate === 'config.ru' ? 'bundle exec rackup -p 9292 -o 0.0.0.0' : `ruby ${candidate}`
+        }
+      }
+      return 'bundle exec ruby app.rb'
+    },
+    port: 9292,
+    workDir: '/app',
+  },
+]
+
+/**
+ * Detects the runtime from a list of MCP files ({ path, content }).
+ * Returns { id, image, startCmd, workDir, port }.
+ */
+function detectRuntimeForFiles(files) {
+  // Map MCP { path, content } → { name, text } used by the detection table.
+  const mapped = files.map((f) => ({
+    name: (f.path || '').split('/').pop(),
+    text: f.content,
+  }))
+  const names = mapped.map((f) => f.name)
+
+  // Static sites (all assets static) and the no-match case both default to nginx.
+  const rt = RUNTIMES.find((r) => r.detect(names)) || NGINX_RUNTIME
+
+  return {
+    id: rt.id,
+    image: rt.image,
+    startCmd: rt.defaultCmd(mapped),
+    workDir: rt.workDir,
+    port: rt.port,
+  }
 }
 
 async function toolDeployVibeApp(req, args, caller) {
@@ -196,12 +432,47 @@ async function toolDeployVibeApp(req, args, caller) {
 
   const {
     appName, envId, namespace, gitTargetId,
-    files = [], envVars, exposeType = 'NodePort', branch = 'main',
+    files = [], envVars, exposeType = 'NodePort', ingress = {}, branch = 'main',
   } = args
 
   if (!appName || !envId || !namespace || !gitTargetId || !files.length) {
     throw new Error('appName, envId, namespace, gitTargetId, and files are all required')
   }
+
+  const safeAppName = appName.toLowerCase().replace(/[^a-z0-9-]/g, '-')
+
+  // Resolve ingress settings. When exposing via Ingress without an explicit host,
+  // fall back to <appName>.<BASE_DOMAIN> if a base domain is configured — mirroring
+  // the template/UI default. Without a host, buildVibeManifests skips the Ingress.
+  const resolvedIngress = exposeType === 'Ingress'
+    ? {
+        host: ingress.host || (BASE_DOMAIN ? `${safeAppName}.${BASE_DOMAIN}` : ''),
+        path: ingress.path || '/',
+        ...(ingress.ingressClass ? { ingressClass: ingress.ingressClass } : {}),
+      }
+    : {}
+
+  if (exposeType === 'Ingress' && !resolvedIngress.host) {
+    throw new Error('exposeType "Ingress" requires ingress.host (or a configured BASE_DOMAIN)')
+  }
+
+  // When no class was supplied, fall back to the cluster's default IngressClass
+  // so the Ingress is actually claimed by a controller. Best effort — if the
+  // lookup fails or there's no default, deploy without an explicit class.
+  if (exposeType === 'Ingress' && !resolvedIngress.ingressClass) {
+    try {
+      const target = resolvePortainerTarget(req)
+      if (target) {
+        const classes = await fetchIngressClasses(target, extractToken(req), envId)
+        const def = classes.find((c) => c.isDefault)
+        if (def) resolvedIngress.ingressClass = def.name
+      }
+    } catch { /* no default available — continue without a class */ }
+  }
+
+  // Detect runtime, image, start command, working dir, and port from the files —
+  // the UI does this client-side; without it the MCP deploy crashloops.
+  const detected = detectRuntimeForFiles(files)
 
   // Auto-detect env vars from .env.example if not provided
   let resolvedEnvVars = envVars
@@ -232,18 +503,18 @@ async function toolDeployVibeApp(req, args, caller) {
     envId,
     envName: '',
     deployParams: {
-      appName: appName.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+      appName: safeAppName,
       ns: namespace,
       instances: 1,
       exposeType,
-      servicePorts: [3000],
-      ingress: {},
+      servicePorts: [detected.port],
+      ingress: resolvedIngress,
     },
     vibeParams: {
-      runtime: '',
-      runtimeImage: '',
-      startCmd: '',
-      workDir: '/app',
+      runtime: detected.id,
+      runtimeImage: detected.image,
+      startCmd: detected.startCmd,
+      workDir: detected.workDir,
       envVars: resolvedEnvVars,
       sourceType: 'upload',
       sourceFiles: files.map((f) => ({ path: f.path, content: f.content })),
@@ -341,6 +612,7 @@ async function dispatch(method, params, req, caller) {
         protocolVersion: MCP_VERSION,
         capabilities: { tools: {} },
         serverInfo: SERVER_INFO,
+        instructions: SERVER_INSTRUCTIONS,
       }
 
     case 'tools/list':
@@ -358,6 +630,9 @@ async function dispatch(method, params, req, caller) {
           break
         case 'list_git_targets':
           toolResult = await toolListGitTargets(req, caller)
+          break
+        case 'list_ingress_classes':
+          toolResult = await toolListIngressClasses(req, args)
           break
         case 'deploy_vibe_app':
           toolResult = await toolDeployVibeApp(req, args, caller)

@@ -120,15 +120,19 @@ Portainer Run exposes an MCP (Model Context Protocol) endpoint at `POST /mcp` th
 
 Authentication uses either `Authorization: Bearer <portainer-token>` or `X-API-Key: <portainer-token>`. The token is validated against Portainer's `/users/me` endpoint on first use and cached for five minutes.
 
+The server returns workflow guidance in the MCP `initialize` response (`instructions`). Compliant clients surface this to the model automatically, so it knows to gather the required deployment details (environment, namespace, git target, exposure, ingress host, port behaviour) and confirm them before deploying — without the user having to prompt for it.
+
 Available tools:
 
-`list_environments` — returns Kubernetes environments accessible with the provided token.
+`list_environments` — returns Kubernetes environments accessible with the provided token, excluding any an admin has disabled from deploy flows (Cluster Readiness).
 
 `list_namespaces` — returns namespaces in a given environment, filtered to exclude system namespaces.
 
-`list_git_targets` — returns git targets accessible to the caller (own targets plus shared targets).
+`list_git_targets` — returns `{ gitTargets }` accessible to the caller (own targets plus shared targets). When none exist it also returns a `message` explaining that a git target is required and must be created in the Portainer Run UI (git targets cannot be created via MCP).
 
-`deploy_vibe_app` — deploys source files to Kubernetes via the full Vibe Deploy pipeline. Accepts `appName`, `envId`, `namespace`, `gitTargetId`, `files` (array of `{ path, content }`), and optional `envVars`, `exposeType`, and `branch`. Auto-detects runtime and parses `.env.example` for environment variables if `envVars` is not supplied. Only available when `FEATURE_VIBE_DEPLOY` is enabled.
+`list_ingress_classes` — returns the IngressClasses defined in an environment (including which one is the cluster default), plus `baseDomain` and `ingressHostRequired`. Use it to pick an ingress class when deploying with `exposeType: "Ingress"`. When `ingressHostRequired` is `true` no base domain is configured, so a full `ingress.host` must be supplied.
+
+`deploy_vibe_app` — deploys source files to Kubernetes via the full Vibe Deploy pipeline. Accepts `appName`, `envId`, `namespace`, `gitTargetId`, `files` (array of `{ path, content }`), and optional `envVars`, `exposeType`, `ingress` (`{ host, path, ingressClass }`), and `branch`. Auto-detects runtime and parses `.env.example` for environment variables if `envVars` is not supplied. When `exposeType` is `Ingress`, the host defaults to `<appName>.<BASE_DOMAIN>` if `BASE_DOMAIN` is set, and `ingressClass` defaults to the cluster's default IngressClass when not supplied. Only available when `FEATURE_VIBE_DEPLOY` is enabled.
 
 `get_app_status` — returns the running status of a deployed application from the server-side cache.
 
