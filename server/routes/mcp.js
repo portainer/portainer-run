@@ -233,14 +233,18 @@ async function toolListEnvironments(req) {
   if (!target) throw new Error('Cannot resolve Portainer target — ensure PORTAINER_URL is set or send X-Portainer-URL header')
 
   const eps = await portainerGet(target, token, '/api/endpoints')
-  const K8S_TYPES = [1, 7]
+  // Portainer EndpointType: 1=Docker, 2=Agent-on-Docker, 3=Azure, 4=Edge-agent-on-Docker,
+  // 5=Kubernetes (local), 6=agent-on-Kubernetes, 7=Edge-on-Kubernetes. This app is
+  // Kubernetes-only, so include 5–7 (matches the UI in services/session.js).
+  const K8S_TYPES = [5, 6, 7]
+  const TYPE_LABELS = { 5: 'local', 6: 'agent', 7: 'edge' }
   const k8sEnvs = (Array.isArray(eps) ? eps : []).filter((e) => K8S_TYPES.includes(e.Type))
 
   // Hide environments an admin has disabled from deploy flows (matches the UI).
   const disabled = await fetchDisabledEnvs(target, token, k8sEnvs.map((e) => e.Id))
   return k8sEnvs
     .filter((e) => !disabled[String(e.Id)])
-    .map((e) => ({ id: String(e.Id), name: e.Name, type: e.Type === 7 ? 'agent' : 'local' }))
+    .map((e) => ({ id: String(e.Id), name: e.Name, type: TYPE_LABELS[e.Type] || 'kubernetes' }))
 }
 
 async function toolListNamespaces(req, args) {
