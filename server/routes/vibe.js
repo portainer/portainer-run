@@ -329,10 +329,15 @@ function buildVibeManifests({
         apiVersion: 'networking.k8s.io/v1',
         kind: 'Ingress',
         metadata: {
-          name: safeApp, namespace: ns, labels, annotations,
-          ...(ingress.ingressClass ? { annotations: { ...annotations, 'kubernetes.io/ingress.class': ingress.ingressClass } } : {}),
+          name: safeApp, namespace: ns, labels,
+          annotations: ingress.ingressClass
+            ? { ...annotations, 'kubernetes.io/ingress.class': ingress.ingressClass }
+            : annotations,
         },
         spec: {
+          // Set spec.ingressClassName (the canonical field; the matching
+          // annotation above is kept for legacy controllers).
+          ...(ingress.ingressClass ? { ingressClassName: ingress.ingressClass } : {}),
           rules: [{
             host: ingress.host,
             http: {
@@ -830,6 +835,9 @@ async function handleVibeUpdateExposure(req, res) {
             ...(ingress.ingressClass ? { annotations: { 'kubernetes.io/ingress.class': ingress.ingressClass } } : {}),
           },
           spec: {
+            // Set spec.ingressClassName (the canonical field; the matching
+            // annotation above is kept for legacy controllers).
+            ...(ingress.ingressClass ? { ingressClassName: ingress.ingressClass } : {}),
             rules: [{
               host: ingress.host,
               http: { paths: [{ path: ingress.path || '/', pathType: 'Prefix', backend: { service: { name: safeApp, port: { number: svcPort } } } }] },
@@ -907,7 +915,10 @@ async function handleVibeManifestExposure(req, res) {
     if (ingDoc) {
       const hostMatch = ingDoc.match(/^\s+host:\s*(\S+)/m)
       const pathMatch = ingDoc.match(/^\s+path:\s*(\S+)/m)
-      const classMatch = ingDoc.match(/kubernetes\.io\/ingress\.class:\s*(\S+)/m)
+      // Prefer spec.ingressClassName; fall back to the legacy annotation for
+      // manifests written before the switch.
+      const classMatch = ingDoc.match(/^\s+ingressClassName:\s*(\S+)/m)
+        || ingDoc.match(/kubernetes\.io\/ingress\.class:\s*(\S+)/m)
       if (hostMatch) result.ingHost = hostMatch[1]
       if (pathMatch) result.ingPath = pathMatch[1]
       if (classMatch) result.ingClass = classMatch[1]
