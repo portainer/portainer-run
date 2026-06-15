@@ -124,7 +124,7 @@ The server returns workflow guidance in the MCP `initialize` response (`instruct
 
 Available tools:
 
-`list_environments` — returns Kubernetes environments accessible with the provided token.
+`list_environments` — returns Kubernetes environments accessible with the provided token, excluding any an admin has disabled from deploy flows (Cluster Readiness).
 
 `list_namespaces` — returns namespaces in a given environment, filtered to exclude system namespaces.
 

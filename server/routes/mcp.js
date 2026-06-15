@@ -200,6 +200,33 @@ function buildTools() {
 // Tool implementations — reuse existing server logic directly
 // ---------------------------------------------------------------------------
 
+/**
+ * Reads the set of environments an admin has disabled from deploy flows.
+ * Stored as a JSON map (keyed by string env Id, truthy = disabled) in the
+ * `portainer-run-config` ConfigMap in kube-system — the same source the UI
+ * uses. The map is global, so the first environment that returns it wins.
+ * Returns {} when no config exists (nothing disabled).
+ */
+async function fetchDisabledEnvs(target, token, envIds) {
+  for (const id of envIds) {
+    try {
+      const cm = await portainerGet(
+        target, token,
+        `/api/endpoints/${id}/kubernetes/api/v1/namespaces/kube-system/configmaps/portainer-run-config`,
+      )
+      const raw = cm?.data?.disabledEnvs
+      if (!raw) continue
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') {
+        const map = {}
+        for (const [k, v] of Object.entries(parsed)) map[String(k)] = v
+        return map
+      }
+    } catch { /* unreachable env or no config — try the next */ }
+  }
+  return {}
+}
+
 async function toolListEnvironments(req) {
   const token = extractToken(req)
   const target = resolvePortainerTarget(req)
@@ -208,7 +235,12 @@ async function toolListEnvironments(req) {
   const eps = await portainerGet(target, token, '/api/endpoints')
   const K8S_TYPES = [1, 7]
   const k8sEnvs = (Array.isArray(eps) ? eps : []).filter((e) => K8S_TYPES.includes(e.Type))
-  return k8sEnvs.map((e) => ({ id: String(e.Id), name: e.Name, type: e.Type === 7 ? 'agent' : 'local' }))
+
+  // Hide environments an admin has disabled from deploy flows (matches the UI).
+  const disabled = await fetchDisabledEnvs(target, token, k8sEnvs.map((e) => e.Id))
+  return k8sEnvs
+    .filter((e) => !disabled[String(e.Id)])
+    .map((e) => ({ id: String(e.Id), name: e.Name, type: e.Type === 7 ? 'agent' : 'local' }))
 }
 
 async function toolListNamespaces(req, args) {
