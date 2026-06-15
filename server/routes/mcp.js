@@ -24,6 +24,7 @@ import {
   FEATURE_VIBE_DEPLOY,
   FEATURE_SIMPLE_DEPLOY,
   FEATURE_MANIFEST_BUILDER,
+  BASE_DOMAIN,
 } from '../config.js'
 import { resolveCallerIdentity, extractToken, portainerGet } from '../lib/identity.js'
 import { resolvePortainerTarget } from '../resolve-portainer.js'
@@ -120,6 +121,16 @@ function buildTools() {
             type: 'string',
             enum: ['none', 'NodePort', 'LoadBalancer', 'Ingress'],
             description: 'How to expose the app externally. Default: NodePort.',
+          },
+          ingress: {
+            type: 'object',
+            description:
+              'Ingress settings, used only when exposeType is "Ingress". If host is omitted and a base domain is configured, defaults to <appName>.<baseDomain>.',
+            properties: {
+              host: { type: 'string', description: 'Ingress hostname, e.g. my-app.example.com' },
+              path: { type: 'string', description: 'Ingress path. Default: /' },
+              ingressClass: { type: 'string', description: 'Ingress class name, e.g. nginx' },
+            },
           },
           branch: {
             type: 'string',
@@ -294,11 +305,28 @@ async function toolDeployVibeApp(req, args, caller) {
 
   const {
     appName, envId, namespace, gitTargetId,
-    files = [], envVars, exposeType = 'NodePort', branch = 'main',
+    files = [], envVars, exposeType = 'NodePort', ingress = {}, branch = 'main',
   } = args
 
   if (!appName || !envId || !namespace || !gitTargetId || !files.length) {
     throw new Error('appName, envId, namespace, gitTargetId, and files are all required')
+  }
+
+  const safeAppName = appName.toLowerCase().replace(/[^a-z0-9-]/g, '-')
+
+  // Resolve ingress settings. When exposing via Ingress without an explicit host,
+  // fall back to <appName>.<BASE_DOMAIN> if a base domain is configured — mirroring
+  // the template/UI default. Without a host, buildVibeManifests skips the Ingress.
+  const resolvedIngress = exposeType === 'Ingress'
+    ? {
+        host: ingress.host || (BASE_DOMAIN ? `${safeAppName}.${BASE_DOMAIN}` : ''),
+        path: ingress.path || '/',
+        ...(ingress.ingressClass ? { ingressClass: ingress.ingressClass } : {}),
+      }
+    : {}
+
+  if (exposeType === 'Ingress' && !resolvedIngress.host) {
+    throw new Error('exposeType "Ingress" requires ingress.host (or a configured BASE_DOMAIN)')
   }
 
   // Detect runtime, image, start command, working dir, and port from the files —
@@ -334,12 +362,12 @@ async function toolDeployVibeApp(req, args, caller) {
     envId,
     envName: '',
     deployParams: {
-      appName: appName.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+      appName: safeAppName,
       ns: namespace,
       instances: 1,
       exposeType,
       servicePorts: [detected.port],
-      ingress: {},
+      ingress: resolvedIngress,
     },
     vibeParams: {
       runtime: detected.id,
