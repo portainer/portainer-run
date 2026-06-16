@@ -179,37 +179,42 @@ function resolveUrl(appName, svcs, ings, nodeIp) {
  * @param {string} token
  * @param {string} envId
  * @param {{ host: string, port: number, isHttps: boolean, key: string }} target
+ * @param {string[]} namespaces  Known namespaces for this user — used as fallback when cluster-level calls return 403
  */
-async function buildEnvStatus(token, envId, target) {
+async function buildEnvStatus(token, envId, target, namespaces = []) {
+  const labelSel = encodeURIComponent('managed-by=portainer-run')
   const [podsR, svcsR, ingsR, nodesR] = await Promise.all([
-    kubeCall(
-      token,
-      envId,
-      '/api/v1/pods?labelSelector=' +
-        encodeURIComponent('managed-by=portainer-run'),
-      target
-    ),
-    kubeCall(
-      token,
-      envId,
-      '/api/v1/services?labelSelector=' +
-        encodeURIComponent('managed-by=portainer-run'),
-      target
-    ),
-    kubeCall(
-      token,
-      envId,
-      '/apis/networking.k8s.io/v1/ingresses?labelSelector=' +
-        encodeURIComponent('managed-by=portainer-run'),
-      target
-    ),
+    kubeCall(token, envId, '/api/v1/pods?labelSelector=' + labelSel, target),
+    kubeCall(token, envId, '/api/v1/services?labelSelector=' + labelSel, target),
+    kubeCall(token, envId, '/apis/networking.k8s.io/v1/ingresses?labelSelector=' + labelSel, target),
     kubeCall(token, envId, '/api/v1/nodes', target),
   ])
 
-  const pods = podsR.status === 200 ? podsR.body.items || [] : []
-  const svcs = svcsR.status === 200 ? svcsR.body.items || [] : []
-  const ings = ingsR.status === 200 ? ingsR.body.items || [] : []
+  let pods = podsR.status === 200 ? podsR.body.items || [] : []
+  let svcs = svcsR.status === 200 ? svcsR.body.items || [] : []
+  let ings = ingsR.status === 200 ? ingsR.body.items || [] : []
   const nodes = nodesR.status === 200 ? nodesR.body.items || [] : []
+
+  // Namespace-scoped fallback for users without cluster-level list permissions.
+  // If pods or services returned 403 and the client supplied known namespaces,
+  // retry with per-namespace scoped calls — same pattern fetchExposureDetail uses.
+  if ((podsR.status === 403 || svcsR.status === 403) && namespaces.length > 0) {
+    const nsResults = await Promise.all(
+      namespaces.flatMap((ns) => [
+        kubeCall(token, envId, `/api/v1/namespaces/${ns}/pods?labelSelector=${labelSel}`, target),
+        kubeCall(token, envId, `/api/v1/namespaces/${ns}/services?labelSelector=${labelSel}`, target),
+        kubeCall(token, envId, `/apis/networking.k8s.io/v1/namespaces/${ns}/ingresses?labelSelector=${labelSel}`, target),
+      ])
+    )
+    pods = []
+    svcs = []
+    ings = []
+    for (let i = 0; i < nsResults.length; i += 3) {
+      if (nsResults[i].status === 200)     pods.push(...(nsResults[i].body.items || []))
+      if (nsResults[i + 1].status === 200) svcs.push(...(nsResults[i + 1].body.items || []))
+      if (nsResults[i + 2].status === 200) ings.push(...(nsResults[i + 2].body.items || []))
+    }
+  }
 
   let nodeIp = null
   for (const node of nodes) {
@@ -219,12 +224,18 @@ async function buildEnvStatus(token, envId, target) {
     nodeIp = ext?.address || int?.address
     if (nodeIp) break
   }
+  // For namespace-scoped users /api/v1/nodes returns 403 so nodeIp stays null.
+  // Fall back to the Portainer host — not the node's real external IP, but gives
+  // a clickable URL for NodePort services on typical single-node or internal clusters.
+  if (!nodeIp && nodesR.status === 403) {
+    nodeIp = target.host
+  }
 
   const podsByApp = {}
   for (const pod of pods) {
     const app = pod.metadata?.labels?.app
     if (!app) continue
-    (podsByApp[app] = podsByApp[app] || []).push(pod)
+    ;(podsByApp[app] = podsByApp[app] || []).push(pod)
   }
 
   const result = {}
@@ -286,6 +297,12 @@ export async function handleEnvStatus(req, res, envId) {
     )
     return
   }
+
+  // Parse namespace hints supplied by the client (?ns=james-namespace,other-ns)
+  const qs = (req.url || '').split('?')[1] || ''
+  const nsParam = new URLSearchParams(qs).get('ns') || ''
+  const namespaces = nsParam.split(',').filter(Boolean)
+
   const ck = crypto
     .createHash('sha256')
     .update(token + ':' + envId + ':' + target.key)
@@ -298,7 +315,7 @@ export async function handleEnvStatus(req, res, envId) {
     return
   }
   try {
-    const data = await buildEnvStatus(token, envId, target)
+    const data = await buildEnvStatus(token, envId, target, namespaces)
     statusCache.set(ck, { data, expiresAt: now + STATUS_TTL })
     res.writeHead(200, { 'Content-Type': 'application/json', ...CORS })
     res.end(JSON.stringify({ cached: false, data }))
