@@ -175,6 +175,8 @@ a.nav-item{color:inherit;}
 .btn-ghost:disabled{opacity:.4;cursor:not-allowed;}
 .btn-danger{background:transparent;color:var(--red);border:1px solid rgba(239,68,68,.3);}
 .btn-danger:hover{background:rgba(239,68,68,.1);}
+.btn-warning{background:transparent;color:var(--amber,#f59e0b);border:1px solid rgba(245,158,11,.3);}
+.btn-warning:hover{background:rgba(245,158,11,.1);}
 .btn-sm{padding:5px 12px;font-size:12px;}
 .btn-xs{padding:3px 9px;font-size:11px;}
 
