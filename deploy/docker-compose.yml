@@ -32,6 +32,8 @@ services:
       - ANTHROPIC_API_KEY=
       # OpenAI (GPT-4o):
       # - OPENAI_API_KEY=
+      # OpenAI model override (default: gpt-4o):
+      # - OPENAI_MODEL=gpt-4o
       # Explicit provider override (auto-detected from key if not set):
       # - AI_PROVIDER=anthropic
 
@@ -48,6 +50,25 @@ services:
       # - PORT=443
       # - HTTP_PORT=80
 
+      # ── Cache directory ───────────────────────────────────────────────────
+      # Override the directory used for persistent cache (default: /app/data).
+      # Must match the mountPath of the volume below if changed.
+      # - CACHE_DIR=/app/data
+
+      # ── TLS certificates ──────────────────────────────────────────────────
+      # Mount your cert directory (see volumes below) and set these paths.
+      # Without these, a self-signed certificate is generated on first start.
+      # - SSL_CERT=/certs/fullchain.pem
+      # - SSL_KEY=/certs/privkey.pem
+      # - SSL_CERT_DIR=/certs
+
+      # ── Feature flags (all on by default; set to 'false' to disable) ──────
+      - FEATURE_VIBE_DEPLOY=true
+      - FEATURE_SIMPLE_DEPLOY=false
+      - FEATURE_MANIFEST_BUILDER=false
+      - FEATURE_CATALOGUE=false
+      - FEATURE_SECRETS=false
+
     volumes:
       # ── Persistent session cache ──────────────────────────────────────────
       # Without this, the cache is lost on container restart.
@@ -55,15 +76,9 @@ services:
        - portainer-run-data:/app/data
 
       # ── Real TLS certificates ─────────────────────────────────────────────
-      # Mount your cert directory and set SSL_CERT / SSL_KEY below.
+      # Mount your cert directory and set SSL_CERT / SSL_KEY above.
       # Without this, a self-signed certificate is generated on first start.
       # - /etc/letsencrypt/live/portainer-run.example.com:/certs:ro
-
-    # Uncomment if using real TLS certificates (requires the volume above):
-    # environment:
-    #   - SSL_CERT=/certs/fullchain.pem
-    #   - SSL_KEY=/certs/privkey.pem
-    #   - SSL_CERT_DIR=/certs
 
     # ── DNS ────────────────────────────────────────────────────────────────
     # If the container cannot resolve your Portainer hostname, uncomment:
