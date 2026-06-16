@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { checkEnvPermissions } from '../lib/envPermissions.js'
-import { restartDeployment } from '../lib/restartDeployment.js'
 import { useNavigate } from 'react-router-dom'
 import SortableList from '../design-system/react/SortableList.jsx'
 import StatusSummaryBar from '../design-system/react/StatusSummaryBar.jsx'
@@ -100,7 +99,7 @@ function ServiceRowContent({
   onKeyDown = undefined,
 }) {
   const token = useAppStore((s) => s.token)
-  const pushToast = useAppStore((s) => s.pushToast)
+  const setRestartTarget = useAppStore((s) => s.setRestartTarget)
   const envPermissions = useAppStore((s) => s.envPermissions)
   const patchEnvPermissions = useAppStore((s) => s.patchEnvPermissions)
   const permKey = `${d._envId}:${d.metadata.namespace}`
@@ -112,7 +111,6 @@ function ServiceRowContent({
     void checkEnvPermissions(token, d._envId, d.metadata.namespace)
       .then((p) => patchEnvPermissions(d._envId, d.metadata.namespace, p))
   }, [permKey])
-  const [restarting, setRestarting] = useState(false)
   const name = d.metadata.name
   const ns = d.metadata.namespace
   const envId = d._envId
@@ -124,19 +122,10 @@ function ServiceRowContent({
   const { border, dot, label } = rowClasses(d)
   const extra = getExtraForApp(envStatusClientCache, envId, name)
 
-  const onRestart = async (e) => {
+  const onRestart = (e) => {
     e.stopPropagation()
-    if (!token || restarting) return
-    setRestarting(true)
-    try {
-      await restartDeployment(token, String(envId), ns, name)
-      pushToast(`"${name}" is restarting — pods will be replaced one by one`, 'ok')
-      void manualRefresh(false)
-    } catch (err) {
-      pushToast('Restart failed: ' + (err?.message || String(err)), 'err')
-    } finally {
-      setRestarting(false)
-    }
+    if (!token) return
+    setRestartTarget({ envId, ns, name })
   }
 
   return (
@@ -216,11 +205,11 @@ function ServiceRowContent({
           type="button"
           className="btn btn-ghost btn-xs"
           onClick={onRestart}
-          disabled={restarting || !perms?.canRestart}
+          disabled={!perms?.canRestart}
           title={!perms?.canRestart ? 'You do not have permission to restart workloads in this environment' : undefined}
           style={!perms?.canRestart ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
         >
-          {restarting ? '…' : 'Restart'}
+          Restart
         </button>
 
       </div>
