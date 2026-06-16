@@ -833,7 +833,7 @@ export function VibeDeploy() {
         }}>
           <span style={{ color: 'var(--amber)', fontSize: 16, flexShrink: 0 }}>⚠</span>
           <span style={{ color: 'var(--text)' }}>
-            No git targets configured. Portainer Run requires a git repository to commit manifests and source files before deploying.{' '}
+            No git targets configured. Portainer-Run requires a git repository to commit manifests and source files before deploying.{' '}
             <Link to={ROUTES.gitTargets} style={{ color: 'var(--accent)' }}>Set one up in Git Targets</Link> first.
           </span>
         </div>

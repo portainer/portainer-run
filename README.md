@@ -1,10 +1,10 @@
-# Portainer Run
+# Portainer-Run
 
-A self-service deployment portal for Kubernetes, backed by the Portainer API. Portainer Run sits between people who can build applications with AI coding tools and the Kubernetes infrastructure those applications need to run on.
+A self-service deployment portal for Kubernetes, backed by the Portainer API. Portainer-Run sits between people who can build applications with AI coding tools and the Kubernetes infrastructure those applications need to run on.
 
 ## Quick start
 
-Deploy Portainer Run then access it via `https://your-ip-address/`.
+Deploy Portainer-Run then access it via `https://your-ip-address/`.
 
 ### Kubernetes
 
@@ -36,11 +36,11 @@ The best AI-assisted development tools know this. It's why they push hosting ont
 
 That platform team is already stretched. The influx of deployment requests coming from people who have never touched infrastructure is a real and growing problem with no clean answer today. Buying an IDP that takes a year to configure before anyone can use it is not the answer.
 
-Portainer Run sits in that gap. The container image (or source folder) is already an artifact AI coding tools can produce. Portainer Run is the "now run it, inside your environment" layer, with the platform team's guardrails baked in via Portainer's existing RBAC and policy controls. The platform team's role shifts from processing every deployment ticket to setting the rules once.
+Portainer-Run sits in that gap. The container image (or source folder) is already an artifact AI coding tools can produce. Portainer-Run is the "now run it, inside your environment" layer, with the platform team's guardrails baked in via Portainer's existing RBAC and policy controls. The platform team's role shifts from processing every deployment ticket to setting the rules once.
 
 ## What it does
 
-Portainer Run connects to your Portainer instance using a personal access token. Access is governed entirely by your Portainer RBAC role. Once connected it provides a unified view across all Kubernetes environments your account can reach.
+Portainer-Run connects to your Portainer instance using a personal access token. Access is governed entirely by your Portainer RBAC role. Once connected it provides a unified view across all Kubernetes environments your account can reach.
 
 **Applications** is the primary operational view and the landing page after login. It lists all deployments tagged `managed-by=portainer-run` with a traffic light status per row, sortable by name, environment, health, or creation date. Status reasons are fetched from pod state and shown in plain English: "App keeps crashing (4 restarts)", "Can't download the image", "No node has enough resources", and so on. The exposure column shows a clickable address. Each row has Logs, Restart, and Delete actions. A **+ Deploy** button in the page header adapts to enabled features: if only one deploy feature is enabled it navigates directly; if multiple are enabled it shows a dropdown listing the available options.
 
@@ -48,15 +48,15 @@ There is no separate Dashboard page. Applications serves that role.
 
 
 
-**Vibe Deploy** is the deployment path designed for source files produced by AI coding tools. Drop the files Claude or another AI tool generated, and Portainer Run handles runtime detection, dependency installation, git commit, and Kubernetes deployment automatically. No Dockerfile, no CI pipeline, no container registry required.
+**Vibe Deploy** is the deployment path designed for source files produced by AI coding tools. Drop the files Claude or another AI tool generated, and Portainer-Run handles runtime detection, dependency installation, git commit, and Kubernetes deployment automatically. No Dockerfile, no CI pipeline, no container registry required.
 
 The runtime is detected from the file structure. A `package.json` maps to Node.js 20. A `requirements.txt` maps to Python 3.12. A `Gemfile` maps to Ruby 3.3. `.php` files map to PHP 8.3 with Apache. Everything else defaults to nginx for static HTML/CSS/JS.
 
 On deploy, three init containers run before the app starts: the first clones source files from git into a PersistentVolume, the second runs the dependency installer (`npm install`, `pip install`, etc.) in the correct runtime image, and the third writes a `.env` file from the entered environment variables. None of this requires a build step.
 
-If uploaded files include a `.env.example`, Portainer Run detects it and presents an editable list of keys before deploying. Keys matching common patterns (SECRET, TOKEN, KEY, PASSWORD) are masked in the form.
+If uploaded files include a `.env.example`, Portainer-Run detects it and presents an editable list of keys before deploying. Keys matching common patterns (SECRET, TOKEN, KEY, PASSWORD) are masked in the form.
 
-Vibe Deploy also supports deploying directly from an existing git repository. Instead of uploading files, select a configured git target, branch, and optional subfolder — Portainer Run fetches the file listing, detects the runtime, and clones directly from that source repository on every pod start.
+Vibe Deploy also supports deploying directly from an existing git repository. Instead of uploading files, select a configured git target, branch, and optional subfolder — Portainer-Run fetches the file listing, detects the runtime, and clones directly from that source repository on every pod start.
 
 **Simple Deploy** provides a Cloud Run-style form for single-container and multi-container (sidecar) workloads, supporting persistent storage, environment variables, Kubernetes Secret references, resource limits including GPU, and all service exposure types.
 
@@ -82,7 +82,7 @@ Each target stores the provider (GitHub, GitLab, Gitea, or other), the repositor
 
 The Test button on each target checks connectivity and reports read and write permissions. For GitHub, the check uses the collaborator permissions API, which works correctly with fine-grained PATs. For GitHub fine-grained PATs, the token requires Contents (read and write) permission on the target repository. Classic PATs require the `repo` scope.
 
-For GitHub Enterprise Server, keep the provider set to GitHub and enter your server host in the GitHub server URL field. Portainer Run uses the GitHub-compatible REST API at `/api/v3` on that host. Do not use the "Other" provider for GitHub Enterprise — that path targets the Gitea API.
+For GitHub Enterprise Server, keep the provider set to GitHub and enter your server host in the GitHub server URL field. Portainer-Run uses the GitHub-compatible REST API at `/api/v3` on that host. Do not use the "Other" provider for GitHub Enterprise — that path targets the Gitea API.
 
 For self-hosted GitLab, keep the provider set to GitLab and enter your server host in the GitLab server URL field. Leave it blank for gitlab.com.
 
@@ -90,7 +90,7 @@ Directory deletion on app removal uses the GitHub Git Data API tree approach: a 
 
 ## Roles
 
-Portainer Run derives roles from Portainer. A user with Role 1 (admin) in Portainer is an admin in Portainer Run.
+Portainer-Run derives roles from Portainer. A user with Role 1 (admin) in Portainer is an admin in Portainer-Run.
 
 Admins see the Admin section of the navigation, which contains Cluster Readiness and full git target management including the ability to mark targets as shared. Admins can edit and delete any git target, including shared ones.
 
@@ -116,7 +116,7 @@ A common deployment pattern is Vibe Deploy only (`FEATURE_SIMPLE_DEPLOY=false FE
 
 ## MCP endpoint
 
-Portainer Run exposes an MCP (Model Context Protocol) endpoint at `POST /mcp` that allows AI coding tools to deploy applications directly.
+Portainer-Run exposes an MCP (Model Context Protocol) endpoint at `POST /mcp` that allows AI coding tools to deploy applications directly.
 
 Authentication uses either `Authorization: Bearer <portainer-token>` or `X-API-Key: <portainer-token>`. The token is validated against Portainer's `/users/me` endpoint on first use and cached for five minutes.
 
@@ -128,7 +128,7 @@ Available tools:
 
 `list_namespaces` — returns namespaces in a given environment, filtered to exclude system namespaces.
 
-`list_git_targets` — returns `{ gitTargets }` accessible to the caller (own targets plus shared targets). When none exist it also returns a `message` explaining that a git target is required and must be created in the Portainer Run UI (git targets cannot be created via MCP).
+`list_git_targets` — returns `{ gitTargets }` accessible to the caller (own targets plus shared targets). When none exist it also returns a `message` explaining that a git target is required and must be created in the Portainer-Run UI (git targets cannot be created via MCP).
 
 `list_ingress_classes` — returns the IngressClasses defined in an environment (including which one is the cluster default), plus `baseDomain` and `ingressHostRequired`. Use it to pick an ingress class when deploying with `exposeType: "Ingress"`. When `ingressHostRequired` is `true` no base domain is configured, so a full `ingress.host` must be supplied.
 
@@ -181,7 +181,7 @@ Browser → Node proxy (server.js) → Portainer API
                                   → OpenAI API     (if configured)
 ```
 
-Portainer Run is a React/Vite frontend served by a Node.js proxy. The proxy forwards Kubernetes API calls to Portainer (bypassing browser CORS), relays AI requests to the configured provider (keeping the API key server-side), serves the aggregated `/env-status/` endpoint, exposes the `/mcp` MCP endpoint, and maintains a file-backed session cache.
+Portainer-Run is a React/Vite frontend served by a Node.js proxy. The proxy forwards Kubernetes API calls to Portainer (bypassing browser CORS), relays AI requests to the configured provider (keeping the API key server-side), serves the aggregated `/env-status/` endpoint, exposes the `/mcp` MCP endpoint, and maintains a file-backed session cache.
 
 User credentials never appear in server logs. AI API keys never reach the browser.
 
@@ -317,7 +317,7 @@ If the container cannot resolve your Portainer hostname (error: `EAI_AGAIN`), ad
 
 ## Connecting
 
-Navigate to `https://<your-host>` and enter a Portainer personal access token. Generate one in Portainer under Account → Access Tokens. The token scope determines what Portainer Run can see and do — namespace-scoped tokens require manual namespace entry on deploy; cluster-scoped tokens enumerate namespaces automatically.
+Navigate to `https://<your-host>` and enter a Portainer personal access token. Generate one in Portainer under Account → Access Tokens. The token scope determines what Portainer-Run can see and do — namespace-scoped tokens require manual namespace entry on deploy; cluster-scoped tokens enumerate namespaces automatically.
 
 Portainer's RBAC applies in full. Users with admin role in Portainer see the Admin section including Cluster Readiness and shared git target management. Non-admin users see only their own targets plus any shared targets an admin has created.
 
@@ -325,7 +325,7 @@ Sessions persist across page refreshes and are cleared on disconnect.
 
 ## Notes on scope
 
-Portainer Run only surfaces deployments it created. It tags every Deployment, Service, PVC, and Ingress with `managed-by=portainer-run` and filters the Applications page to that label. Workloads deployed through Portainer's own UI or `kubectl` will not appear. Secrets are an exception — the Secrets page and secret picker show all secrets in the namespace regardless of origin.
+Portainer-Run only surfaces deployments it created. It tags every Deployment, Service, PVC, and Ingress with `managed-by=portainer-run` and filters the Applications page to that label. Workloads deployed through Portainer's own UI or `kubectl` will not appear. Secrets are an exception — the Secrets page and secret picker show all secrets in the namespace regardless of origin.
 
 Persistent storage volumes cannot be modified after deployment. PVCs are created at deploy time and are not touched by the Edit tab.
 

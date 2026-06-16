@@ -11,7 +11,7 @@ function serverHeaders() {
 
 /**
  * Deploy a Helm chart via Portainer's Helm stack API.
- * Routed through the Portainer Run server to keep the token server-side.
+ * Routed through the Portainer-Run server to keep the token server-side.
  *
  * @param {object} p
  * @param {string} p.envId

@@ -1,5 +1,5 @@
 /**
- * MCP (Model Context Protocol) endpoint for Portainer Run.
+ * MCP (Model Context Protocol) endpoint for Portainer-Run.
  *
  * Exposes Vibe Deploy capabilities to AI coding tools (Claude, etc.) via
  * the MCP JSON-RPC protocol over plain HTTP.
@@ -39,12 +39,12 @@ const SERVER_INFO = { name: 'portainer-run', version: '1.0.0' }
 // self-describing so the user does not have to prompt for it — the model
 // is told to gather the info the tool schema cannot enforce on its own.
 const SERVER_INSTRUCTIONS = [
-  'Portainer Run deploys applications to Kubernetes from source files via the deploy_vibe_app tool.',
+  'Portainer-Run deploys applications to Kubernetes from source files via the deploy_vibe_app tool.',
   '',
   'Before calling deploy_vibe_app, gather and confirm the following with the user. Do not assume defaults silently — ask when anything is unknown or ambiguous:',
   '1. Environment — call list_environments. If more than one is returned, ask which to use.',
   '2. Namespace — call list_namespaces. If more than one is returned, ask which to use.',
-  '3. Git target — call list_git_targets. If none exist, tell the user to create one in the Portainer Run UI (git targets cannot be created via MCP) and stop. If several exist, ask which.',
+  '3. Git target — call list_git_targets. If none exist, tell the user to create one in the Portainer-Run UI (git targets cannot be created via MCP) and stop. If several exist, ask which.',
   '4. App name — propose one and confirm it with the user.',
   '5. Exposure — explicitly ask how the app should be reachable: none, NodePort, LoadBalancer, or Ingress. Do not default to NodePort without asking.',
   '6. Ingress (only if chosen) — call list_ingress_classes. If ingressHostRequired is true, ask the user for the full hostname. Confirm which ingress class to use.',
@@ -82,7 +82,7 @@ function buildTools() {
 
   tools.push({
     name: 'list_git_targets',
-    description: 'List git repositories configured in Portainer Run. These are used to store deployment manifests. Call this to find the gitTargetId needed for deployment.',
+    description: 'List git repositories configured in Portainer-Run. These are used to store deployment manifests. Call this to find the gitTargetId needed for deployment.',
     inputSchema: { type: 'object', properties: {} },
   })
 
@@ -107,7 +107,7 @@ function buildTools() {
     tools.push({
       name: 'deploy_vibe_app',
       description:
-        'Deploy an application to Kubernetes via Portainer Run. Pass the source files directly — ' +
+        'Deploy an application to Kubernetes via Portainer-Run. Pass the source files directly — ' +
         'runtime detection, dependency installation, git commit, and Kubernetes deployment are all ' +
         'handled automatically. Use list_environments, list_namespaces, and list_git_targets first ' +
         'to get the required IDs.',
@@ -129,7 +129,7 @@ function buildTools() {
           },
           gitTargetId: {
             type: 'string',
-            description: 'Git target ID for manifest storage (from list_git_targets). Git targets cannot be created via MCP — if none exist, direct the user to add one in the Portainer Run UI first.',
+            description: 'Git target ID for manifest storage (from list_git_targets). Git targets cannot be created via MCP — if none exist, direct the user to add one in the Portainer-Run UI first.',
           },
           files: {
             type: 'array',
@@ -283,7 +283,7 @@ async function toolListGitTargets(req, caller) {
   if (gitTargets.length === 0) {
     result.message =
       'No git targets are configured for this user. A git target is required to deploy, ' +
-      'and it cannot be created through MCP. Ask the user to add one in the Portainer Run UI ' +
+      'and it cannot be created through MCP. Ask the user to add one in the Portainer-Run UI ' +
       '(Git Targets section), then call list_git_targets again.'
   }
   return result
@@ -428,7 +428,7 @@ function detectRuntimeForFiles(files) {
 }
 
 async function toolDeployVibeApp(req, args, caller) {
-  if (!FEATURE_VIBE_DEPLOY) throw new Error('Vibe Deploy is not enabled on this Portainer Run instance')
+  if (!FEATURE_VIBE_DEPLOY) throw new Error('Vibe Deploy is not enabled on this Portainer-Run instance')
 
   const {
     appName, envId, namespace, gitTargetId,

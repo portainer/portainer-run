@@ -35,7 +35,7 @@ export default function EmptyRepoWarning({ id, onInitialized }) {
     }}>
       <div style={{ color: 'var(--amber)', fontWeight: 600 }}>⚠ Repository is empty</div>
       <div style={{ color: 'var(--text-dim)', fontSize: 11, lineHeight: 1.5 }}>
-        This repository has no commits. Portainer Run needs at least one commit before it can push manifests and source files.
+        This repository has no commits. Portainer-Run needs at least one commit before it can push manifests and source files.
         Click Initialize to create an initial commit automatically.
       </div>
       {error && <div style={{ color: 'var(--red)', fontSize: 11 }}>{error}</div>}
