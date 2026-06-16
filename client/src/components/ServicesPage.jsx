@@ -467,7 +467,7 @@ export function ServicesPage() {
                     <span className="svc-l-header-name"><span>Name</span></span>
                     <span>Image</span>
                     <span>Environment</span>
-                    <span>Namespace</span>
+                    <span>Project space</span>
                     <span>Status</span>
                     <span>Exposure</span>
                     <span>Age</span>
@@ -529,7 +529,7 @@ export function ServicesPage() {
                   <span className="svc-l-header-name"><span>Name</span></span>
                   <span>Image</span>
                   <span>Environment</span>
-                  <span>Namespace</span>
+                  <span>Project space</span>
                   <span>Status</span>
                   <span>Exposure</span>
                   <span>Age</span>
