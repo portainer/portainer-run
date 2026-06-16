@@ -50,6 +50,8 @@ const SERVER_INSTRUCTIONS = [
   '6. Ingress (only if chosen) — call list_ingress_classes. If ingressHostRequired is true, ask the user for the full hostname. Confirm which ingress class to use.',
   '7. Environment variables / secrets — if the app needs any, list them and ask the user for values.',
   '',
+  'Static sites: if the app is plain HTML/CSS/JS with no server-side logic, deploy it as a static site — send only the static files (index.html, css, js, assets) and set runtime to "nginx". Do NOT scaffold a Node/Express (or any) server to serve static files; adding a package.json would make it deploy as a Node app instead of nginx.',
+  '',
   'Port: deploy_vibe_app has no port parameter. The service port is inferred from the detected runtime (Node 3000, Python 8000, php/nginx 80, Ruby 9292). Make the app listen on that runtime default and bind 0.0.0.0. If the app must use a non-standard port, warn the user that the MCP deploy may expose the wrong port and the app could be unreachable.',
   '',
   'Always show a summary of the chosen settings and get explicit confirmation before calling deploy_vibe_app.',
@@ -130,6 +132,11 @@ function buildTools() {
           gitTargetId: {
             type: 'string',
             description: 'Git target ID for manifest storage (from list_git_targets). Git targets cannot be created via MCP — if none exist, direct the user to add one in the Portainer Run UI first.',
+          },
+          runtime: {
+            type: 'string',
+            enum: ['auto', 'node', 'python', 'php', 'ruby', 'nginx'],
+            description: 'Runtime override. Default: auto (detected from the files). Set to "nginx" to deploy a static HTML/CSS/JS site — send only the static files (index.html, css, js, assets) and do NOT scaffold a Node/Express or other server to serve them.',
           },
           files: {
             type: 'array',
@@ -403,11 +410,16 @@ const RUNTIMES = [
   },
 ]
 
+const ALL_RUNTIMES = [...RUNTIMES, NGINX_RUNTIME]
+
 /**
- * Detects the runtime from a list of MCP files ({ path, content }).
+ * Resolves the runtime for a list of MCP files ({ path, content }).
+ * When `forcedId` is given (and not 'auto') that runtime is used directly —
+ * e.g. 'nginx' to serve a static site even if a stray package.json is present.
+ * Otherwise the runtime is detected from the file structure.
  * Returns { id, image, startCmd, workDir, port }.
  */
-function detectRuntimeForFiles(files) {
+function detectRuntimeForFiles(files, forcedId) {
   // Map MCP { path, content } → { name, text } used by the detection table.
   const mapped = files.map((f) => ({
     name: (f.path || '').split('/').pop(),
@@ -415,8 +427,14 @@ function detectRuntimeForFiles(files) {
   }))
   const names = mapped.map((f) => f.name)
 
-  // Static sites (all assets static) and the no-match case both default to nginx.
-  const rt = RUNTIMES.find((r) => r.detect(names)) || NGINX_RUNTIME
+  let rt
+  if (forcedId && forcedId !== 'auto') {
+    rt = ALL_RUNTIMES.find((r) => r.id === forcedId)
+    if (!rt) throw new Error(`Unknown runtime "${forcedId}" — use one of: ${ALL_RUNTIMES.map((r) => r.id).join(', ')}`)
+  } else {
+    // Static sites (all assets static) and the no-match case both default to nginx.
+    rt = RUNTIMES.find((r) => r.detect(names)) || NGINX_RUNTIME
+  }
 
   return {
     id: rt.id,
@@ -433,6 +451,7 @@ async function toolDeployVibeApp(req, args, caller) {
   const {
     appName, envId, namespace, gitTargetId,
     files = [], envVars, exposeType = 'NodePort', ingress = {}, branch = 'main',
+    runtime = 'auto',
   } = args
 
   if (!appName || !envId || !namespace || !gitTargetId || !files.length) {
@@ -471,8 +490,9 @@ async function toolDeployVibeApp(req, args, caller) {
   }
 
   // Detect runtime, image, start command, working dir, and port from the files —
-  // the UI does this client-side; without it the MCP deploy crashloops.
-  const detected = detectRuntimeForFiles(files)
+  // the UI does this client-side; without it the MCP deploy crashloops. A
+  // caller-supplied runtime (e.g. "nginx" for a static site) overrides detection.
+  const detected = detectRuntimeForFiles(files, runtime)
 
   // Auto-detect env vars from .env.example if not provided
   let resolvedEnvVars = envVars
