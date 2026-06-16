@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import JSZip from 'jszip'
 import { Link, useNavigate } from 'react-router-dom'
 import { ROUTES } from '../lib/routes.js'
 import { listGitTargets } from '../lib/gitTargets.js'
@@ -132,6 +133,35 @@ const SECRET_PATTERN = /SECRET|KEY|TOKEN|PASSWORD|PASS|AUTH|CREDENTIAL/i
 // ---------------------------------------------------------------------------
 // Step indicator
 // ---------------------------------------------------------------------------
+// ZIP extraction
+// ---------------------------------------------------------------------------
+
+async function extractZip(file) {
+  const zip = await JSZip.loadAsync(file)
+  const results = []
+  const tasks = []
+  zip.forEach((relPath, entry) => {
+    // Skip directories and macOS metadata folders
+    if (entry.dir || relPath.startsWith('__MACOSX/') || relPath.includes('/__MACOSX/')) return
+    tasks.push(
+      entry.async('text').then((text) => {
+        const parts = relPath.split('/')
+        const name = parts[parts.length - 1]
+        if (!name) return // skip entries with trailing slash that aren't flagged as dir
+        results.push({
+          name,
+          size: text.length,
+          text,
+          webkitRelativePath: relPath,
+        })
+      })
+    )
+  })
+  await Promise.all(tasks)
+  return results
+}
+
+// ---------------------------------------------------------------------------
 // File drop zone
 // ---------------------------------------------------------------------------
 
@@ -180,13 +210,22 @@ function DropZone({ onFiles }) {
   const filesRef = useRef(null)
 
   function readFileList(fileList) {
-    const readers = Array.from(fileList).map((file) => new Promise((resolve) => {
-      const reader = new FileReader()
-      reader.onload = (e) => resolve({ name: file.name, size: file.size, text: e.target.result, webkitRelativePath: file.webkitRelativePath || file.name })
-      reader.onerror = () => resolve({ name: file.name, size: file.size, text: '', webkitRelativePath: file.webkitRelativePath || file.name })
-      reader.readAsText(file)
-    }))
-    Promise.all(readers).then(onFiles)
+    const allFiles = Array.from(fileList)
+    const zips = allFiles.filter((f) => f.name.toLowerCase().endsWith('.zip'))
+    const rest = allFiles.filter((f) => !f.name.toLowerCase().endsWith('.zip'))
+
+    const zipPromises = zips.map((f) => extractZip(f))
+    const restPromise = rest.length
+      ? Promise.all(rest.map((file) => new Promise((resolve) => {
+          const reader = new FileReader()
+          reader.onload = (e) => resolve({ name: file.name, size: file.size, text: e.target.result, webkitRelativePath: file.webkitRelativePath || file.name })
+          reader.onerror = () => resolve({ name: file.name, size: file.size, text: '', webkitRelativePath: file.webkitRelativePath || file.name })
+          reader.readAsText(file)
+        })))
+      : Promise.resolve([])
+
+    Promise.all([restPromise, ...zipPromises])
+      .then((groups) => onFiles(groups.flat()))
   }
 
   async function onDrop(e) {
@@ -197,8 +236,19 @@ function DropZone({ onFiles }) {
     if (items && items.length) {
       const entries = Array.from(items).map((item) => item.webkitGetAsEntry?.()).filter(Boolean)
       if (entries.length) {
-        const all = (await Promise.all(entries.map(traverseEntry))).flat()
-        onFiles(all)
+        // Split zip file entries from everything else
+        const zipEntries = entries.filter((entry) => entry.isFile && entry.name.toLowerCase().endsWith('.zip'))
+        const otherEntries = entries.filter((entry) => !entry.isFile || !entry.name.toLowerCase().endsWith('.zip'))
+
+        const zipFiles = await Promise.all(
+          zipEntries.map((entry) => new Promise((resolve) => entry.file(resolve)))
+        )
+        const zipResults = await Promise.all(zipFiles.map(extractZip))
+        const traversed = otherEntries.length
+          ? (await Promise.all(otherEntries.map(traverseEntry))).flat()
+          : []
+
+        onFiles([...traversed, ...zipResults.flat()])
         return
       }
     }
@@ -855,24 +905,36 @@ export function VibeDeploy() {
                       <div style={{ display: 'flex', gap: 8 }}>
                         <input id="vibe-add-folder" type="file" webkitdirectory="" multiple style={{ display: 'none' }}
                           onChange={(e) => { if (e.target.files.length) {
-                            const readers = Array.from(e.target.files).map((file) => new Promise((res) => {
-                              const r = new FileReader()
-                              r.onload = (ev) => res({ name: file.name, size: file.size, text: ev.target.result, webkitRelativePath: file.webkitRelativePath || file.name })
-                              r.onerror = () => res({ name: file.name, size: file.size, text: '', webkitRelativePath: file.webkitRelativePath || file.name })
-                              r.readAsText(file)
-                            }))
-                            Promise.all(readers).then(handleFilesAdded)
+                            const allFiles = Array.from(e.target.files)
+                            const zips = allFiles.filter((f) => f.name.toLowerCase().endsWith('.zip'))
+                            const rest = allFiles.filter((f) => !f.name.toLowerCase().endsWith('.zip'))
+                            const zipPromises = zips.map((f) => extractZip(f))
+                            const restPromise = rest.length
+                              ? Promise.all(rest.map((file) => new Promise((res) => {
+                                  const r = new FileReader()
+                                  r.onload = (ev) => res({ name: file.name, size: file.size, text: ev.target.result, webkitRelativePath: file.webkitRelativePath || file.name })
+                                  r.onerror = () => res({ name: file.name, size: file.size, text: '', webkitRelativePath: file.webkitRelativePath || file.name })
+                                  r.readAsText(file)
+                                })))
+                              : Promise.resolve([])
+                            Promise.all([restPromise, ...zipPromises]).then((groups) => handleFilesAdded(groups.flat()))
                           }}}
                         />
                         <input id="vibe-add-files" type="file" multiple style={{ display: 'none' }}
                           onChange={(e) => { if (e.target.files.length) {
-                            const readers = Array.from(e.target.files).map((file) => new Promise((res) => {
-                              const r = new FileReader()
-                              r.onload = (ev) => res({ name: file.name, size: file.size, text: ev.target.result, webkitRelativePath: file.webkitRelativePath || file.name })
-                              r.onerror = () => res({ name: file.name, size: file.size, text: '', webkitRelativePath: file.webkitRelativePath || file.name })
-                              r.readAsText(file)
-                            }))
-                            Promise.all(readers).then(handleFilesAdded)
+                            const allFiles = Array.from(e.target.files)
+                            const zips = allFiles.filter((f) => f.name.toLowerCase().endsWith('.zip'))
+                            const rest = allFiles.filter((f) => !f.name.toLowerCase().endsWith('.zip'))
+                            const zipPromises = zips.map((f) => extractZip(f))
+                            const restPromise = rest.length
+                              ? Promise.all(rest.map((file) => new Promise((res) => {
+                                  const r = new FileReader()
+                                  r.onload = (ev) => res({ name: file.name, size: file.size, text: ev.target.result, webkitRelativePath: file.webkitRelativePath || file.name })
+                                  r.onerror = () => res({ name: file.name, size: file.size, text: '', webkitRelativePath: file.webkitRelativePath || file.name })
+                                  r.readAsText(file)
+                                })))
+                              : Promise.resolve([])
+                            Promise.all([restPromise, ...zipPromises]).then((groups) => handleFilesAdded(groups.flat()))
                           }}}
                         />
                         <button type="button" className="btn btn-ghost btn-sm"
