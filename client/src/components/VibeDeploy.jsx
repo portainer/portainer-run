@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import JSZip from 'jszip'
+import { unzip } from 'fflate'
 import { Link, useNavigate } from 'react-router-dom'
 import { ROUTES } from '../lib/routes.js'
 import { listGitTargets } from '../lib/gitTargets.js'
@@ -137,28 +137,29 @@ const SECRET_PATTERN = /SECRET|KEY|TOKEN|PASSWORD|PASS|AUTH|CREDENTIAL/i
 // ---------------------------------------------------------------------------
 
 async function extractZip(file) {
-  const zip = await JSZip.loadAsync(file)
-  const results = []
-  const tasks = []
-  zip.forEach((relPath, entry) => {
-    // Skip directories and macOS metadata folders
-    if (entry.dir || relPath.startsWith('__MACOSX/') || relPath.includes('/__MACOSX/')) return
-    tasks.push(
-      entry.async('text').then((text) => {
+  const arrayBuffer = await file.arrayBuffer()
+  const uint8 = new Uint8Array(arrayBuffer)
+
+  return new Promise((resolve, reject) => {
+    unzip(uint8, (err, files) => {
+      if (err) { reject(err); return }
+      const results = []
+      for (const [relPath, data] of Object.entries(files)) {
+        if (relPath.endsWith('/')) continue // directory entry
+        if (relPath.startsWith('__MACOSX/') || relPath.includes('/__MACOSX/')) continue
         const parts = relPath.split('/')
         const name = parts[parts.length - 1]
-        if (!name) return // skip entries with trailing slash that aren't flagged as dir
+        if (!name) continue
         results.push({
           name,
-          size: text.length,
-          text,
+          size: data.length,
+          text: new TextDecoder().decode(data),
           webkitRelativePath: relPath,
         })
-      })
-    )
+      }
+      resolve(results)
+    })
   })
-  await Promise.all(tasks)
-  return results
 }
 
 // ---------------------------------------------------------------------------
