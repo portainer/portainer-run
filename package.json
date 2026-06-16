@@ -14,7 +14,7 @@
     "react-router-dom": "^6.28.0",
     "zustand": "^4.5.0",
     "js-yaml": "^4.1.0",
-    "jszip": "^3.10.1"
+    "fflate": "^0.8.2"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
