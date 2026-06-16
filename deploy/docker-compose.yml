@@ -1,4 +1,4 @@
-# Portainer Run — Docker Compose deployment
+# Portainer-Run — Docker Compose deployment
 #
 # Required: set PORTAINER_URL and ENCRYPTION_KEY before starting.
 # Optional components are commented out with instructions below.

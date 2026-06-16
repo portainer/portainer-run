@@ -1,6 +1,6 @@
-# Portainer Run — Kubernetes deployment manifest
+# Portainer-Run — Kubernetes deployment manifest
 #
-# Deploys Portainer Run as a single pod in the portainer-run namespace.
+# Deploys Portainer-Run as a single pod in the portainer-run namespace.
 #
 # Required: update PORTAINER_URL and ENCRYPTION_KEY in the ConfigMap before applying.
 # Optional components are commented out with instructions below.
@@ -231,7 +231,7 @@ spec:
       #     - 8.8.8.8
 
 ---
-# Service — exposes Portainer Run within the cluster
+# Service — exposes Portainer-Run within the cluster
 apiVersion: v1
 kind: Service
 metadata:
@@ -260,7 +260,7 @@ spec:
   # type: LoadBalancer
 
 ---
-# Ingress — expose Portainer Run via an ingress controller
+# Ingress — expose Portainer-Run via an ingress controller
 # Uncomment and configure if using ClusterIP above.
 # Requires an ingress controller (nginx, traefik, etc.) in your cluster.
 #
