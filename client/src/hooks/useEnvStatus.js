@@ -40,12 +40,13 @@ function rvFingerprint(deps, state) {
   for (const d of deps) {
     const envId = d._envId
     if (!venv.has(String(envId))) continue
-    if (!by[envId]) by[envId] = []
-    by[envId].push(d.metadata?.resourceVersion || '')
+    if (!by[envId]) by[envId] = { rvs: [], namespaces: new Set() }
+    by[envId].rvs.push(d.metadata?.resourceVersion || '')
+    if (d.metadata?.namespace) by[envId].namespaces.add(d.metadata.namespace)
   }
   const out = {}
-  for (const [envId, rvs] of Object.entries(by)) {
-    out[envId] = rvs.sort().join(',')
+  for (const [envId, { rvs, namespaces }] of Object.entries(by)) {
+    out[envId] = { rv: rvs.sort().join(','), namespaces: [...namespaces].sort() }
   }
   return out
 }
@@ -57,12 +58,13 @@ export function useEnvStatusOnDeployments(deps, token) {
     if (!token) return
     const state = useAppStore.getState()
     const finger = rvFingerprint(deps, state)
-    for (const [envId, rv] of Object.entries(finger)) {
+    for (const [envId, { rv, namespaces }] of Object.entries(finger)) {
       const prev = state.envStatusClientCache[String(envId)]
       if (prev && prev.rv === rv) continue
+      const nsParam = namespaces.length ? '?ns=' + namespaces.join(',') : ''
       const job = () =>
         inflightDedupe(`env-status:${envId}`, async () => {
-          const r = await fetch(`/env-status/${envId}`, {
+          const r = await fetch(`/env-status/${envId}${nsParam}`, {
             headers: { 'X-API-Key': token, ...portainerUrlHeaders() },
           })
           return r.ok ? r.json() : null
