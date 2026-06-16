@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { unzip } from 'fflate'
 import { Link, useNavigate } from 'react-router-dom'
 import { ROUTES } from '../lib/routes.js'
 import { listGitTargets } from '../lib/gitTargets.js'
@@ -6,6 +7,7 @@ import { useAppStore, visibleEnvironments, isEnvDisabled } from '../store/useApp
 import { fetchNamespaceOptions } from '../lib/deployK8s.js'
 import { checkEnvPermissions } from '../lib/envPermissions.js'
 import { GitOpsStep } from './deploy/GitOpsStep.jsx'
+import { checkIngress, checkLoadBalancer } from '../lib/readinessChecks.js'
 
 // ---------------------------------------------------------------------------
 // Runtime detection
@@ -131,6 +133,36 @@ const SECRET_PATTERN = /SECRET|KEY|TOKEN|PASSWORD|PASS|AUTH|CREDENTIAL/i
 // ---------------------------------------------------------------------------
 // Step indicator
 // ---------------------------------------------------------------------------
+// ZIP extraction
+// ---------------------------------------------------------------------------
+
+async function extractZip(file) {
+  const arrayBuffer = await file.arrayBuffer()
+  const uint8 = new Uint8Array(arrayBuffer)
+
+  return new Promise((resolve, reject) => {
+    unzip(uint8, (err, files) => {
+      if (err) { reject(err); return }
+      const results = []
+      for (const [relPath, data] of Object.entries(files)) {
+        if (relPath.endsWith('/')) continue // directory entry
+        if (relPath.startsWith('__MACOSX/') || relPath.includes('/__MACOSX/')) continue
+        const parts = relPath.split('/')
+        const name = parts[parts.length - 1]
+        if (!name) continue
+        results.push({
+          name,
+          size: data.length,
+          text: new TextDecoder().decode(data),
+          webkitRelativePath: relPath,
+        })
+      }
+      resolve(results)
+    })
+  })
+}
+
+// ---------------------------------------------------------------------------
 // File drop zone
 // ---------------------------------------------------------------------------
 
@@ -179,13 +211,22 @@ function DropZone({ onFiles }) {
   const filesRef = useRef(null)
 
   function readFileList(fileList) {
-    const readers = Array.from(fileList).map((file) => new Promise((resolve) => {
-      const reader = new FileReader()
-      reader.onload = (e) => resolve({ name: file.name, size: file.size, text: e.target.result, webkitRelativePath: file.webkitRelativePath || file.name })
-      reader.onerror = () => resolve({ name: file.name, size: file.size, text: '', webkitRelativePath: file.webkitRelativePath || file.name })
-      reader.readAsText(file)
-    }))
-    Promise.all(readers).then(onFiles)
+    const allFiles = Array.from(fileList)
+    const zips = allFiles.filter((f) => f.name.toLowerCase().endsWith('.zip'))
+    const rest = allFiles.filter((f) => !f.name.toLowerCase().endsWith('.zip'))
+
+    const zipPromises = zips.map((f) => extractZip(f))
+    const restPromise = rest.length
+      ? Promise.all(rest.map((file) => new Promise((resolve) => {
+          const reader = new FileReader()
+          reader.onload = (e) => resolve({ name: file.name, size: file.size, text: e.target.result, webkitRelativePath: file.webkitRelativePath || file.name })
+          reader.onerror = () => resolve({ name: file.name, size: file.size, text: '', webkitRelativePath: file.webkitRelativePath || file.name })
+          reader.readAsText(file)
+        })))
+      : Promise.resolve([])
+
+    Promise.all([restPromise, ...zipPromises])
+      .then((groups) => onFiles(groups.flat()))
   }
 
   async function onDrop(e) {
@@ -196,8 +237,19 @@ function DropZone({ onFiles }) {
     if (items && items.length) {
       const entries = Array.from(items).map((item) => item.webkitGetAsEntry?.()).filter(Boolean)
       if (entries.length) {
-        const all = (await Promise.all(entries.map(traverseEntry))).flat()
-        onFiles(all)
+        // Split zip file entries from everything else
+        const zipEntries = entries.filter((entry) => entry.isFile && entry.name.toLowerCase().endsWith('.zip'))
+        const otherEntries = entries.filter((entry) => !entry.isFile || !entry.name.toLowerCase().endsWith('.zip'))
+
+        const zipFiles = await Promise.all(
+          zipEntries.map((entry) => new Promise((resolve) => entry.file(resolve)))
+        )
+        const zipResults = await Promise.all(zipFiles.map(extractZip))
+        const traversed = otherEntries.length
+          ? (await Promise.all(otherEntries.map(traverseEntry))).flat()
+          : []
+
+        onFiles([...traversed, ...zipResults.flat()])
         return
       }
     }
@@ -362,6 +414,10 @@ export function VibeDeploy() {
   const [ingClass, setIngClass] = useState('')
   const [deployConfigConfirmed, setDeployConfigConfirmed] = useState(false)
 
+  // ---- Env capabilities (for expose type filtering) ----
+  // null = not yet probed, true = available, false = not available
+  const [envCapabilities, setEnvCapabilities] = useState({ ingressOk: null, lbOk: null, probing: false })
+
   // ---- Step 5: gitops (stagedParams) ----
   const [stagedParams, setStagedParams] = useState(null)
   const [deploying, setDeploying] = useState(false)
@@ -429,7 +485,43 @@ export function VibeDeploy() {
     }
   }, [files]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch namespaces when envId changes
+  // Auto-select environment when only one is available
+  useEffect(() => {
+    if (envId) return
+    const available = environments.filter((e) => !isEnvDisabled({ disabledEnvs }, e.Id))
+    if (available.length === 1) {
+      setEnvId(String(available[0].Id))
+    }
+  }, [environments, disabledEnvs]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Probe env capabilities when envId changes (for expose type filtering)
+  useEffect(() => {
+    if (!envId || !token) {
+      setEnvCapabilities({ ingressOk: null, lbOk: null, probing: false })
+      return
+    }
+    setEnvCapabilities({ ingressOk: null, lbOk: null, probing: true })
+    Promise.all([
+      checkIngress(token, envId),
+      checkLoadBalancer(token, envId),
+    ]).then(([ingressResult, lbResult]) => {
+      const caps = {
+        ingressOk: ingressResult.ok !== false,
+        lbOk: lbResult.ok !== false,
+        probing: false,
+      }
+      setEnvCapabilities(caps)
+      // Reset expose type if currently-selected option is no longer available
+      setExposeType((prev) => {
+        if (prev === 'LoadBalancer' && !caps.lbOk) return 'none'
+        if (prev === 'Ingress' && !caps.ingressOk) return 'none'
+        return prev
+      })
+    }).catch(() => {
+      // On error, show all options (permissive fallback)
+      setEnvCapabilities({ ingressOk: true, lbOk: true, probing: false })
+    })
+  }, [envId, token])
   useEffect(() => {
     if (!envId || !token) {
       setNsList([]); setNamespace(''); setManualNs(false)
@@ -442,20 +534,25 @@ export function VibeDeploy() {
       if (r.ok) {
         if (r.manual) {
           setManualNs(true)
-          setNsHint({ text: r.message || 'Enter namespace manually', tone: 'warn' })
+          setNsHint({ text: 'Enter your project space name below', tone: 'warn' })
         } else {
           setNsList(r.namespaces)
           setManualNs(false)
-          setNamespace('')
-          setNsHint({ text: `${r.namespaces.length} namespace${r.namespaces.length !== 1 ? 's' : ''} found`, tone: 'ok' })
+          // Auto-select when only one project space is available
+          if (r.namespaces.length === 1) {
+            setNamespace(r.namespaces[0])
+          } else {
+            setNamespace('')
+          }
+          setNsHint({ text: `${r.namespaces.length} project space${r.namespaces.length !== 1 ? 's' : ''} found`, tone: 'ok' })
         }
       } else {
         setManualNs(true)
-        setNsHint({ text: r.error || 'Could not load namespaces', tone: 'err' })
+        setNsHint({ text: r.error || 'Could not load project spaces', tone: 'err' })
       }
     }).catch(() => {
       setManualNs(true)
-      setNsHint({ text: 'Could not load namespaces', tone: 'err' })
+      setNsHint({ text: 'Could not load project spaces', tone: 'err' })
     }).finally(() => setNsLoading(false))
   }, [envId, token])
 
@@ -570,10 +667,10 @@ export function VibeDeploy() {
 
   function confirmDeployConfig() {
     if (!appName.trim()) { pushToast('App name is required', 'err'); return }
-    if (perms && !perms.canDeploy) { pushToast('No deploy permission in this namespace', 'err'); return }
-    if (perms && !perms.canCreatePvc) { pushToast('No permission to create PersistentVolumeClaims in this namespace', 'err'); return }
+    if (perms && !perms.canDeploy) { pushToast('No deploy permission in this project space', 'err'); return }
+    if (perms && !perms.canCreatePvc) { pushToast('No permission to create PersistentVolumeClaims in this project space', 'err'); return }
     if (!envId) { pushToast('Select a target environment', 'err'); return }
-    if (!resolvedNs) { pushToast('Select or enter a namespace', 'err'); return }
+    if (!resolvedNs) { pushToast('Select or enter a project space', 'err'); return }
 
     // Build deploy params for GitOpsStep dry-run + actual deploy
     // Priority: user-entered svcPort > PORT env var > runtime default
@@ -721,7 +818,7 @@ export function VibeDeploy() {
         <div>
           <div className="page-title">Vibe Deploy</div>
           <div className="page-sub">
-            Drop your Claude-generated files — we handle git, runtime detection, and deployment.
+            Drop your vibe coded files — we handle git, runtime detection, and deployment.
           </div>
         </div>
       </div>
@@ -809,24 +906,36 @@ export function VibeDeploy() {
                       <div style={{ display: 'flex', gap: 8 }}>
                         <input id="vibe-add-folder" type="file" webkitdirectory="" multiple style={{ display: 'none' }}
                           onChange={(e) => { if (e.target.files.length) {
-                            const readers = Array.from(e.target.files).map((file) => new Promise((res) => {
-                              const r = new FileReader()
-                              r.onload = (ev) => res({ name: file.name, size: file.size, text: ev.target.result, webkitRelativePath: file.webkitRelativePath || file.name })
-                              r.onerror = () => res({ name: file.name, size: file.size, text: '', webkitRelativePath: file.webkitRelativePath || file.name })
-                              r.readAsText(file)
-                            }))
-                            Promise.all(readers).then(handleFilesAdded)
+                            const allFiles = Array.from(e.target.files)
+                            const zips = allFiles.filter((f) => f.name.toLowerCase().endsWith('.zip'))
+                            const rest = allFiles.filter((f) => !f.name.toLowerCase().endsWith('.zip'))
+                            const zipPromises = zips.map((f) => extractZip(f))
+                            const restPromise = rest.length
+                              ? Promise.all(rest.map((file) => new Promise((res) => {
+                                  const r = new FileReader()
+                                  r.onload = (ev) => res({ name: file.name, size: file.size, text: ev.target.result, webkitRelativePath: file.webkitRelativePath || file.name })
+                                  r.onerror = () => res({ name: file.name, size: file.size, text: '', webkitRelativePath: file.webkitRelativePath || file.name })
+                                  r.readAsText(file)
+                                })))
+                              : Promise.resolve([])
+                            Promise.all([restPromise, ...zipPromises]).then((groups) => handleFilesAdded(groups.flat()))
                           }}}
                         />
                         <input id="vibe-add-files" type="file" multiple style={{ display: 'none' }}
                           onChange={(e) => { if (e.target.files.length) {
-                            const readers = Array.from(e.target.files).map((file) => new Promise((res) => {
-                              const r = new FileReader()
-                              r.onload = (ev) => res({ name: file.name, size: file.size, text: ev.target.result, webkitRelativePath: file.webkitRelativePath || file.name })
-                              r.onerror = () => res({ name: file.name, size: file.size, text: '', webkitRelativePath: file.webkitRelativePath || file.name })
-                              r.readAsText(file)
-                            }))
-                            Promise.all(readers).then(handleFilesAdded)
+                            const allFiles = Array.from(e.target.files)
+                            const zips = allFiles.filter((f) => f.name.toLowerCase().endsWith('.zip'))
+                            const rest = allFiles.filter((f) => !f.name.toLowerCase().endsWith('.zip'))
+                            const zipPromises = zips.map((f) => extractZip(f))
+                            const restPromise = rest.length
+                              ? Promise.all(rest.map((file) => new Promise((res) => {
+                                  const r = new FileReader()
+                                  r.onload = (ev) => res({ name: file.name, size: file.size, text: ev.target.result, webkitRelativePath: file.webkitRelativePath || file.name })
+                                  r.onerror = () => res({ name: file.name, size: file.size, text: '', webkitRelativePath: file.webkitRelativePath || file.name })
+                                  r.readAsText(file)
+                                })))
+                              : Promise.resolve([])
+                            Promise.all([restPromise, ...zipPromises]).then((groups) => handleFilesAdded(groups.flat()))
                           }}}
                         />
                         <button type="button" className="btn btn-ghost btn-sm"
@@ -1039,29 +1148,66 @@ export function VibeDeploy() {
               <div className="frow">
                 <div className="field">
                   <label>Deployment target</label>
-                  <select value={envId} onChange={(e) => { setEnvId(e.target.value); setNamespace(''); setNsList([]); setManualNs(false); setNsHint({ text: '', tone: 'dim' }) }}>
-                    <option value="">— Select —</option>
-                    {environments.filter((e) => !isEnvDisabled({ disabledEnvs }, e.Id)).map((e) => (
-                      <option key={e.Id} value={String(e.Id)}>{e.Name}</option>
-                    ))}
-                  </select>
+                  {(() => {
+                    const availableEnvs = environments.filter((e) => !isEnvDisabled({ disabledEnvs }, e.Id))
+                    const locked = availableEnvs.length === 1
+                    return locked ? (
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        background: 'var(--bg)', border: '1px solid var(--border2)',
+                        borderRadius: 6, padding: '9px 12px', fontFamily: 'var(--mono)', fontSize: 13,
+                        color: 'var(--text-bright)',
+                      }}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2">
+                          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                        </svg>
+                        {availableEnvs[0].Name}
+                      </div>
+                    ) : (
+                      <select value={envId} onChange={(e) => { setEnvId(e.target.value); setNamespace(''); setNsList([]); setManualNs(false); setNsHint({ text: '', tone: 'dim' }) }}>
+                        <option value="">— Select —</option>
+                        {availableEnvs.map((e) => (
+                          <option key={e.Id} value={String(e.Id)}>{e.Name}</option>
+                        ))}
+                      </select>
+                    )
+                  })()}
                   <div className="hint">Portainer environment to deploy into</div>
                 </div>
                 <div className="field">
-                  <label>Namespace</label>
+                  <label>Project space</label>
                   {!manualNs ? (
-                    <select value={namespace} onChange={(e) => setNamespace(e.target.value)} disabled={!envId || nsLoading}>
-                      <option value="">{!envId ? 'Select target first...' : nsLoading ? 'Loading namespaces...' : '— Select —'}</option>
-                      {nsList.map((n) => <option key={n} value={n}>{n}</option>)}
-                    </select>
+                    (() => {
+                      const locked = nsList.length === 1 && !nsLoading
+                      return locked ? (
+                        <div style={{
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          background: 'var(--bg)', border: '1px solid var(--border2)',
+                          borderRadius: 6, padding: '9px 12px', fontFamily: 'var(--mono)', fontSize: 13,
+                          color: 'var(--text-bright)',
+                        }}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                          </svg>
+                          {nsList[0]}
+                        </div>
+                      ) : (
+                        <select value={namespace} onChange={(e) => setNamespace(e.target.value)} disabled={!envId || nsLoading}>
+                          <option value="">{!envId ? 'Select target first...' : nsLoading ? 'Loading project spaces...' : '— Select —'}</option>
+                          {nsList.map((n) => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                      )
+                    })()
                   ) : (
                     <input type="text" value={manualNsValue}
-                      onChange={(e) => setManualNsValue(e.target.value)} placeholder="my-namespace" />
+                      onChange={(e) => setManualNsValue(e.target.value)} placeholder="my-project-space" />
                   )}
                   {nsHint.text && (
                     <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: nsStatusColor, marginTop: 4 }}>{nsHint.text}</div>
                   )}
-                  <div className="hint">Namespace must already exist in the target</div>
+                  <div className="hint">Project space must already exist in the target</div>
                 </div>
               </div>
               {perms && (!perms.canDeploy || !perms.canCreatePvc) && (
@@ -1076,20 +1222,33 @@ export function VibeDeploy() {
                     <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
                   </svg>
                   <div>
-                    {!perms.canDeploy && <div>No permission to create Deployments in namespace &quot;{resolvedNs}&quot;.</div>}
-                    {!perms.canCreatePvc && <div>No permission to create PersistentVolumeClaims in namespace &quot;{resolvedNs}&quot;.</div>}
-                    <div style={{ marginTop: 4, fontSize: 12, opacity: 0.8 }}>Select a different namespace or contact your platform administrator.</div>
+                    {!perms.canDeploy && <div>No permission to create Deployments in project space &quot;{resolvedNs}&quot;.</div>}
+                    {!perms.canCreatePvc && <div>No permission to create PersistentVolumeClaims in project space &quot;{resolvedNs}&quot;.</div>}
+                    <div style={{ marginTop: 4, fontSize: 12, opacity: 0.8 }}>Select a different project space or contact your platform administrator.</div>
                   </div>
                 </div>
               )}
               <div className="field">
                 <label>Expose as</label>
-                <select value={exposeType} onChange={(e) => setExposeType(e.target.value)}>
+                <select value={exposeType} onChange={(e) => setExposeType(e.target.value)}
+                  disabled={envCapabilities.probing}>
                   <option value="none">Internal only (ClusterIP)</option>
                   <option value="NodePort">NodePort — expose on cluster node IP + port</option>
-                  <option value="LoadBalancer">LoadBalancer — provision external load balancer</option>
-                  <option value="Ingress">Ingress — route via ingress controller</option>
+                  {(envCapabilities.probing || envCapabilities.lbOk !== false) && (
+                    <option value="LoadBalancer">LoadBalancer — provision external load balancer</option>
+                  )}
+                  {(envCapabilities.probing || envCapabilities.ingressOk !== false) && (
+                    <option value="Ingress">Ingress — route via ingress controller</option>
+                  )}
                 </select>
+                {!envCapabilities.probing && envId && (envCapabilities.lbOk === false || envCapabilities.ingressOk === false) && (
+                  <div className="hint" style={{ marginTop: 4 }}>
+                    {[
+                      envCapabilities.lbOk === false && 'LoadBalancer',
+                      envCapabilities.ingressOk === false && 'Ingress',
+                    ].filter(Boolean).join(' and ')} not detected on this cluster — option{(envCapabilities.lbOk === false && envCapabilities.ingressOk === false) ? 's' : ''} hidden
+                  </div>
+                )}
               </div>
               {exposeType === 'Ingress' && (
                 <div className="frow">

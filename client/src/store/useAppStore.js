@@ -47,6 +47,9 @@ export const useAppStore = create((set, get) => ({
   /** @type {null | { envId: string, ns: string, name: string }} */
   deleteTarget: null,
 
+  /** @type {null | { envId: string, ns: string, name: string }} */
+  restartTarget: null,
+
   chatOpen: false,
   toasts: [],
 
@@ -86,6 +89,7 @@ export const useAppStore = create((set, get) => ({
   patchEnvPermissions: (envId, namespace, perms) =>
     set((s) => ({ envPermissions: { ...s.envPermissions, [`${envId}:${namespace}`]: perms } })),
   setDeleteTarget: (deleteTarget) => set({ deleteTarget }),
+  setRestartTarget: (restartTarget) => set({ restartTarget }),
   setChatOpen: (chatOpen) => {
     if (typeof document !== 'undefined') {
       document.body.classList.toggle('chat-open', chatOpen)
@@ -120,6 +124,7 @@ export const useAppStore = create((set, get) => ({
       authChecking: false,
       connectError: '',
       deleteTarget: null,
+      restartTarget: null,
       chatOpen: false,
       envStatusClientCache: {},
       envPermissions: {},

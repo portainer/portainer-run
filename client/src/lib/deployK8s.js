@@ -27,7 +27,8 @@ export async function fetchNamespaceOptions(token, envId) {
       manual: true,
     }
   }
-  const allNss = (await r.json()).items.map((n) => n.metadata.name)
+  const json = await r.json().catch(() => ({}))
+  const allNss = (json.items || []).map((n) => n.metadata.name)
   const accessible = (
     await Promise.all(
       allNss.map(async (ns) => {

@@ -5,6 +5,7 @@ import { loadServerConfig } from './services/config.js'
 import { tryAutoConnect } from './services/session.js'
 import { AppRoutes } from './AppRoutes.jsx'
 import { DeleteModal } from './components/DeleteModal.jsx'
+import { RestartModal } from './components/RestartModal.jsx'
 import { Toasts } from './components/Toasts.jsx'
 
 export function App() {
@@ -21,6 +22,7 @@ export function App() {
     <div className="app">
       <AppRoutes />
       {connected ? <DeleteModal /> : null}
+      {connected ? <RestartModal /> : null}
       <Toasts />
     </div>
   )

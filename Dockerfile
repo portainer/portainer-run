@@ -1,7 +1,7 @@
 # Stage 1: Build the Vite client
 FROM oven/bun:1-alpine AS build-ui
 WORKDIR /build
-COPY client/package.json client/bun.lock ./
+COPY client/package.json ./
 RUN bun install
 COPY client/ ./
 RUN bun run build
