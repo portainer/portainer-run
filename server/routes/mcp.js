@@ -44,6 +44,8 @@ const SERVER_INSTRUCTIONS = [
   '',
   'CRITICAL — file content must be exact: every entry in `files` must contain the COMPLETE, verbatim content of the file, copied byte-for-byte. Never send a placeholder, summary, description, ellipsis ("..."), comment like "<!-- content here -->", or any truncated/abbreviated version. Whatever you send is committed to git and served to users as-is. This matters most for uploaded artifacts and HTML/CSS/JS files: when the user attaches or references a file (e.g. an HTML page), read it in full and reproduce its ENTIRE contents in the content field. If a file is genuinely too large to reproduce reliably, stop and tell the user — do not stub or guess it.',
   '',
+  'CRITICAL — read before you deploy: fully read and assemble the COMPLETE contents of every file BEFORE calling deploy_vibe_app. Do not deploy first and then re-deploy to "fix" or fill in the content — re-deploying the same app fails (the stack already exists) and can leave the placeholder version running. Call deploy_vibe_app exactly once per app, with every file already complete.',
+  '',
   'Before calling deploy_vibe_app, gather and confirm the following with the user. Do not assume defaults silently — ask when anything is unknown or ambiguous:',
   '1. Environment — call list_environments. If more than one is returned, ask which to use.',
   '2. Namespace — call list_namespaces. If more than one is returned, ask which to use.',
