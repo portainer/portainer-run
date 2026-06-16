@@ -30,6 +30,7 @@ import { resolveCallerIdentity, extractToken, portainerGet } from '../lib/identi
 import { resolvePortainerTarget } from '../resolve-portainer.js'
 import { getConnectionsForUser } from '../models/connection.js'
 import { handleVibe } from './vibe.js'
+import { resolveUrl } from '../env-status.js'
 
 const MCP_VERSION = '2024-11-05'
 const SERVER_INFO = { name: 'portainer-run', version: '1.0.0' }
@@ -46,8 +47,8 @@ const SERVER_INSTRUCTIONS = [
   '2. Namespace — call list_namespaces. If more than one is returned, ask which to use.',
   '3. Git target — call list_git_targets. If none exist, tell the user to create one in the Portainer Run UI (git targets cannot be created via MCP) and stop. If several exist, ask which.',
   '4. App name — propose one and confirm it with the user.',
-  '5. Exposure — explicitly ask how the app should be reachable: none, NodePort, LoadBalancer, or Ingress. Do not default to NodePort without asking.',
-  '6. Ingress (only if chosen) — call list_ingress_classes. If ingressHostRequired is true, ask the user for the full hostname. Confirm which ingress class to use.',
+  '5. Exposure — decide how the app should be reachable: none, NodePort, LoadBalancer, or Ingress. Call list_ingress_classes first to inform the choice: if it reports a baseDomain (ingressHostRequired is false), PREFER Ingress so the app gets a real URL — do NOT use NodePort when a base domain is available unless the user explicitly asks for NodePort. If there is no base domain, NodePort is the usual default. When in doubt, ask the user.',
+  '6. Ingress (when chosen) — from list_ingress_classes, if ingressHostRequired is true ask the user for the full hostname (otherwise the host is derived as <appName>.<baseDomain>). Confirm which ingress class to use, or let it default to the cluster default.',
   '7. Environment variables / secrets — if the app needs any, list them and ask the user for values.',
   '',
   'Static sites: if the app is plain HTML/CSS/JS with no server-side logic, deploy it as a static site — send only the static files (index.html, css, js, assets) and set runtime to "nginx". Do NOT scaffold a Node/Express (or any) server to serve static files; adding a package.json would make it deploy as a Node app instead of nginx.',
@@ -55,6 +56,8 @@ const SERVER_INSTRUCTIONS = [
   'Port: deploy_vibe_app has no port parameter. The service port is inferred from the detected runtime (Node 3000, Python 8000, php/nginx 80, Ruby 9292). Make the app listen on that runtime default and bind 0.0.0.0. If the app must use a non-standard port, warn the user that the MCP deploy may expose the wrong port and the app could be unreachable.',
   '',
   'Always show a summary of the chosen settings and get explicit confirmation before calling deploy_vibe_app.',
+  '',
+  'After deploying, report the access URL to the user. The deploy result has a "url" field; if it is null (NodePort/LoadBalancer addresses are assigned asynchronously), call get_app_status after a short wait to retrieve the URL.',
 ].join('\n')
 
 // ---------------------------------------------------------------------------
@@ -445,6 +448,48 @@ function detectRuntimeForFiles(files, forcedId) {
   }
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+function pickNodeIp(nodes) {
+  for (const node of nodes || []) {
+    const addrs = node.status?.addresses || []
+    const ip = addrs.find((a) => a.type === 'ExternalIP')?.address
+      || addrs.find((a) => a.type === 'InternalIP')?.address
+    if (ip) return ip
+  }
+  return null
+}
+
+/**
+ * Builds the externally-reachable URL for a freshly deployed app, reusing the
+ * same resolveUrl logic as the live status endpoint. Ingress hosts are known
+ * up front; NodePort/LoadBalancer addresses are assigned asynchronously, so
+ * this polls briefly. Returns { url, label, type } or null. Best-effort —
+ * never throws.
+ */
+async function resolveAppAccessUrl(target, token, envId, ns, appName, { attempts = 1, delayMs = 0 } = {}) {
+  const base = `/api/endpoints/${envId}/kubernetes`
+  let last = null
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const [svc, ing, nodesData] = await Promise.all([
+        portainerGet(target, token, `${base}/api/v1/namespaces/${ns}/services/${appName}`).catch(() => null),
+        portainerGet(target, token, `${base}/apis/networking.k8s.io/v1/namespaces/${ns}/ingresses/${appName}`).catch(() => null),
+        portainerGet(target, token, `${base}/api/v1/nodes`).catch(() => null),
+      ])
+      const svcs = svc?.kind === 'Service' ? [svc] : []
+      const ings = ing?.kind === 'Ingress' ? [ing] : []
+      // Fall back to the Portainer host when node IPs aren't listable (403) —
+      // gives a usable NodePort URL on single-node/internal clusters.
+      const nodeIp = pickNodeIp(nodesData?.items) || (svcs.length ? target.host : null)
+      last = resolveUrl(appName, svcs, ings, nodeIp)
+      if (last?.url) return last
+    } catch { /* best effort */ }
+    if (i < attempts - 1) await sleep(delayMs)
+  }
+  return last
+}
+
 async function toolDeployVibeApp(req, args, caller) {
   if (!FEATURE_VIBE_DEPLOY) throw new Error('Vibe Deploy is not enabled on this Portainer Run instance')
 
@@ -580,12 +625,40 @@ async function toolDeployVibeApp(req, args, caller) {
 
   let data = {}
   try { data = JSON.parse(result._body) } catch { /* ignore */ }
+  const deployedName = data.appName || safeAppName
+
+  // Resolve an access URL for the response. Ingress hosts are known immediately;
+  // NodePort/LoadBalancer addresses are assigned asynchronously so we poll briefly.
+  let access = null
+  try {
+    const target = resolvePortainerTarget(req)
+    if (exposeType === 'Ingress' && resolvedIngress.host) {
+      const p = resolvedIngress.path && resolvedIngress.path !== '/' ? resolvedIngress.path : ''
+      access = { url: `http://${resolvedIngress.host}${p}`, label: resolvedIngress.host, type: 'ingress' }
+    } else if (target && (exposeType === 'NodePort' || exposeType === 'LoadBalancer')) {
+      access = await resolveAppAccessUrl(target, token, envId, namespace, deployedName, { attempts: 4, delayMs: 1500 })
+    }
+  } catch { /* best effort — URL is a convenience */ }
+
+  let message = `${deployedName} deployed to ${namespace} successfully.`
+  if (access?.url) {
+    message += ` Access it at ${access.url}`
+    if (access.type === 'ingress') message += ' (ensure DNS for the host points to your ingress controller; served over HTTP unless TLS is configured)'
+  } else if (exposeType === 'none') {
+    message += ' It is not exposed externally (exposeType "none").'
+  } else {
+    message += ` The ${exposeType} address is still being assigned — call get_app_status shortly, or check the Applications page, for the URL.`
+  }
+
   return {
     ok: true,
-    appName: data.appName || appName,
+    appName: deployedName,
     namespace,
     envId,
-    message: `${data.appName || appName} deployed to ${namespace} successfully — view it in the Applications page`,
+    exposeType,
+    url: access?.url || null,
+    accessLabel: access?.label || null,
+    message,
   }
 }
 
@@ -613,6 +686,14 @@ async function toolGetAppStatus(req, args) {
     return { found: false, message: `No application found for ${appName} in ${namespace}` }
   }
 
+  // Resolve a live access URL (cache may predate the Service getting its address).
+  let access = null
+  if (target) {
+    try {
+      access = await resolveAppAccessUrl(target, token, envId, namespace, appName)
+    } catch { /* best effort */ }
+  }
+
   return {
     found: true,
     appName: dep.name,
@@ -622,6 +703,8 @@ async function toolGetAppStatus(req, args) {
     desired: dep.replicas || 1,
     image: dep.image,
     nodePort: dep.nodePort || null,
+    url: access?.url || null,
+    accessLabel: access?.label || null,
   }
 }
 

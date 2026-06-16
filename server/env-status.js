@@ -121,7 +121,7 @@ function resolveStatusReason(pod) {
   return null
 }
 
-function resolveUrl(appName, svcs, ings, nodeIp) {
+export function resolveUrl(appName, svcs, ings, nodeIp) {
   for (const ing of ings.filter(
     (i) => i.metadata?.labels?.app === appName || i.metadata?.name === appName
   )) {
