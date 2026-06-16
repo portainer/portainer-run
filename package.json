@@ -1,14 +1,23 @@
 {
-  "name": "portainer-run",
+  "name": "portainer-run-ui",
   "private": true,
   "type": "module",
-  "packageManager": "bun@1.1.0",
-  "workspaces": ["client", "server"],
+  "version": "0.0.0",
   "scripts": {
-    "dev": "bun run scripts/dev.mjs",
-    "start": "bun run server/server.js",
-    "start:node": "node server/server.js",
-    "build:client": "cd client && bun run build",
-    "docker:run": "bash scripts/docker-run.sh"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^6.28.0",
+    "zustand": "^4.5.0",
+    "js-yaml": "^4.1.0",
+    "jszip": "^3.10.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.10"
   }
 }
