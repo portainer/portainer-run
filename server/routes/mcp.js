@@ -42,6 +42,8 @@ const SERVER_INFO = { name: 'portainer-run', version: '1.0.0' }
 const SERVER_INSTRUCTIONS = [
   'Portainer Run deploys applications to Kubernetes from source files via the deploy_vibe_app tool.',
   '',
+  'CRITICAL — file content must be exact: every entry in `files` must contain the COMPLETE, verbatim content of the file, copied byte-for-byte. Never send a placeholder, summary, description, ellipsis ("..."), comment like "<!-- content here -->", or any truncated/abbreviated version. Whatever you send is committed to git and served to users as-is. This matters most for uploaded artifacts and HTML/CSS/JS files: when the user attaches or references a file (e.g. an HTML page), read it in full and reproduce its ENTIRE contents in the content field. If a file is genuinely too large to reproduce reliably, stop and tell the user — do not stub or guess it.',
+  '',
   'Before calling deploy_vibe_app, gather and confirm the following with the user. Do not assume defaults silently — ask when anything is unknown or ambiguous:',
   '1. Environment — call list_environments. If more than one is returned, ask which to use.',
   '2. Namespace — call list_namespaces. If more than one is returned, ask which to use.',
@@ -149,7 +151,7 @@ function buildTools() {
               required: ['path', 'content'],
               properties: {
                 path: { type: 'string', description: 'Relative file path, e.g. server.js or public/index.html' },
-                content: { type: 'string', description: 'File content as a string' },
+                content: { type: 'string', description: 'The complete, verbatim file content, copied exactly (byte-for-byte). Never a placeholder, summary, ellipsis, or truncated version — this is committed to git and served as-is.' },
               },
             },
           },
