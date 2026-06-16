@@ -38,10 +38,26 @@ data:
   # If set, Ingress templates default to appname.BASE_DOMAIN as the host.
   # BASE_DOMAIN: "apps.example.com"
 
+  # ── AI model override ────────────────────────────────────────────────────────
+  # OpenAI model to use (default: gpt-4o). No effect when using Anthropic.
+  # OPENAI_MODEL: "gpt-4o"
+
   # ── Custom ports ────────────────────────────────────────────────────────────
   # Only needed if you change containerPort below to match.
   # PORT: "443"
   # HTTP_PORT: "80"
+
+  # ── Cache directory ──────────────────────────────────────────────────────────
+  # Override the directory used for persistent cache (default: /app/data).
+  # Must match the mountPath of the volume in the Deployment if changed.
+  # CACHE_DIR: "/app/data"
+
+  # ── Feature flags (all on by default; set to 'false' to disable) ────────────
+  FEATURE_VIBE_DEPLOY: "true"
+  FEATURE_SIMPLE_DEPLOY: "false"
+  FEATURE_MANIFEST_BUILDER: "false"
+  FEATURE_CATALOGUE: "false"
+  FEATURE_SECRETS: "false"
 
 ---
 # Secret — sensitive values
@@ -153,6 +169,8 @@ spec:
             #   value: "/certs/tls.crt"
             # - name: SSL_KEY
             #   value: "/certs/tls.key"
+            # - name: SSL_CERT_DIR
+            #   value: "/certs"
 
           volumeMounts:
             # ── Session cache ─────────────────────────────────────────────────
