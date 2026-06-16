@@ -25,7 +25,7 @@ const POLL_INTERVALS = [
  * @param {() => void} props.onBack
  * @param {boolean} props.deploying
  */
-export function GitOpsStep({ appName, ns, envId, deployParams, manifestBuilderParams, onConfirm, onBack, deploying }) {
+export function GitOpsStep({ appName, ns, envId, deployParams, onConfirm, onBack, deploying }) {
   const [targets, setTargets] = useState([])
   const [loadingTargets, setLoadingTargets] = useState(true)
   const [selectedTargetId, setSelectedTargetId] = useState('')
@@ -79,12 +79,12 @@ export function GitOpsStep({ appName, ns, envId, deployParams, manifestBuilderPa
   const resolvedPath = [pathPrefix, ns, `${appName}.yaml`].filter(Boolean).join('/')
 
   async function handleValidate() {
-    if ((!deployParams && !manifestBuilderParams) || !envId) { setError('Deploy params not available for validation'); return }
+    if (!deployParams || !envId) { setError('Deploy params not available for validation'); return }
     setValidating(true)
     setValidateResults(null)
     setError('')
     try {
-      const r = await gitOpsValidate({ deployParams, manifestBuilderParams, envId })
+      const r = await gitOpsValidate({ deployParams, envId })
       setValidateResults(r.results || [])
     } catch (e) {
       setError('Validation failed: ' + (e.message || 'Unknown error'))
@@ -209,37 +209,8 @@ export function GitOpsStep({ appName, ns, envId, deployParams, manifestBuilderPa
           </div>
         )}
 
-        {/* Deployment summary */}
-        {manifestBuilderParams && (
-          <div style={{ background: 'var(--surface2, var(--bg2))', border: '1px solid var(--border)', borderRadius: 6, padding: '12px 16px', marginBottom: 4 }}>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>Deployment summary</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: '4px 12px', fontSize: 12, fontFamily: 'var(--mono)' }}>
-              <span style={{ color: 'var(--text-dim)' }}>Application</span>
-              <span style={{ color: 'var(--text-bright)' }}>{manifestBuilderParams.appName}</span>
-              <span style={{ color: 'var(--text-dim)' }}>Namespace</span>
-              <span style={{ color: 'var(--text-bright)' }}>{manifestBuilderParams.namespace || ns}</span>
-              <span style={{ color: 'var(--text-dim)' }}>Type</span>
-              <span style={{ color: 'var(--text-bright)' }}>{manifestBuilderParams.deploymentType || 'Deployment'}</span>
-              <span style={{ color: 'var(--text-dim)' }}>Image</span>
-              <span style={{ color: 'var(--text-bright)' }}>{manifestBuilderParams.image}</span>
-              {manifestBuilderParams.services?.length > 0 && <>
-                <span style={{ color: 'var(--text-dim)' }}>Services</span>
-                <span style={{ color: 'var(--text-bright)' }}>{manifestBuilderParams.services.map((s) => `${s.type}:${s.containerPort}`).join(', ')}</span>
-              </>}
-              {manifestBuilderParams.volumes?.length > 0 && <>
-                <span style={{ color: 'var(--text-dim)' }}>Storage</span>
-                <span style={{ color: 'var(--text-bright)' }}>{manifestBuilderParams.volumes.length} volume(s)</span>
-              </>}
-              {manifestBuilderParams.autoScalingEnabled && <>
-                <span style={{ color: 'var(--text-dim)' }}>Auto-scaling</span>
-                <span style={{ color: 'var(--text-bright)' }}>{manifestBuilderParams.minInstances}–{manifestBuilderParams.maxInstances} instances</span>
-              </>}
-            </div>
-          </div>
-        )}
-
         {/* Dry-run validation */}
-        {selectedTargetId && (deployParams || manifestBuilderParams) && (
+        {selectedTargetId && deployParams && (
           <div>
             <button
               type="button"

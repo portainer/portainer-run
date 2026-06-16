@@ -23,10 +23,6 @@ export const useAppStore = create((set, get) => ({
   baseDomain: '',
   features: {
     vibeDeploy: true,
-    simpleDeploy: true,
-    manifestBuilder: true,
-    catalogue: true,
-    secrets: true,
   },
   /** @type {Record<string, { reason?: string, disabledAt?: string }>} */
   disabledEnvs: {},

@@ -60,13 +60,6 @@ function resolveStatusReason(pod) {
   if (scheduledCond?.status === 'False') {
     const msg = (scheduledCond.message || '').toLowerCase()
     if (
-      msg.includes('nvidia.com/gpu') ||
-      msg.includes('amd.com/gpu') ||
-      msg.includes('gpu.intel.com') ||
-      msg.includes('insufficient gpu')
-    )
-      return 'No GPU node available'
-    if (
       msg.includes('insufficient cpu') ||
       msg.includes('insufficient memory') ||
       msg.includes('nodes are available')

@@ -1,8 +1,5 @@
 import { kubeFetch } from './api.js'
 import { inflightDedupe } from './inflightDedupe.js'
-import { GPU_RESOURCE_KEYS } from './deployFormModel.js'
-
-export { GPU_RESOURCE_KEYS } from './deployFormModel.js'
 
 /**
  * @param {string} token
@@ -185,47 +182,6 @@ export async function createOpaquePortainerSecret(token, envId, ns, name, dataPl
 export function deleteNamespacedSecret(token, envId, ns, name) {
   return kubeFetch(token, envId, `/api/v1/namespaces/${ns}/secrets/${name}`, { method: 'DELETE' })
 }
-
-/**
- * @param {string} token
- * @param {string} envId
- * @returns {Promise<{ key: string, label: string, warn?: 'amber' | 'green' }>}
- */
-export async function detectClusterGpuType(token, envId) {
-  if (!envId) return { key: 'nvidia.com/gpu', label: 'Select an environment first' }
-  return inflightDedupe(`k8s:gpu-type:${envId}`, async () => {
-    const r = await kubeFetch(token, envId, '/api/v1/nodes')
-    if (!r.ok) {
-      return { key: 'nvidia.com/gpu', label: 'Could not detect GPU type' }
-    }
-    const nodes = (await r.json()).items || []
-    const typeCounts = {}
-    for (const node of nodes) {
-      const alloc = node.status?.allocatable || {}
-      for (const k of GPU_RESOURCE_KEYS) {
-        const n = parseInt(alloc[k] || '0', 10)
-        if (n > 0) typeCounts[k] = (typeCounts[k] || 0) + n
-      }
-    }
-    if (!Object.keys(typeCounts).length) {
-      return {
-        key: 'nvidia.com/gpu',
-        label: '⚠ No GPU nodes in this environment',
-        warn: 'amber',
-      }
-    }
-    const topKey = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0][0]
-    const total = Object.values(typeCounts).reduce((a, b) => a + b, 0)
-    return {
-      key: topKey,
-      label: `${total} GPU(s) available · ${topKey}`,
-      warn: 'green',
-    }
-  })
-}
-
-/** Alias for older imports — same as `detectClusterGpuType` */
-export { detectClusterGpuType as detectClusterGpu }
 
 /**
  * @param {string} token
@@ -463,14 +419,6 @@ export function buildK8sContainer(c) {
   if (memReq) res.requests.memory = memReq
   if (cpuLim) res.limits.cpu = cpuLim
   if (memLim) res.limits.memory = memLim
-  if (c.gpuEnabled) {
-    const n = Math.min(16, Math.max(1, parseInt(String(c.gpuCount), 10) || 1))
-    const gk = c.gpuKey || 'nvidia.com/gpu'
-    if (!res.limits) res.limits = {}
-    if (!res.requests) res.requests = {}
-    res.limits[gk] = String(n)
-    res.requests[gk] = String(n)
-  }
   if (res.requests || res.limits) k.resources = res
 
   const env = []

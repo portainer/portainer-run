@@ -5,6 +5,7 @@ import { listGitTargets } from '../lib/gitTargets.js'
 import { useAppStore, visibleEnvironments, isEnvDisabled } from '../store/useAppStore.js'
 import { fetchNamespaceOptions } from '../lib/deployK8s.js'
 import { checkEnvPermissions } from '../lib/envPermissions.js'
+import { checkIngress, checkLoadBalancer } from '../lib/readinessChecks.js'
 import { GitOpsStep } from './deploy/GitOpsStep.jsx'
 
 // ---------------------------------------------------------------------------
@@ -361,6 +362,9 @@ export function VibeDeploy() {
   const [ingPath, setIngPath] = useState('/')
   const [ingClass, setIngClass] = useState('')
   const [deployConfigConfirmed, setDeployConfigConfirmed] = useState(false)
+  // Expose type availability — checked against cluster readiness when envId changes
+  // { ingressAvailable: true|false|null, lbAvailable: true|false|null }
+  const [exposeCapabilities, setExposeCapabilities] = useState({ ingressAvailable: null, lbAvailable: null })
 
   // ---- Step 5: gitops (stagedParams) ----
   const [stagedParams, setStagedParams] = useState(null)
@@ -458,6 +462,46 @@ export function VibeDeploy() {
       setNsHint({ text: 'Could not load namespaces', tone: 'err' })
     }).finally(() => setNsLoading(false))
   }, [envId, token])
+
+  // Check expose capabilities when envId changes
+  useEffect(() => {
+    if (!envId || !token) {
+      setExposeCapabilities({ ingressAvailable: null, lbAvailable: null })
+      return
+    }
+    setExposeCapabilities({ ingressAvailable: null, lbAvailable: null })
+    Promise.all([
+      checkIngress(token, envId),
+      checkLoadBalancer(token, envId),
+    ]).then(([ingressResult, lbResult]) => {
+      const ingressAvailable = ingressResult.ok !== false
+      const lbAvailable = lbResult.ok !== false
+      setExposeCapabilities({ ingressAvailable, lbAvailable })
+      // Reset exposeType if currently selected option is no longer available
+      setExposeType((prev) => {
+        if (prev === 'Ingress' && !ingressAvailable) return 'none'
+        if (prev === 'LoadBalancer' && !lbAvailable) return 'none'
+        return prev
+      })
+    }).catch(() => {
+      // On error leave capabilities as null (permissive — show all options)
+      setExposeCapabilities({ ingressAvailable: null, lbAvailable: null })
+    })
+  }, [envId, token])
+
+  // Auto-select environment and project space when there is only one of each
+  useEffect(() => {
+    const visEnvs = environments.filter((e) => !isEnvDisabled({ disabledEnvs }, e.Id))
+    if (visEnvs.length === 1 && !envId) {
+      setEnvId(String(visEnvs[0].Id))
+    }
+  }, [environments, disabledEnvs, envId])
+
+  useEffect(() => {
+    if (nsList.length === 1 && !namespace && !manualNs) {
+      setNamespace(nsList[0])
+    }
+  }, [nsList, namespace, manualNs])
 
   // ---- Handlers ----
 
@@ -721,7 +765,7 @@ export function VibeDeploy() {
         <div>
           <div className="page-title">Vibe Deploy</div>
           <div className="page-sub">
-            Drop your Claude-generated files — we handle git, runtime detection, and deployment.
+            Upload your AI Vibe Coded source files — we handle git, runtime detection, and deployment.
           </div>
         </div>
       </div>
@@ -1039,19 +1083,41 @@ export function VibeDeploy() {
               <div className="frow">
                 <div className="field">
                   <label>Deployment target</label>
-                  <select value={envId} onChange={(e) => { setEnvId(e.target.value); setNamespace(''); setNsList([]); setManualNs(false); setNsHint({ text: '', tone: 'dim' }) }}>
-                    <option value="">— Select —</option>
-                    {environments.filter((e) => !isEnvDisabled({ disabledEnvs }, e.Id)).map((e) => (
-                      <option key={e.Id} value={String(e.Id)}>{e.Name}</option>
-                    ))}
-                  </select>
-                  <div className="hint">Portainer environment to deploy into</div>
+                  {environments.filter((e) => !isEnvDisabled({ disabledEnvs }, e.Id)).length === 1 ? (
+                    <div style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 8,
+                      background: 'var(--surface2)', border: '1px solid var(--border2)',
+                      borderRadius: 6, padding: '8px 12px',
+                      fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--text-bright)',
+                    }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                      {environments.find((e) => String(e.Id) === envId)?.Name || '—'}
+                    </div>
+                  ) : (
+                    <select value={envId} onChange={(e) => { setEnvId(e.target.value); setNamespace(''); setNsList([]); setManualNs(false); setNsHint({ text: '', tone: 'dim' }) }}>
+                      <option value="">— Select —</option>
+                      {environments.filter((e) => !isEnvDisabled({ disabledEnvs }, e.Id)).map((e) => (
+                        <option key={e.Id} value={String(e.Id)}>{e.Name}</option>
+                      ))}
+                    </select>
+                  )}
+                  <div className="hint">Where your app will run</div>
                 </div>
                 <div className="field">
-                  <label>Namespace</label>
-                  {!manualNs ? (
+                  <label>Project space</label>
+                  {!manualNs && nsList.length === 1 ? (
+                    <div style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 8,
+                      background: 'var(--surface2)', border: '1px solid var(--border2)',
+                      borderRadius: 6, padding: '8px 12px',
+                      fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--text-bright)',
+                    }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                      {nsList[0]}
+                    </div>
+                  ) : !manualNs ? (
                     <select value={namespace} onChange={(e) => setNamespace(e.target.value)} disabled={!envId || nsLoading}>
-                      <option value="">{!envId ? 'Select target first...' : nsLoading ? 'Loading namespaces...' : '— Select —'}</option>
+                      <option value="">{!envId ? 'Select target first...' : nsLoading ? 'Loading...' : '— Select —'}</option>
                       {nsList.map((n) => <option key={n} value={n}>{n}</option>)}
                     </select>
                   ) : (
@@ -1061,7 +1127,7 @@ export function VibeDeploy() {
                   {nsHint.text && (
                     <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: nsStatusColor, marginTop: 4 }}>{nsHint.text}</div>
                   )}
-                  <div className="hint">Namespace must already exist in the target</div>
+                  <div className="hint">The isolated area within the deployment target where your app will run</div>
                 </div>
               </div>
               {perms && (!perms.canDeploy || !perms.canCreatePvc) && (
@@ -1087,9 +1153,21 @@ export function VibeDeploy() {
                 <select value={exposeType} onChange={(e) => setExposeType(e.target.value)}>
                   <option value="none">Internal only (ClusterIP)</option>
                   <option value="NodePort">NodePort — expose on cluster node IP + port</option>
-                  <option value="LoadBalancer">LoadBalancer — provision external load balancer</option>
-                  <option value="Ingress">Ingress — route via ingress controller</option>
+                  {exposeCapabilities.lbAvailable !== false && (
+                    <option value="LoadBalancer">LoadBalancer — provision external load balancer</option>
+                  )}
+                  {exposeCapabilities.ingressAvailable !== false && (
+                    <option value="Ingress">Ingress — route via ingress controller</option>
+                  )}
                 </select>
+                {(exposeCapabilities.lbAvailable === false || exposeCapabilities.ingressAvailable === false) && (
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-dim)', marginTop: 4 }}>
+                    {[
+                      exposeCapabilities.lbAvailable === false && 'LoadBalancer not available on this target',
+                      exposeCapabilities.ingressAvailable === false && 'Ingress not available on this target',
+                    ].filter(Boolean).join(' · ')}
+                  </div>
+                )}
               </div>
               {exposeType === 'Ingress' && (
                 <div className="frow">

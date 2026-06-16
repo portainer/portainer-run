@@ -8,10 +8,6 @@ import {
   OPENAI_KEY,
   PORTAINER_URL,
   FEATURE_VIBE_DEPLOY,
-  FEATURE_SIMPLE_DEPLOY,
-  FEATURE_MANIFEST_BUILDER,
-  FEATURE_CATALOGUE,
-  FEATURE_SECRETS,
 } from './config.js'
 import { handleCache } from './cache.js'
 import { handleEnvStatus } from './env-status.js'
@@ -22,7 +18,6 @@ import { proxyToAnthropic } from './proxy/anthropic.js'
 import { proxyToOpenAI } from './proxy/openai.js'
 import { handleConnections } from './routes/connections.js'
 import { handleGitOps } from './routes/gitops.js'
-import { handleHelm } from './routes/helm.js'
 import { handleVibe } from './routes/vibe.js'
 import { handleMcp } from './routes/mcp.js'
 
@@ -50,11 +45,7 @@ export async function handleRequest(req, res) {
         aiProvider: AI_PROVIDER,
         baseDomain: BASE_DOMAIN,
         features: {
-          vibeDeploy:      FEATURE_VIBE_DEPLOY,
-          simpleDeploy:    FEATURE_SIMPLE_DEPLOY,
-          manifestBuilder: FEATURE_MANIFEST_BUILDER,
-          catalogue:       FEATURE_CATALOGUE,
-          secrets:         FEATURE_SECRETS,
+          vibeDeploy: FEATURE_VIBE_DEPLOY,
         },
       }),
     )
@@ -120,12 +111,6 @@ export async function handleRequest(req, res) {
   // Vibe deploy API
   if (pathname.startsWith('/api/vibe')) {
     const handled = await handleVibe(req, res, pathname)
-    if (handled !== null) return
-  }
-
-  // Helm deploy API
-  if (pathname.startsWith('/api/helm')) {
-    const handled = await handleHelm(req, res, pathname)
     if (handled !== null) return
   }
 

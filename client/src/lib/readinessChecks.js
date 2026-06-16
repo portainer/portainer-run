@@ -1,5 +1,4 @@
 import { kubeFetch } from './api.js'
-import { GPU_RESOURCE_KEYS } from './deployFormModel.js'
 
 /** @typedef {true | false | null} TriBool */
 
@@ -191,46 +190,7 @@ export async function checkNodes(token, envId) {
 /**
  * @param {string} token
  * @param {string|number} envId
- * @returns {Promise<ReadinessCheckResult>}
- */
-export async function checkGPU(token, envId) {
-  try {
-    const r = await kubeFetch(token, envId, '/api/v1/nodes')
-    if (!r.ok) throw new Error('HTTP ' + r.status)
-    const nodes = (await r.json()).items || []
-    const gpuNodes = []
-    const typeCounts = {}
-    for (const node of nodes) {
-      const allocatable = node.status?.allocatable || {}
-      for (const key of GPU_RESOURCE_KEYS) {
-        const count = parseInt(allocatable[key] || '0', 10)
-        if (count > 0) {
-          typeCounts[key] = (typeCounts[key] || 0) + count
-          gpuNodes.push(node.metadata.name)
-        }
-      }
-    }
-    if (!Object.keys(typeCounts).length) {
-      return {
-        ok: null,
-        label: 'None detected',
-        detail: 'No GPU nodes found — GPU workloads will not schedule',
-      }
-    }
-    const summary = Object.entries(typeCounts)
-      .map(([k, v]) => `${v}× ${k.split('/')[1] || k}`)
-      .join(', ')
-    const nodeLabel = `${[...new Set(gpuNodes)].length} node(s)`
-    return { ok: true, label: summary, detail: `${nodeLabel} with GPU capacity` }
-  } catch (e) {
-    return { ok: false, label: 'Error', detail: e instanceof Error ? e.message : String(e) }
-  }
-}
-
-/**
- * @param {string} token
- * @param {string|number} envId
- * @returns {Promise<ReadinessCheckResult[]>} order: Ingress, LoadBalancer, Storage, Nodes, GPU
+ * @returns {Promise<ReadinessCheckResult[]>} order: Ingress, LoadBalancer, Storage, Nodes
  */
 export async function runReadinessForEnv(token, envId) {
   return Promise.all([
@@ -238,7 +198,6 @@ export async function runReadinessForEnv(token, envId) {
     checkLoadBalancer(token, envId),
     checkStorage(token, envId),
     checkNodes(token, envId),
-    checkGPU(token, envId),
   ])
 }
 
