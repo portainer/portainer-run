@@ -165,7 +165,7 @@ function buildTools() {
           exposeType: {
             type: 'string',
             enum: ['none', 'NodePort', 'LoadBalancer', 'Ingress'],
-            description: 'How to expose the app externally. Default: NodePort.',
+            description: 'How to expose the app externally. Default: Ingress when the server has a base domain configured (a hostname can be derived), otherwise NodePort.',
           },
           ingress: {
             type: 'object',
@@ -450,13 +450,17 @@ async function toolDeployVibeApp(req, args, caller) {
 
   const {
     appName, envId, namespace, gitTargetId,
-    files = [], envVars, exposeType = 'NodePort', ingress = {}, branch = 'main',
+    files = [], envVars, ingress = {}, branch = 'main',
     runtime = 'auto',
   } = args
 
   if (!appName || !envId || !namespace || !gitTargetId || !files.length) {
     throw new Error('appName, envId, namespace, gitTargetId, and files are all required')
   }
+
+  // Default exposure: when a base domain is configured we can derive a real
+  // hostname, so default to Ingress; otherwise fall back to NodePort.
+  const exposeType = args.exposeType || (BASE_DOMAIN ? 'Ingress' : 'NodePort')
 
   const safeAppName = appName.toLowerCase().replace(/[^a-z0-9-]/g, '-')
 
