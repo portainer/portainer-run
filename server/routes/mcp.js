@@ -526,18 +526,19 @@ async function toolDeployVibeApp(req, args, caller) {
     throw new Error('exposeType "Ingress" requires ingress.host (or a configured BASE_DOMAIN)')
   }
 
-  // When no class was supplied, fall back to the cluster's default IngressClass
-  // so the Ingress is actually claimed by a controller. Best effort — if the
-  // lookup fails or there's no default, deploy without an explicit class.
+  // When no class was supplied, pick an IngressClass so the Ingress is actually
+  // claimed by a controller: prefer the cluster default, else use the only class
+  // if there is exactly one (the common single-controller, e.g. nginx, case).
+  // Best effort — if the lookup fails or it's ambiguous, deploy without a class.
   if (exposeType === 'Ingress' && !resolvedIngress.ingressClass) {
     try {
       const target = resolvePortainerTarget(req)
       if (target) {
         const classes = await fetchIngressClasses(target, extractToken(req), envId)
-        const def = classes.find((c) => c.isDefault)
-        if (def) resolvedIngress.ingressClass = def.name
+        const chosen = classes.find((c) => c.isDefault) || (classes.length === 1 ? classes[0] : null)
+        if (chosen) resolvedIngress.ingressClass = chosen.name
       }
-    } catch { /* no default available — continue without a class */ }
+    } catch { /* no class resolvable — continue without one */ }
   }
 
   // Detect runtime, image, start command, working dir, and port from the files —
