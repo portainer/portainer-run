@@ -89,7 +89,7 @@ export function GitTargetsPage() {
         <div>
           <div className="page-title">Git Targets</div>
           <div className="page-sub">
-            Repositories where Portainer Run commits Kubernetes manifests for GitOps deployment.
+            Repositories where Portainer-Run commits Kubernetes manifests for GitOps deployment.
             Credentials are stored encrypted. Add a target here before deploying.
           </div>
         </div>

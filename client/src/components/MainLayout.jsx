@@ -183,7 +183,7 @@ export function MainLayout() {
 
       <header className="app-top-header">
         <div className="app-header-brand">
-          <Link to={ROUTES.dashboard} className="app-header-brand-link" title="Portainer Run — Dashboard">
+          <Link to={ROUTES.dashboard} className="app-header-brand-link" title="Portainer-Run — Dashboard">
             <div className="logo">
               <img src="/portainer-logo.png" alt="Portainer" className="logo-wordmark" />
               <div className="logo-run-row">

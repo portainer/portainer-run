@@ -19,7 +19,7 @@ const tlsOptions = loadTlsOptions()
 const httpsServer = https.createServer(tlsOptions, handleRequest)
 
 httpsServer.listen(PORT, () => {
-  console.log('\n✅  Portainer Run started')
+  console.log('\n✅  Portainer-Run started')
   console.log(
     `    UI:        https://localhost${PORT !== 443 ? ':' + PORT : ''}`
   )
