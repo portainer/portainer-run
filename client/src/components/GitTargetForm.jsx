@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { createGitTarget, updateGitTarget, testGitTargetPayload, initializeGitTarget } from '../lib/gitTargets.js'
-import EmptyRepoWarning from './EmptyRepoWarning.jsx'
+import { createGitTarget, updateGitTarget, testGitTargetPayload } from '../lib/gitTargets.js'
 import { useAppStore } from '../store/useAppStore.js'
 
 const PROVIDERS = ['github', 'gitlab', 'gitea', 'other']
@@ -196,13 +195,6 @@ export function GitTargetForm({ initial, onSaved, onCancel }) {
               </div>
             )}
           </div>
-        )}
-
-        {testResult?.ok && testResult?.isEmpty && savedId && (
-          <EmptyRepoWarning
-            id={savedId}
-            onInitialized={() => setTestResult((r) => ({ ...r, isEmpty: false }))}
-          />
         )}
 
         {error && (

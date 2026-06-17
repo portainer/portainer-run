@@ -51,6 +51,17 @@ export async function handleConnections(req, res, pathname) {
     if (!data?.name || !data?.payload) {
       return json(res, 400, { error: 'name and payload required' })
     }
+    try {
+      const branches = await getBranches(data.payload)
+      if (branches.length === 0) {
+        return json(res, 422, {
+          error: 'Repository has no commits. Initialize the repository with at least one file using your Git provider before adding it as a target. See your provider\'s documentation for instructions.',
+        })
+      }
+    } catch {
+      // Can't reach repo or auth failed — not a blocking error here.
+      // Use Test Connection to diagnose connectivity issues.
+    }
     // Only admins can create shared targets
     const shared = isAdmin ? Boolean(data.shared) : false
     const conn = createConnection(data.name, data.payload, userId, shared)
@@ -91,6 +102,16 @@ export async function handleConnections(req, res, pathname) {
       const data = parseJson(body)
       if (!data?.name || !data?.payload) {
         return json(res, 400, { error: 'name and payload required' })
+      }
+      try {
+        const branches = await getBranches(data.payload)
+        if (branches.length === 0) {
+          return json(res, 422, {
+            error: 'Repository has no commits. Initialize the repository with at least one file using your Git provider before saving this target. See your provider\'s documentation for instructions.',
+          })
+        }
+      } catch {
+        // Can't reach repo or auth failed — not a blocking error here.
       }
       const result = updateConnection(id, data.name, data.payload, data.shared, userId, isAdmin)
       if (result === 'forbidden') return json(res, 403, { error: 'Forbidden' })
