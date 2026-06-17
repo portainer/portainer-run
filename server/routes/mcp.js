@@ -25,6 +25,7 @@ import {
   FEATURE_SIMPLE_DEPLOY,
   FEATURE_MANIFEST_BUILDER,
   BASE_DOMAIN,
+  CONFIG_NAMESPACE,
 } from '../config.js'
 import { resolveCallerIdentity, extractToken, portainerGet } from '../lib/identity.js'
 import { resolvePortainerTarget } from '../resolve-portainer.js'
@@ -217,7 +218,7 @@ function buildTools() {
 /**
  * Reads the set of environments an admin has disabled from deploy flows.
  * Stored as a JSON map (keyed by string env Id, truthy = disabled) in the
- * `portainer-run-config` ConfigMap in kube-system — the same source the UI
+ * `portainer-run-config` ConfigMap in CONFIG_NAMESPACE (default: kube-system) — same source as the UI
  * uses. The map is global, so the first environment that returns it wins.
  * Returns {} when no config exists (nothing disabled).
  */
@@ -226,7 +227,7 @@ async function fetchDisabledEnvs(target, token, envIds) {
     try {
       const cm = await portainerGet(
         target, token,
-        `/api/endpoints/${id}/kubernetes/api/v1/namespaces/kube-system/configmaps/portainer-run-config`,
+        `/api/endpoints/${id}/kubernetes/api/v1/namespaces/${CONFIG_NAMESPACE}/configmaps/portainer-run-config`,
       )
       const raw = cm?.data?.disabledEnvs
       if (!raw) continue
