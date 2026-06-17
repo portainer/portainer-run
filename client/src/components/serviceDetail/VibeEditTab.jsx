@@ -1,4 +1,31 @@
 import { useEffect, useRef, useState } from 'react'
+import { unzip } from 'fflate'
+
+// ZIP extraction (mirrors VibeDeploy.jsx)
+async function extractZip(file) {
+  const arrayBuffer = await file.arrayBuffer()
+  const uint8 = new Uint8Array(arrayBuffer)
+  return new Promise((resolve, reject) => {
+    unzip(uint8, (err, files) => {
+      if (err) { reject(err); return }
+      const results = []
+      for (const [relPath, data] of Object.entries(files)) {
+        if (relPath.endsWith('/')) continue
+        if (relPath.startsWith('__MACOSX/') || relPath.includes('/__MACOSX/')) continue
+        const parts = relPath.split('/')
+        const name = parts[parts.length - 1]
+        if (!name) continue
+        results.push({
+          name,
+          size: data.length,
+          text: new TextDecoder().decode(data),
+          webkitRelativePath: relPath,
+        })
+      }
+      resolve(results)
+    })
+  })
+}
 
 // Folder traversal helpers (mirrors VibeDeploy.jsx)
 function readFileEntry(entry) {
@@ -157,13 +184,19 @@ export default function VibeEditTab({ d, envId, namespace, name, gitOpsInfo, onS
   }
 
   function readFileList(fileList) {
-    const readers = Array.from(fileList).map((file) => new Promise((res) => {
+    const allFiles = Array.from(fileList)
+    const zips = allFiles.filter((f) => f.name.toLowerCase().endsWith('.zip'))
+    const rest = allFiles.filter((f) => !f.name.toLowerCase().endsWith('.zip'))
+
+    const restPromise = Promise.all(rest.map((file) => new Promise((res) => {
       const r = new FileReader()
       r.onload = (e) => res({ name: file.name, size: file.size, text: e.target.result, webkitRelativePath: file.webkitRelativePath || file.name })
       r.onerror = () => res({ name: file.name, size: file.size, text: '', webkitRelativePath: file.webkitRelativePath || file.name })
       r.readAsText(file)
-    }))
-    Promise.all(readers).then(mergeFiles)
+    })))
+
+    const zipPromises = zips.map((f) => extractZip(f))
+    Promise.all([restPromise, ...zipPromises]).then((groups) => mergeFiles(groups.flat()))
   }
 
   async function onDrop(e) {
@@ -171,7 +204,15 @@ export default function VibeEditTab({ d, envId, namespace, name, gitOpsInfo, onS
     const items = e.dataTransfer.items
     if (items && items.length) {
       const entries = Array.from(items).map((item) => item.webkitGetAsEntry?.()).filter(Boolean)
-      if (entries.length) { mergeFiles((await Promise.all(entries.map(traverseEntry))).flat()); return }
+      if (entries.length) {
+        const zipEntries = entries.filter((entry) => entry.isFile && entry.name.toLowerCase().endsWith('.zip'))
+        const otherEntries = entries.filter((entry) => !entry.isFile || !entry.name.toLowerCase().endsWith('.zip'))
+        const zipFiles = await Promise.all(zipEntries.map((entry) => new Promise((resolve) => entry.file(resolve))))
+        const zipResults = await Promise.all(zipFiles.map(extractZip))
+        const traversed = (await Promise.all(otherEntries.map(traverseEntry))).flat()
+        mergeFiles([...traversed, ...zipResults.flat()])
+        return
+      }
     }
     if (e.dataTransfer.files.length) readFileList(e.dataTransfer.files)
   }

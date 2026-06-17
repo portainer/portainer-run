@@ -406,7 +406,7 @@ export function VibeDeploy() {
   const [manualNs, setManualNs] = useState(false)
   const [manualNsValue, setManualNsValue] = useState('')
   const [nsHint, setNsHint] = useState({ text: '', tone: 'dim' })
-  const [instances, setInstances] = useState(1)
+  const instances = 1
   const [exposeType, setExposeType] = useState('none')
   const [svcPort, setSvcPort] = useState('')
   const [ingHost, setIngHost] = useState('')
@@ -782,7 +782,7 @@ export function VibeDeploy() {
       // Reset form
       setFiles([]); setStep(1); setStagedParams(null)
       setRuntimeConfirmed(false); setEnvVarsConfirmed(false); setDeployConfigConfirmed(false)
-      setAppName(''); setEnvId(''); setNamespace(''); setInstances(1)
+      setAppName(''); setEnvId(''); setNamespace('')
       setExposeType('none'); setIngHost(''); setIngPath('/'); setIngClass('')
     } catch (e) {
       pushToast('Deploy failed: ' + (e?.message || 'Unknown error'), 'err')
@@ -1138,11 +1138,6 @@ export function VibeDeploy() {
                     onChange={(e) => setAppName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
                     placeholder="my-app" />
                   <div className="hint">Lowercase, alphanumeric and hyphens</div>
-                </div>
-                <div className="field">
-                  <label>Instances</label>
-                  <input type="number" value={instances} min={1} max={20}
-                    onChange={(e) => setInstances(Math.max(1, Math.min(20, parseInt(e.target.value, 10) || 1)))} />
                 </div>
               </div>
               <div className="frow">
