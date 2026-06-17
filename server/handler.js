@@ -12,6 +12,7 @@ import {
   FEATURE_MANIFEST_BUILDER,
   FEATURE_CATALOGUE,
   FEATURE_SECRETS,
+  CONFIG_NAMESPACE,
 } from './config.js'
 import { handleCache } from './cache.js'
 import { handleEnvStatus } from './env-status.js'
@@ -49,6 +50,7 @@ export async function handleRequest(req, res) {
         aiAvailable: !!(ANTHROPIC_KEY || OPENAI_KEY),
         aiProvider: AI_PROVIDER,
         baseDomain: BASE_DOMAIN,
+        configNamespace: CONFIG_NAMESPACE,
         features: {
           vibeDeploy:      FEATURE_VIBE_DEPLOY,
           simpleDeploy:    FEATURE_SIMPLE_DEPLOY,
