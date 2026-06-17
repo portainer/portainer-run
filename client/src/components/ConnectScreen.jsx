@@ -8,8 +8,6 @@ export function ConnectScreen() {
   const [apiToken, setApiToken] = useState('')
   const [connecting, setConnecting] = useState(false)
   const portainerBaseUrl = useAppStore((s) => s.portainerBaseUrl)
-  const setPortainerBaseUrl = useAppStore((s) => s.setPortainerBaseUrl)
-  const portainerFromServer = useAppStore((s) => s.portainerFromServer)
   const connectError = useAppStore((s) => s.connectError)
   const setConnectError = useAppStore((s) => s.setConnectError)
   const navigate = useNavigate()
@@ -46,32 +44,11 @@ export function ConnectScreen() {
         </div>
         <div className="connect-card">
           <div className="ccard-head">
-            <h2>Connect to Portainer</h2>
-            <p>
-              Set the same base URL you use in the browser (for example https://host:9443) and
-              your personal API token. If the app server was started with <code>PORTAINER_URL</code>
-              in the environment, you can leave the URL field empty to use that default.
-            </p>
+            <h2>Log in to Portainer Run</h2>
           </div>
           <div className="ccard-body">
             <div className="field">
-              <label>Portainer base URL{portainerFromServer ? ' (optional override)' : null}</label>
-              <input
-                type="url"
-                value={portainerBaseUrl}
-                onChange={(e) => setPortainerBaseUrl(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') void onConnect()
-                }}
-                placeholder="https://portainer.internal:9443"
-                autoComplete="off"
-              />
-              <div className="hint">
-                Same URL you use in the browser (scheme, host, port if not 443/80)
-              </div>
-            </div>
-            <div className="field">
-              <label>API Token</label>
+              <label>Portainer API Token</label>
               <input
                 type="password"
                 value={apiToken}
@@ -82,7 +59,6 @@ export function ConnectScreen() {
                 placeholder="ptr_xxxxxxxxxxxx"
                 autoComplete="off"
               />
-              <div className="hint">Generate in Portainer → Account → Access Tokens</div>
             </div>
             <button
               type="button"
