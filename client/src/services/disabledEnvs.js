@@ -2,10 +2,10 @@ import { kubeFetch } from '../lib/api.js'
 import { useAppStore } from '../store/useAppStore.js'
 
 const CM_NAME = 'portainer-run-config'
-const CM_NS = 'kube-system'
 
 export async function loadDisabledEnvs(token, environments) {
   const st = useAppStore.getState
+  const CM_NS = st().configNamespace
   for (const env of environments) {
     try {
       const r = await kubeFetch(token, env.Id, `/api/v1/namespaces/${CM_NS}/configmaps/${CM_NAME}`)
@@ -35,6 +35,7 @@ export async function loadDisabledEnvs(token, environments) {
 }
 
 export async function saveDisabledEnvs(token, environments, disabledEnvs) {
+  const CM_NS = useAppStore.getState().configNamespace
   const payload = {
     apiVersion: 'v1',
     kind: 'ConfigMap',

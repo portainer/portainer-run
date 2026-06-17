@@ -21,6 +21,7 @@ export const useAppStore = create((set, get) => ({
   isAiAvailable: false,
   aiProvider: 'anthropic',
   baseDomain: '',
+  configNamespace: 'kube-system',
   features: {
     vibeDeploy: true,
     simpleDeploy: true,
@@ -67,6 +68,7 @@ export const useAppStore = create((set, get) => ({
   setUsername: (v) => set({ username: v }),
   setAi: (isAiAvailable, aiProvider, baseDomain) =>
     set({ isAiAvailable, aiProvider, baseDomain: baseDomain || '' }),
+  setConfigNamespace: (v) => set({ configNamespace: v || 'kube-system' }),
   setFeatures: (features) => set({ features }),
   setDisabledEnvs: (disabledEnvs) => set({ disabledEnvs }),
   setCache: (updater) =>

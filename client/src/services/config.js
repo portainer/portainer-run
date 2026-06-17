@@ -18,6 +18,7 @@ export async function loadServerConfig() {
           : 'Set your Portainer base URL below'
     )
     st().setAi(!!d.aiAvailable, d.aiProvider || 'anthropic', d.baseDomain || '')
+    if (d.configNamespace) st().setConfigNamespace(d.configNamespace)
     if (d.features) st().setFeatures({
       vibeDeploy:      d.features.vibeDeploy      !== false,
       simpleDeploy:    d.features.simpleDeploy    !== false,

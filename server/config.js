@@ -59,6 +59,18 @@ function resolveTemplateUrl() {
 
 export const TEMPLATE_URL = resolveTemplateUrl()
 export const BASE_DOMAIN = process.env.BASE_DOMAIN || ''
+
+function resolveConfigNamespace() {
+  // When running in Kubernetes, the pod's own namespace is mounted at this path automatically.
+  try {
+    const ns = fs.readFileSync('/var/run/secrets/kubernetes.io/serviceaccount/namespace', 'utf8').trim()
+    if (ns) return ns
+  } catch { /* not in Kubernetes */ }
+  // Explicit override, or kube-system for local/non-K8s runs.
+  return process.env.CONFIG_NAMESPACE || 'kube-system'
+}
+
+export const CONFIG_NAMESPACE = resolveConfigNamespace()
 export const CACHE_FILE = path.join(CACHE_DIR, 'cache.json')
 
 // ---------------------------------------------------------------------------
