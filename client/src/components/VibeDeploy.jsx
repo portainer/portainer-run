@@ -39,8 +39,8 @@ const NGINX_RUNTIME = {
 const RUNTIMES = [
   {
     id: 'node',
-    label: 'Node.js 24',
-    image: 'node:24-slim',
+    label: 'Node.js 22',
+    image: 'node:22-slim',
     detect: (names) => names.includes('package.json'),
     defaultCmd: (files) => {
       const pkg = files.find((f) => f.name === 'package.json')
@@ -58,8 +58,8 @@ const RUNTIMES = [
   },
   {
     id: 'python',
-    label: 'Python 3.14',
-    image: 'python:3.14-slim',
+    label: 'Python 3.13',
+    image: 'python:3.13-slim',
     detect: (names) => names.includes('requirements.txt') || names.some((n) => n.endsWith('.py')),
     defaultCmd: (files) => {
       for (const candidate of ['main.py', 'app.py', 'server.py', 'run.py']) {
@@ -677,7 +677,7 @@ export function VibeDeploy() {
     // Build a single-container spec representing the vibe deploy
     const containerSpec = {
       name: appName,
-      image: detectedRuntime?.image || 'node:24-slim',
+      image: detectedRuntime?.image || 'node:22-slim',
       command: startCmd ? startCmd.split(/\s+/) : undefined,
       workingDir: detectedRuntime?.workDir || '/app',
       ports: [{ containerPort: resolvedPort, protocol: 'TCP' }],
@@ -712,7 +712,7 @@ export function VibeDeploy() {
       // Vibe-specific extras passed through to server
       vibeParams: {
         runtime: detectedRuntime?.id || 'node',
-        runtimeImage: detectedRuntime?.image || 'node:24-slim',
+        runtimeImage: detectedRuntime?.image || 'node:22-slim',
         startCmd: startCmd.trim(),
         workDir: detectedRuntime?.workDir || '/app',
         envVars: envVars.filter((v) => v.key),
