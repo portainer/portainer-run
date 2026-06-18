@@ -167,7 +167,7 @@ function ServiceRowContent({
             className="btn-open"
             onClick={(e) => e.stopPropagation()}
           >
-            <span className="btn-open-label">{extra.accessLabel || extra.accessUrl}</span>
+            <span className="btn-open-label">Open → {extra.accessLabel || extra.accessUrl}</span>
           </a>
         ) : extra.accessLabel ? (
           <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-dim)' }}>
@@ -455,9 +455,9 @@ export function ServicesPage() {
                     <span className="svc-l-header-name"><span>Name</span></span>
                     <span>Environment</span>
                     <span>Project space</span>
-                    <span>Status</span>
-                    <span>Exposure</span>
-                    <span>Age</span>
+                    <span>Health</span>
+                    <span>Access</span>
+                    <span>Deployed</span>
                     <span />
                   </div>
                 </div>
@@ -515,9 +515,9 @@ export function ServicesPage() {
                   <span className="svc-l-header-name"><span>Name</span></span>
                   <span>Environment</span>
                   <span>Project space</span>
-                  <span>Status</span>
-                  <span>Exposure</span>
-                  <span>Age</span>
+                  <span>Health</span>
+                  <span>Access</span>
+                  <span>Deployed</span>
                   <span />
                 </div>
               )}
