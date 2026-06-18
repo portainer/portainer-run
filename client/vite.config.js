@@ -15,9 +15,11 @@ export default defineConfig({
       '/config': target,
       '/portainer-api': target,
       '/ai': target,
+      '/api': target,
       '/cache': target,
       '/env-status': target,
       '/templates': target,
+      '/mcp': target,
     },
   },
 })
