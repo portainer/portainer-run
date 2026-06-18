@@ -115,9 +115,6 @@ function ServiceRowContent({
   const ns = d.metadata.namespace
   const envId = d._envId
   const envName = d._envName || '—'
-  const images = (d.spec?.template?.spec?.containers || [])
-    .map((c) => c.image)
-    .filter(Boolean)
   const created = d.metadata?.creationTimestamp
   const { border, dot, label } = rowClasses(d)
   const extra = getExtraForApp(envStatusClientCache, envId, name)
@@ -142,15 +139,6 @@ function ServiceRowContent({
         <div className="svc-name-body">
         {name}
         </div>
-      </div>
-      <div className="svc-image" title={images.join('\n') || '—'}>
-        {images.length ? (
-          images.map((img, i) => (
-            <div key={`${name}-img-${i}`} className="svc-image-line">{img}</div>
-          ))
-        ) : (
-          '—'
-        )}
       </div>
       <div className="svc-env" title={envName}>
         <span className="ns-badge">{envName}</span>
@@ -179,7 +167,7 @@ function ServiceRowContent({
             className="btn-open"
             onClick={(e) => e.stopPropagation()}
           >
-            {extra.accessLabel || extra.accessUrl}
+            <span className="btn-open-label">{extra.accessLabel || extra.accessUrl}</span>
           </a>
         ) : extra.accessLabel ? (
           <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-dim)' }}>
@@ -465,7 +453,6 @@ export function ServicesPage() {
                 <div className="list-column-headers">
                   <div className="svc-l-header">
                     <span className="svc-l-header-name"><span>Name</span></span>
-                    <span>Image</span>
                     <span>Environment</span>
                     <span>Project space</span>
                     <span>Status</span>
@@ -480,11 +467,11 @@ export function ServicesPage() {
                       <div className="svc-skeleton-name-cell">
                         <div className="svc-skeleton-pill" />
                       </div>
-                      <div className="svc-skeleton-line" style={{ maxWidth: '100%' }} />
                       <div className="svc-skeleton-pill sm" />
                       <div className="svc-skeleton-pill" />
                       <div className="svc-skeleton-line" />
                       <div className="svc-skeleton-pill" />
+                      <div />
                       <div className="svc-skeleton-actions" />
                     </div>
                   ))}
@@ -517,17 +504,15 @@ export function ServicesPage() {
                 return [primaryServicePartition(d)]
               }}
               filterItem={({ d, id }, q) => {
-                const im = d.spec?.template?.spec?.containers?.[0]?.image || ''
                 const envN = d._envName || ''
                 const n = d.metadata.name
                 const { label } = rowClasses(d)
-                const hay = `${n} ${im} ${envN} ${label}`.toLowerCase()
+                const hay = `${n} ${envN} ${label}`.toLowerCase()
                 return hay.includes(q)
               }}
               renderColumnHeaders={() => (
                 <div className="svc-l-header">
                   <span className="svc-l-header-name"><span>Name</span></span>
-                  <span>Image</span>
                   <span>Environment</span>
                   <span>Project space</span>
                   <span>Status</span>
