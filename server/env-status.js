@@ -5,7 +5,7 @@ import { CORS } from './lib/cors.js'
 import { createLimiter } from './lib/limit.js'
 import { resolvePortainerTarget } from './resolve-portainer.js'
 
-const STATUS_TTL = 20 * 1000
+const STATUS_TTL = 5 * 1000
 
 const statusCache = new Map()
 const kubeLimit = createLimiter(10)
