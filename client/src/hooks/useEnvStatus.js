@@ -59,8 +59,6 @@ export function useEnvStatusOnDeployments(deps, token) {
     const state = useAppStore.getState()
     const finger = rvFingerprint(deps, state)
     for (const [envId, { rv, namespaces }] of Object.entries(finger)) {
-      const prev = state.envStatusClientCache[String(envId)]
-      if (prev && prev.rv === rv) continue
       const nsParam = namespaces.length ? '?ns=' + namespaces.join(',') : ''
       const job = () =>
         inflightDedupe(`env-status:${envId}`, async () => {
