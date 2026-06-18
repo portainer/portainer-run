@@ -448,7 +448,7 @@ a.nav-item{color:inherit;}
 .svc-l-header,
 .svc-l-row{
   display:grid;
-  grid-template-columns:2fr 2fr 1fr 1fr 1.4fr 1.6fr 60px 200px;
+  grid-template-columns:2fr 1.8fr 1fr 1.4fr 1.6fr 1.4fr 60px 200px;
   padding:10px 16px;
   align-items:start;
   min-width:0;
@@ -469,6 +469,7 @@ a.nav-item{color:inherit;}
   align-items:center;
 }
 .svc-l-header > span{min-width:0;overflow:hidden;text-overflow:ellipsis;}
+.svc-l-row > *{min-width:0;overflow:hidden;}
 .svc-l-row[role="button"]{cursor:pointer;outline:none;}
 .svc-l-row[role="button"]:focus-visible{box-shadow:inset 0 0 0 2px rgba(14,165,233,.45);}
 .services-page-list .list-group-items .svc-l-row{padding:13px 16px 13px 13px;border-bottom:1px solid var(--border);border-left:3px solid transparent;transition:background .1s,border-color .2s;}

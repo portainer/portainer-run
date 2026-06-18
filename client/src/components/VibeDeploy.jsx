@@ -407,7 +407,7 @@ export function VibeDeploy() {
   const [manualNsValue, setManualNsValue] = useState('')
   const [nsHint, setNsHint] = useState({ text: '', tone: 'dim' })
   const instances = 1
-  const [exposeType, setExposeType] = useState('none')
+  const [exposeType, setExposeType] = useState('NodePort')
   const [svcPort, setSvcPort] = useState('')
   const [ingHost, setIngHost] = useState('')
   const [ingPath, setIngPath] = useState('/')
@@ -513,8 +513,8 @@ export function VibeDeploy() {
       setEnvCapabilities(caps)
       // Reset expose type if currently-selected option is no longer available
       setExposeType((prev) => {
-        if (prev === 'LoadBalancer' && !caps.lbOk) return 'none'
-        if (prev === 'Ingress' && !caps.ingressOk) return 'none'
+        if (prev === 'LoadBalancer' && !caps.lbOk) return 'NodePort'
+        if (prev === 'Ingress' && !caps.ingressOk) return 'NodePort'
         return prev
       })
     }).catch(() => {
@@ -705,7 +705,7 @@ export function VibeDeploy() {
         // Vibe deploy marker — server uses this to generate init container
         vibeSource: true,
       }],
-      exposeType: exposeType === 'none' ? 'none' : exposeType,
+      exposeType: exposeType,
       servicePorts: [resolvedPort],
       ingress: {
         host: ingHost,
@@ -783,7 +783,7 @@ export function VibeDeploy() {
       setFiles([]); setStep(1); setStagedParams(null)
       setRuntimeConfirmed(false); setEnvVarsConfirmed(false); setDeployConfigConfirmed(false)
       setAppName(''); setEnvId(''); setNamespace('')
-      setExposeType('none'); setIngHost(''); setIngPath('/'); setIngClass('')
+      setExposeType('NodePort'); setIngHost(''); setIngPath('/'); setIngClass('')
     } catch (e) {
       pushToast('Deploy failed: ' + (e?.message || 'Unknown error'), 'err')
     } finally {
@@ -1227,13 +1227,12 @@ export function VibeDeploy() {
                 <label>Expose as</label>
                 <select value={exposeType} onChange={(e) => setExposeType(e.target.value)}
                   disabled={envCapabilities.probing}>
-                  <option value="none">Do not expose</option>
-                  <option value="NodePort">Internal use</option>
+                  <option value="NodePort">Network Accessible</option>
                   {(envCapabilities.probing || envCapabilities.lbOk !== false) && (
-                    <option value="LoadBalancer">External, dedicated IP</option>
+                    <option value="LoadBalancer">Network Accessible via dedicated IP</option>
                   )}
                   {(envCapabilities.probing || envCapabilities.ingressOk !== false) && (
-                    <option value="Ingress">External web access</option>
+                    <option value="Ingress">Network Accessible via a URL</option>
                   )}
                 </select>
                 {!envCapabilities.probing && envId && (envCapabilities.lbOk === false || envCapabilities.ingressOk === false) && (
