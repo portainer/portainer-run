@@ -39,8 +39,8 @@ const NGINX_RUNTIME = {
 const RUNTIMES = [
   {
     id: 'node',
-    label: 'Node.js 20',
-    image: 'node:20-alpine',
+    label: 'Node.js 24',
+    image: 'node:24-alpine',
     detect: (names) => names.includes('package.json'),
     defaultCmd: (files) => {
       const pkg = files.find((f) => f.name === 'package.json')
@@ -58,8 +58,8 @@ const RUNTIMES = [
   },
   {
     id: 'python',
-    label: 'Python 3.12',
-    image: 'python:3.12-slim',
+    label: 'Python 3.14',
+    image: 'python:3.14-slim',
     detect: (names) => names.includes('requirements.txt') || names.some((n) => n.endsWith('.py')),
     defaultCmd: (files) => {
       for (const candidate of ['main.py', 'app.py', 'server.py', 'run.py']) {
@@ -72,8 +72,8 @@ const RUNTIMES = [
   },
   {
     id: 'php',
-    label: 'PHP 8.3',
-    image: 'php:8.3-apache',
+    label: 'PHP 8.4',
+    image: 'php:8.4-apache',
     detect: (names) => names.some((n) => n.endsWith('.php')),
     defaultCmd: () => 'apache2-foreground',
     port: 80,
@@ -81,8 +81,8 @@ const RUNTIMES = [
   },
   {
     id: 'ruby',
-    label: 'Ruby 3.3',
-    image: 'ruby:3.3-alpine',
+    label: 'Ruby 3.4',
+    image: 'ruby:3.4-alpine',
     detect: (names) => names.includes('Gemfile') || names.some((n) => n.endsWith('.rb')),
     defaultCmd: (files) => {
       for (const candidate of ['app.rb', 'server.rb', 'config.ru']) {
@@ -677,7 +677,7 @@ export function VibeDeploy() {
     // Build a single-container spec representing the vibe deploy
     const containerSpec = {
       name: appName,
-      image: detectedRuntime?.image || 'node:20-alpine',
+      image: detectedRuntime?.image || 'node:24-alpine',
       command: startCmd ? startCmd.split(/\s+/) : undefined,
       workingDir: detectedRuntime?.workDir || '/app',
       ports: [{ containerPort: resolvedPort, protocol: 'TCP' }],
@@ -712,7 +712,7 @@ export function VibeDeploy() {
       // Vibe-specific extras passed through to server
       vibeParams: {
         runtime: detectedRuntime?.id || 'node',
-        runtimeImage: detectedRuntime?.image || 'node:20-alpine',
+        runtimeImage: detectedRuntime?.image || 'node:24-alpine',
         startCmd: startCmd.trim(),
         workDir: detectedRuntime?.workDir || '/app',
         envVars: envVars.filter((v) => v.key),
