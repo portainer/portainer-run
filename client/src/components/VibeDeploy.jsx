@@ -1227,7 +1227,7 @@ export function VibeDeploy() {
                 <label>Expose as</label>
                 <select value={exposeType} onChange={(e) => setExposeType(e.target.value)}
                   disabled={envCapabilities.probing}>
-                  <option value="NodePort">Network Accessible</option>
+                  <option value="NodePort">Network Accessible - Default, use this unless advised otherwise</option>
                   {(envCapabilities.probing || envCapabilities.lbOk !== false) && (
                     <option value="LoadBalancer">Network Accessible via dedicated IP</option>
                   )}
