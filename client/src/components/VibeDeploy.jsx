@@ -596,11 +596,11 @@ export function VibeDeploy() {
   function confirmFiles() {
     if (sourceType === 'upload') {
       if (!files.length) { pushToast('Add at least one file', 'err'); return }
-      setStep(2)
+      setStep(hasEnvExample ? 3 : 4)
     } else {
       // git source — already confirmed, runtime detected
       if (!gitSourceConfirmed) { pushToast('Select a git source and fetch files', 'err'); return }
-      setStep(2)
+      setStep(hasEnvExample ? 3 : 4)
     }
   }
 
@@ -628,7 +628,7 @@ export function VibeDeploy() {
       setDetectedRuntime(rt)
       setStartCmd(rt?.startCmd || '')
       setGitSourceConfirmed(true)
-      pushToast(`Runtime detected: ${rt?.label || 'nginx'}`, 'ok')
+      pushToast('Files scanned — ready to deploy', 'ok')
     } catch (e) {
       pushToast(e?.message || 'Failed to fetch files from git', 'err')
     } finally {
@@ -733,10 +733,20 @@ export function VibeDeploy() {
     setStagedParams(params)
     setDeployConfigConfirmed(true)
     setStep(5)
+    if (gitTargetsList.length === 1) {
+      const target = gitTargetsList[0]
+      void handleGitOpsConfirm({
+        gitTargetId: target.id,
+        branch: target.payload?.defaultBranch || 'main',
+        pathPrefix: target.payload?.pathPrefix || '',
+        pollInterval: '5m',
+      }, params)
+    }
   }
 
-  async function handleGitOpsConfirm({ gitTargetId, branch, pathPrefix, pollInterval }) {
-    if (!stagedParams) return
+  async function handleGitOpsConfirm({ gitTargetId, branch, pathPrefix, pollInterval }, _params = null) {
+    const sp = _params || stagedParams
+    if (!sp) return
     setDeploying(true)
     try {
       const { portainerBaseUrl, portainerFromServer, token: tok } = useAppStore.getState()
@@ -755,25 +765,25 @@ export function VibeDeploy() {
           branch,
           pathPrefix,
           pollInterval,
-          envId: stagedParams.envId,
-          envName: stagedParams.envName,
-          vibeParams: stagedParams.vibeParams,
+          envId: sp.envId,
+          envName: sp.envName,
+          vibeParams: sp.vibeParams,
           deployParams: {
-            appName: stagedParams.appName,
-            ns: stagedParams.ns,
-            instances: stagedParams.instances,
-            containerSpecs: stagedParams.containerSpecs,
-            containerRowIds: stagedParams.containerRowIds,
-            volumeDefs: stagedParams.volumeDefs,
-            exposeType: stagedParams.exposeType,
-            servicePorts: stagedParams.servicePorts,
-            ingress: stagedParams.ingress,
+            appName: sp.appName,
+            ns: sp.ns,
+            instances: sp.instances,
+            containerSpecs: sp.containerSpecs,
+            containerRowIds: sp.containerRowIds,
+            volumeDefs: sp.volumeDefs,
+            exposeType: sp.exposeType,
+            servicePorts: sp.servicePorts,
+            ingress: sp.ingress,
           },
         }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
-      pushToast(`${stagedParams.appName} deployed successfully`, 'ok')
+      pushToast(`${sp.appName} deployed successfully`, 'ok')
       void manualRefresh()
       schedulePostDeployRefreshes()
       navigate(ROUTES.services)
@@ -792,17 +802,18 @@ export function VibeDeploy() {
 
   // ---- Render helpers ----
 
-  const VD_STEPS = [
+  const VD_STEPS_ALL = [
     { num: 1, label: 'Files' },
-    { num: 2, label: 'Runtime' },
-    { num: 3, label: 'Env Vars' },
+    { num: 3, label: 'App settings' },
     { num: 4, label: 'Deploy' },
-    { num: 5, label: 'GitOps' },
+    { num: 5, label: 'Storage' },
   ]
-
-  const visibleSteps = hasEnvExample ? VD_STEPS : VD_STEPS.filter((s) => s.num !== 3).map((s, i) => ({ ...s, num: i + 1 }))
-  // Map logical step to display step
-  const displayStep = hasEnvExample ? step : step < 3 ? step : step === 4 ? 3 : step === 5 ? 4 : step
+  const visibleSteps = VD_STEPS_ALL
+    .filter((s) => !(s.num === 3 && !hasEnvExample))
+    .filter((s) => !(s.num === 5 && gitTargetsList.length === 1))
+    .map((s, i) => ({ ...s, displayNum: i + 1 }))
+  const displayStep = visibleSteps.find((s) => s.num === step)?.displayNum
+    ?? (step >= 5 ? visibleSteps.length + 1 : 1)
 
   const nsStatusColor = nsHint.tone === 'warn' ? 'var(--amber)'
     : nsHint.tone === 'ok' ? 'var(--green)'
@@ -839,11 +850,11 @@ export function VibeDeploy() {
         {/* Stepper */}
         <div className="mb-stepper">
           {visibleSteps.map((s, i) => {
-            const state = s.num < displayStep ? 'done' : s.num === displayStep ? 'active' : 'idle'
+            const state = s.displayNum < displayStep ? 'done' : s.displayNum === displayStep ? 'active' : 'idle'
             return (
               <div key={s.num} style={{ display: 'flex', alignItems: 'center' }}>
                 <div className={`mb-step mb-step--${state}`}>
-                  <div className="mb-step-num">{state === 'done' ? '✓' : s.num}</div>
+                  <div className="mb-step-num">{state === 'done' ? '✓' : s.displayNum}</div>
                   <span className="mb-step-label">{s.label}</span>
                 </div>
                 {i < visibleSteps.length - 1 && <div className="mb-step-sep" />}
@@ -986,7 +997,7 @@ export function VibeDeploy() {
                   </div>
                   {gitSourceConfirmed ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 6, fontSize: 12, fontFamily: 'var(--mono)', color: 'var(--green)' }}>
-                      ✓ Runtime detected: <strong style={{ marginLeft: 4 }}>{detectedRuntime?.label || 'nginx'}</strong>
+                      ✓ Files ready to deploy
                       <button type="button" className="btn btn-ghost btn-xs" style={{ marginLeft: 'auto' }} onClick={() => { setGitSourceConfirmed(false); setDetectedRuntime(null) }}>Re-fetch</button>
                     </div>
                   ) : (
@@ -1010,84 +1021,13 @@ export function VibeDeploy() {
           </div>
         )}
 
-        {/* ── Step 2: Runtime ── */}
-        {step === 2 && (
-          <div className="form-section">
-            <div className="form-section-head">Step 2 — Runtime</div>
-            <div className="form-section-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div className="frow">
-                <div className="field">
-                  <label>Detected runtime</label>
-                  <div style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 8,
-                    background: 'rgba(74,222,128,.07)', border: '1px solid rgba(74,222,128,.18)',
-                    borderRadius: 6, padding: '8px 12px', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--green)',
-                  }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
-                    </svg>
-                    {detectedRuntime
-                      ? `${detectedRuntime.label}${detectedRuntime.id === 'nginx' ? ' — static site' : ''}`
-                      : 'Unknown — defaulting to nginx'}
-                  </div>
-                  <div className="hint">
-                    Image: {detectedRuntime?.image || 'nginx:alpine'} &nbsp;·&nbsp; Port: {detectedRuntime?.port || 80} &nbsp;·&nbsp; Workdir: {detectedRuntime?.workDir || '/usr/share/nginx/html'}
-                    {detectedRuntime?.id === 'nginx' ? ' — static files served directly' : ' — dependencies installed automatically at deploy time'}
-                  </div>
-                </div>
-              </div>
-              <div className="field">
-                <label>Start command</label>
-                {overrideCmd ? (
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <input
-                      type="text"
-                      value={startCmd}
-                      onChange={(e) => setStartCmd(e.target.value)}
-                      placeholder="e.g. node server.js"
-                      autoFocus
-                      style={{ flex: 1 }}
-                    />
-                    <button type="button" className="btn btn-ghost btn-sm"
-                      onClick={() => { setOverrideCmd(false); if (detectedRuntime) setStartCmd(detectedRuntime.defaultCmd(files)) }}>
-                      Reset
-                    </button>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <div style={{
-                      flex: 1, background: 'var(--bg)', border: '1px solid var(--border2)',
-                      borderRadius: 6, padding: '9px 12px', fontFamily: 'var(--mono)', fontSize: 13,
-                      color: 'var(--text-bright)', display: 'flex', alignItems: 'center', gap: 8,
-                    }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2">
-                        <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
-                      </svg>
-                      {startCmd}
-                    </div>
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOverrideCmd(true)}>
-                      Override
-                    </button>
-                  </div>
-                )}
-              </div>
-              <div className="form-actions">
-                <button type="button" className="btn btn-ghost" onClick={() => setStep(1)}>← Back</button>
-                <button type="button" className="btn btn-primary" onClick={confirmRuntime}>
-                  Next →
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── Step 3: Env Vars (only when .env.example present) ── */}
+        {/* ── Step 3: App settings (only when .env.example present) ── */}
         {step === 3 && hasEnvExample && (
           <div className="form-section">
-            <div className="form-section-head">Step 3 — Environment Variables</div>
+            <div className="form-section-head">App settings</div>
             <div className="form-section-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div className="hint" style={{ marginBottom: 4 }}>
-                Detected from <span style={{ fontFamily: 'var(--mono)', color: 'var(--amber)' }}>.env.example</span> — enter values to create a real <span style={{ fontFamily: 'var(--mono)' }}>.env</span> at deploy time. The .env file is written to the PV and never committed to git.
+                Your app needs a few settings — fill in the values below and they will be applied securely at deploy time.
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {envVars.map((v, i) => (
@@ -1113,9 +1053,9 @@ export function VibeDeploy() {
                 onClick={() => setEnvVars((prev) => [...prev, { key: '', value: '' }])}>
                 + Add variable
               </button>
-              <div className="hint">Keys matching SECRET, KEY, TOKEN, PASSWORD are masked above.</div>
+              <div className="hint">Values marked with •••• are treated as sensitive and hidden from view.</div>
               <div className="form-actions">
-                <button type="button" className="btn btn-ghost" onClick={() => setStep(2)}>← Back</button>
+                <button type="button" className="btn btn-ghost" onClick={() => setStep(1)}>← Back</button>
                 <button type="button" className="btn btn-primary" onClick={confirmEnvVars}>
                   Next →
                 </button>
@@ -1127,7 +1067,7 @@ export function VibeDeploy() {
         {/* ── Step 4: Deploy Config ── */}
         {step === 4 && (
           <div className="form-section">
-            <div className="form-section-head">Step {hasEnvExample ? 4 : 3} — Deploy</div>
+            <div className="form-section-head">Deploy your app</div>
             <div className="form-section-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div className="frow">
                 <div className="field">
@@ -1255,11 +1195,11 @@ export function VibeDeploy() {
                 </div>
               )}
               <div className="form-actions">
-                <button type="button" className="btn btn-ghost" onClick={() => setStep(hasEnvExample ? 3 : 2)}>← Back</button>
+                <button type="button" className="btn btn-ghost" onClick={() => setStep(hasEnvExample ? 3 : 1)}>← Back</button>
                 <button type="button" className="btn btn-primary"
                   onClick={confirmDeployConfig}
                   disabled={!appName || !envId || !resolvedNs || !canProceed}>
-                  Next: Git Target →
+                  {gitTargetsList.length === 1 ? 'Deploy →' : 'Next →'}
                 </button>
               </div>
               {(!appName || !envId || !resolvedNs) && (
@@ -1275,8 +1215,21 @@ export function VibeDeploy() {
           </div>
         )}
 
-        {/* ── Step 5: GitOps Target (shared component) ── */}
-        {step === 5 && stagedParams && (
+        {/* ── Step 5: Deploying (single git target) ── */}
+        {step === 5 && gitTargetsList.length === 1 && (
+          <div className="form-section">
+            <div className="form-section-head">Deploying</div>
+            <div className="form-section-body" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '28px 20px' }}>
+              <span className="spinner" style={{ width: 18, height: 18, flexShrink: 0 }} />
+              <span style={{ color: 'var(--text-dim)', fontSize: 14 }}>
+                Deploying your app — this may take a moment…
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 5: Storage (multiple git targets) ── */}
+        {step === 5 && gitTargetsList.length !== 1 && stagedParams && (
           <GitOpsStep
             appName={stagedParams.appName}
             ns={stagedParams.ns}
@@ -1285,6 +1238,7 @@ export function VibeDeploy() {
             onConfirm={handleGitOpsConfirm}
             onBack={() => { setStep(4); setDeployConfigConfirmed(false); setStagedParams(null) }}
             deploying={deploying}
+            sectionTitle="Where should we store your app?"
           />
         )}
       </div>
