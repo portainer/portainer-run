@@ -4,9 +4,13 @@
   "type": "module",
   "version": "0.0.0",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "dev": "bun run scripts/dev.mjs",
+    "dev:ui": "vite client",
+    "start": "bun run server/server.js",
+    "start:node": "node server/server.js",
+    "build": "vite build client",
+    "preview": "vite preview client",
+    "docker:run": "bash scripts/docker-run.sh"
   },
   "dependencies": {
     "react": "^19.0.0",
