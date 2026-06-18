@@ -296,7 +296,7 @@ export default function VibeEditTab({ d, envId, namespace, name, gitOpsInfo, onS
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Expose service as</label>
             <select value={exposeType} onChange={(e) => setExposeType(e.target.value)}>
-              <option value="NodePort">Network Accessible</option>
+              <option value="NodePort">Network Accessible - Default, use this unless advised otherwise</option>
               <option value="LoadBalancer">Network Accessible via dedicated IP</option>
               <option value="Ingress">Network Accessible via a URL</option>
             </select>
