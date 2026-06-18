@@ -1227,13 +1227,13 @@ export function VibeDeploy() {
                 <label>Expose as</label>
                 <select value={exposeType} onChange={(e) => setExposeType(e.target.value)}
                   disabled={envCapabilities.probing}>
-                  <option value="none">Internal only (ClusterIP)</option>
-                  <option value="NodePort">NodePort — expose on cluster node IP + port</option>
+                  <option value="none">Do not expose</option>
+                  <option value="NodePort">Internal use</option>
                   {(envCapabilities.probing || envCapabilities.lbOk !== false) && (
-                    <option value="LoadBalancer">LoadBalancer — provision external load balancer</option>
+                    <option value="LoadBalancer">External, dedicated IP</option>
                   )}
                   {(envCapabilities.probing || envCapabilities.ingressOk !== false) && (
-                    <option value="Ingress">Ingress — route via ingress controller</option>
+                    <option value="Ingress">External web access</option>
                   )}
                 </select>
                 {!envCapabilities.probing && envId && (envCapabilities.lbOk === false || envCapabilities.ingressOk === false) && (
