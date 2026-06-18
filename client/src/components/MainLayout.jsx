@@ -77,21 +77,17 @@ function NavLinks({ onNav, isAdmin, features }) {
         </>
       )}
 
-      <div className="nav-label" style={{ marginTop: 16 }}>GitOps</div>
-      <div className="nav-section">
-        <NavLink to={ROUTES.gitTargets} className={navClass} onClick={onNav}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-          </svg>
-          Git Targets
-        </NavLink>
-      </div>
-
-      {isAdmin ? (
+      {isAdmin && (
         <>
           <div className="nav-label" style={{ marginTop: 16 }}>Admin</div>
           <div className="nav-section">
+            <NavLink to={ROUTES.gitTargets} className={navClass} onClick={onNav}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+              </svg>
+              Git Targets
+            </NavLink>
             <NavLink to={ROUTES.readiness} className={navClass} onClick={onNav}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0 1 12 2.944a11.955 11.955 0 0 1-8.618 3.04A12.02 12.02 0 0 0 3 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -100,9 +96,9 @@ function NavLinks({ onNav, isAdmin, features }) {
             </NavLink>
           </div>
         </>
-      ) : null}
+      )}
 
-      <div className="nav-label" style={{ marginTop: 16 }}>Session</div>
+      <div className="nav-label" style={{ marginTop: 16 }}>Account</div>
       <div className="nav-section">
         {username && (
           <div style={{
@@ -132,9 +128,25 @@ function NavLinks({ onNav, isAdmin, features }) {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
           </svg>
-          Disconnect
+          Sign out
         </div>
       </div>
+
+      {!isAdmin && (
+        <>
+          <div style={{ marginTop: 20, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+            <NavLink to={ROUTES.gitTargets} className={navClass} onClick={onNav}
+              style={{ opacity: 0.7 }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07M8.46 8.46a5 5 0 0 0 0 7.07" />
+              </svg>
+              Settings
+            </NavLink>
+          </div>
+        </>
+      )}
     </>
   )
 }
