@@ -447,6 +447,9 @@ a.nav-item{color:inherit;}
 .services-page-list{min-width:0;}
 .services-page-list .list-group-items{gap:0;}
 .services-page-list .list-group ~ .list-group .list-column-headers{display:none;}
+.services-page-list--vibe-only .svc-l-header,
+.services-page-list--vibe-only .svc-l-row{grid-template-columns:2.8fr 1.2fr 2.2fr 60px 200px;}
+.services-page-list--vibe-only .svc-env,.services-page-list--vibe-only .svc-ns{display:none !important;}
 .svc-l-header,
 .svc-l-row{
   display:grid;

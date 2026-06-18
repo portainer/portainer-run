@@ -102,6 +102,8 @@ function ServiceRowContent({
   const setRestartTarget = useAppStore((s) => s.setRestartTarget)
   const envPermissions = useAppStore((s) => s.envPermissions)
   const patchEnvPermissions = useAppStore((s) => s.patchEnvPermissions)
+  const features = useAppStore((s) => s.features)
+  const vibeOnly = !!(features.vibeDeploy && !features.simpleDeploy && !features.manifestBuilder)
   const permKey = `${d._envId}:${d.metadata.namespace}`
   const perms = envPermissions[permKey] ?? null
 
@@ -141,10 +143,10 @@ function ServiceRowContent({
         </div>
       </div>
       <div className="svc-env" title={envName}>
-        <span className="ns-badge">{envName}</span>
+        {!vibeOnly && <span className="ns-badge">{envName}</span>}
       </div>
       <div className="svc-ns">
-        <span className="ns-badge">{ns}</span>
+        {!vibeOnly && <span className="ns-badge">{ns}</span>}
       </div>
       <div className="status-cell">
         <span className="status-light">
@@ -165,9 +167,10 @@ function ServiceRowContent({
             target="_blank"
             rel="noopener noreferrer"
             className="btn-open"
+            title={extra.accessLabel || extra.accessUrl}
             onClick={(e) => e.stopPropagation()}
           >
-            <span className="btn-open-label">Open → {extra.accessLabel || extra.accessUrl}</span>
+            <span className="btn-open-label">Launch</span>
           </a>
         ) : extra.accessLabel ? (
           <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-dim)' }}>
@@ -216,6 +219,7 @@ export function ServicesPage() {
   const setDeleteTarget = useAppStore((s) => s.setDeleteTarget)
   const features = useAppStore((s) => s.features)
   const [deployMenuOpen, setDeployMenuOpen] = useState(false)
+  const vibeOnly = !!(features.vibeDeploy && !features.simpleDeploy && !features.manifestBuilder)
 
   const enabledDeployFeatures = [
     features.vibeDeploy      && { label: 'Vibe Deploy',       route: ROUTES.deployVibe },
@@ -453,8 +457,8 @@ export function ServicesPage() {
                 <div className="list-column-headers">
                   <div className="svc-l-header">
                     <span className="svc-l-header-name"><span>Name</span></span>
-                    <span>Environment</span>
-                    <span>Project space</span>
+                    {!vibeOnly && <span>Environment</span>}
+                    {!vibeOnly && <span>Project space</span>}
                     <span>Health</span>
                     <span>Access</span>
                     <span>Deployed</span>
@@ -482,7 +486,7 @@ export function ServicesPage() {
         ) : null}
 
         {!initialLoading && deps.length > 0 ? (
-          <div className="services-page-list">
+          <div className={`services-page-list${vibeOnly ? ' services-page-list--vibe-only' : ''}`}>
             <SortableList
               items={listItems}
               sort={listSort}
@@ -513,8 +517,8 @@ export function ServicesPage() {
               renderColumnHeaders={() => (
                 <div className="svc-l-header">
                   <span className="svc-l-header-name"><span>Name</span></span>
-                  <span>Environment</span>
-                  <span>Project space</span>
+                  {!vibeOnly && <span>Environment</span>}
+                  {!vibeOnly && <span>Project space</span>}
                   <span>Health</span>
                   <span>Access</span>
                   <span>Deployed</span>

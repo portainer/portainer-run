@@ -25,7 +25,7 @@ const POLL_INTERVALS = [
  * @param {() => void} props.onBack
  * @param {boolean} props.deploying
  */
-export function GitOpsStep({ appName, ns, envId, deployParams, manifestBuilderParams, onConfirm, onBack, deploying }) {
+export function GitOpsStep({ appName, ns, envId, deployParams, manifestBuilderParams, onConfirm, onBack, deploying, sectionTitle }) {
   const [targets, setTargets] = useState([])
   const [loadingTargets, setLoadingTargets] = useState(true)
   const [selectedTargetId, setSelectedTargetId] = useState('')
@@ -104,7 +104,7 @@ export function GitOpsStep({ appName, ns, envId, deployParams, manifestBuilderPa
 
   return (
     <div className="form-section">
-      <div className="form-section-head">GitOps Target</div>
+      <div className="form-section-head">{sectionTitle || 'GitOps Target'}</div>
       <div className="form-section-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
         {/* Manifest path preview */}

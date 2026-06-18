@@ -44,7 +44,7 @@ export function ConnectScreen() {
         </div>
         <div className="connect-card">
           <div className="ccard-head">
-            <h2>Log in to Portainer Run</h2>
+            <h2>Log in to Portainer-Run</h2>
           </div>
           <div className="ccard-body">
             <div className="field">
