@@ -86,7 +86,12 @@ function resolveStatusReason(pod) {
     ...(pod.status?.containerStatuses || []),
     ...(pod.status?.initContainerStatuses || []),
   ]
-  if (pod.status?.phase === 'Pending' && !allCS.length) return 'Waiting for a node'
+  if (pod.status?.phase === 'Pending' && !allCS.length) {
+    const isScheduled = (pod.status?.conditions || []).find(
+      (c) => c.type === 'PodScheduled'
+    )?.status === 'True'
+    return isScheduled ? 'Preparing your app...' : 'Waiting for a node'
+  }
 
   // Init containers running — surface a meaningful message by name
   const runningInit = (pod.status?.initContainerStatuses || []).find(
