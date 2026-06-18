@@ -81,7 +81,7 @@ export default function VibeEditTab({ d, envId, namespace, name, gitOpsInfo, onS
   const filesRef = useRef(null)
 
   // Exposure state — populated from git manifest on mount
-  const [exposeType, setExposeType] = useState('none')
+  const [exposeType, setExposeType] = useState('NodePort')
   const [svcPort, setSvcPort] = useState(80)
   const [ingHost, setIngHost] = useState('')
   const [ingPath, setIngPath] = useState('/')
@@ -296,10 +296,9 @@ export default function VibeEditTab({ d, envId, namespace, name, gitOpsInfo, onS
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Expose service as</label>
             <select value={exposeType} onChange={(e) => setExposeType(e.target.value)}>
-              <option value="none">None — internal only</option>
-              <option value="NodePort">NodePort — expose on cluster node IP + port</option>
-              <option value="LoadBalancer">LoadBalancer — provision external load balancer</option>
-              <option value="Ingress">Ingress — route via ingress controller</option>
+              <option value="NodePort">Network Accessible</option>
+              <option value="LoadBalancer">Network Accessible via dedicated IP</option>
+              <option value="Ingress">Network Accessible via a URL</option>
             </select>
           </div>
           {(exposeType === 'NodePort' || exposeType === 'LoadBalancer') && (
