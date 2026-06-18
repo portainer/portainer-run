@@ -349,7 +349,7 @@ async function toolListIngressClasses(req, args) {
 //
 // The browser UI fills runtime/runtimeImage/startCmd/workDir/port before calling
 // the deploy backend. The MCP path has no UI, so without this it would always
-// deploy a bare node:20-alpine image with no start command — which crashloops.
+// deploy a bare node:22-slim image with no start command — which crashloops.
 // Keep this in sync with the RUNTIMES table in VibeDeploy.jsx.
 // ---------------------------------------------------------------------------
 
@@ -364,7 +364,7 @@ const NGINX_RUNTIME = {
 const RUNTIMES = [
   {
     id: 'node',
-    image: 'node:20-alpine',
+    image: 'node:22-slim',
     detect: (names) => names.includes('package.json'),
     defaultCmd: (files) => {
       const pkg = files.find((f) => f.name === 'package.json')
@@ -382,7 +382,7 @@ const RUNTIMES = [
   },
   {
     id: 'python',
-    image: 'python:3.12-slim',
+    image: 'python:3.13-slim',
     detect: (names) => names.includes('requirements.txt') || names.some((n) => n.endsWith('.py')),
     defaultCmd: (files) => {
       for (const candidate of ['main.py', 'app.py', 'server.py', 'run.py']) {
@@ -395,7 +395,7 @@ const RUNTIMES = [
   },
   {
     id: 'php',
-    image: 'php:8.3-apache',
+    image: 'php:8.4-apache',
     detect: (names) => names.some((n) => n.endsWith('.php')),
     defaultCmd: () => 'apache2-foreground',
     port: 80,
@@ -403,7 +403,7 @@ const RUNTIMES = [
   },
   {
     id: 'ruby',
-    image: 'ruby:3.3-alpine',
+    image: 'ruby:3.4-slim',
     detect: (names) => names.includes('Gemfile') || names.some((n) => n.endsWith('.rb')),
     defaultCmd: (files) => {
       for (const candidate of ['app.rb', 'server.rb', 'config.ru']) {
