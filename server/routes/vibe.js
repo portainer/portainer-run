@@ -108,11 +108,15 @@ function parseJson(buf) {
 function getInstallCommand(runtime, workDir) {
   switch (runtime) {
     case 'node':
-      return `cd ${workDir} && if [ -f package.json ]; then npm install --production --prefer-offline 2>&1 || npm install --production 2>&1; fi`
+      // Install build tools first so node-gyp can compile native addons from source
+      // when no prebuilt binary exists for the current Node version.
+      // apt-get failures are suppressed so the npm install still runs on images
+      // that don't use apt (fallback path).
+      return `apt-get update -qq 2>/dev/null && apt-get install -y --no-install-recommends python3 make g++ 2>/dev/null; cd ${workDir} && if [ -f package.json ]; then npm install --production 2>&1; fi`
     case 'python':
-      return `cd ${workDir} && if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; fi`
+      return `apt-get update -qq 2>/dev/null && apt-get install -y --no-install-recommends build-essential python3-dev 2>/dev/null; cd ${workDir} && if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; fi`
     case 'ruby':
-      return `cd ${workDir} && if [ -f Gemfile ]; then bundle install --without development test; fi`
+      return `apt-get update -qq 2>/dev/null && apt-get install -y --no-install-recommends build-essential ruby-dev 2>/dev/null; cd ${workDir} && if [ -f Gemfile ]; then bundle install --without development test; fi`
     case 'php':
       return `cd ${workDir} && if [ -f composer.json ] && command -v composer > /dev/null 2>&1; then composer install --no-dev --optimize-autoloader --no-interaction; fi`
     case 'nginx':
@@ -245,7 +249,7 @@ function buildVibeManifests({
   if (installCmd) {
     initContainers.push({
       name: 'vibe-install',
-      image: runtimeImage || 'node:20-alpine',
+      image: runtimeImage || 'node:24-slim',
       command: ['sh', '-c', installCmd],
       volumeMounts: [{ name: 'app-data', mountPath: workDirSafe }],
     })
@@ -272,7 +276,7 @@ function buildVibeManifests({
   // init container so apps work whether or not they use dotenv.
   const mainContainer = {
     name: safeApp,
-    image: runtimeImage || 'node:20-alpine',
+    image: runtimeImage || 'node:24-slim',
     command: startCmd ? ['sh', '-c', startCmd] : undefined,
     workingDir: workDirSafe,
     ports: [{ containerPort: port, protocol: 'TCP' }],
