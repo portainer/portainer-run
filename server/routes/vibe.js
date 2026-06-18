@@ -245,7 +245,7 @@ function buildVibeManifests({
   if (installCmd) {
     initContainers.push({
       name: 'vibe-install',
-      image: runtimeImage || 'node:22-slim',
+      image: runtimeImage || 'node:22',
       command: ['sh', '-c', installCmd],
       volumeMounts: [{ name: 'app-data', mountPath: workDirSafe }],
     })
@@ -272,7 +272,7 @@ function buildVibeManifests({
   // init container so apps work whether or not they use dotenv.
   const mainContainer = {
     name: safeApp,
-    image: runtimeImage || 'node:22-slim',
+    image: runtimeImage || 'node:22',
     command: startCmd ? ['sh', '-c', startCmd] : undefined,
     workingDir: workDirSafe,
     ports: [{ containerPort: port, protocol: 'TCP' }],

@@ -40,7 +40,7 @@ const RUNTIMES = [
   {
     id: 'node',
     label: 'Node.js 22',
-    image: 'node:22-slim',
+    image: 'node:22',
     detect: (names) => names.includes('package.json'),
     defaultCmd: (files) => {
       const pkg = files.find((f) => f.name === 'package.json')
@@ -677,7 +677,7 @@ export function VibeDeploy() {
     // Build a single-container spec representing the vibe deploy
     const containerSpec = {
       name: appName,
-      image: detectedRuntime?.image || 'node:22-slim',
+      image: detectedRuntime?.image || 'node:22',
       command: startCmd ? startCmd.split(/\s+/) : undefined,
       workingDir: detectedRuntime?.workDir || '/app',
       ports: [{ containerPort: resolvedPort, protocol: 'TCP' }],
@@ -712,7 +712,7 @@ export function VibeDeploy() {
       // Vibe-specific extras passed through to server
       vibeParams: {
         runtime: detectedRuntime?.id || 'node',
-        runtimeImage: detectedRuntime?.image || 'node:22-slim',
+        runtimeImage: detectedRuntime?.image || 'node:22',
         startCmd: startCmd.trim(),
         workDir: detectedRuntime?.workDir || '/app',
         envVars: envVars.filter((v) => v.key),

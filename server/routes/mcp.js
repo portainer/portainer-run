@@ -364,7 +364,7 @@ const NGINX_RUNTIME = {
 const RUNTIMES = [
   {
     id: 'node',
-    image: 'node:22-slim',
+    image: 'node:22',
     detect: (names) => names.includes('package.json'),
     defaultCmd: (files) => {
       const pkg = files.find((f) => f.name === 'package.json')

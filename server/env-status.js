@@ -87,6 +87,19 @@ function resolveStatusReason(pod) {
     ...(pod.status?.initContainerStatuses || []),
   ]
   if (pod.status?.phase === 'Pending' && !allCS.length) return 'Waiting for a node'
+
+  // Init containers running — surface a meaningful message by name
+  const runningInit = (pod.status?.initContainerStatuses || []).find(
+    (cs) => cs.state?.running && !cs.ready
+  )
+  if (runningInit) {
+    switch (runningInit.name) {
+      case 'vibe-sync':    return 'Downloading your app files...'
+      case 'vibe-install': return 'Installing dependencies...'
+      case 'vibe-env':     return 'Applying settings...'
+      default:             return 'Getting ready...'
+    }
+  }
   for (const cs of allCS) {
     const waiting = cs.state?.waiting
     const terminated = cs.state?.terminated
