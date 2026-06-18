@@ -40,7 +40,7 @@ const RUNTIMES = [
   {
     id: 'node',
     label: 'Node.js 24',
-    image: 'node:24-alpine',
+    image: 'node:24-slim',
     detect: (names) => names.includes('package.json'),
     defaultCmd: (files) => {
       const pkg = files.find((f) => f.name === 'package.json')
@@ -82,7 +82,7 @@ const RUNTIMES = [
   {
     id: 'ruby',
     label: 'Ruby 3.4',
-    image: 'ruby:3.4-alpine',
+    image: 'ruby:3.4-slim',
     detect: (names) => names.includes('Gemfile') || names.some((n) => n.endsWith('.rb')),
     defaultCmd: (files) => {
       for (const candidate of ['app.rb', 'server.rb', 'config.ru']) {
@@ -677,7 +677,7 @@ export function VibeDeploy() {
     // Build a single-container spec representing the vibe deploy
     const containerSpec = {
       name: appName,
-      image: detectedRuntime?.image || 'node:24-alpine',
+      image: detectedRuntime?.image || 'node:24-slim',
       command: startCmd ? startCmd.split(/\s+/) : undefined,
       workingDir: detectedRuntime?.workDir || '/app',
       ports: [{ containerPort: resolvedPort, protocol: 'TCP' }],
@@ -712,7 +712,7 @@ export function VibeDeploy() {
       // Vibe-specific extras passed through to server
       vibeParams: {
         runtime: detectedRuntime?.id || 'node',
-        runtimeImage: detectedRuntime?.image || 'node:24-alpine',
+        runtimeImage: detectedRuntime?.image || 'node:24-slim',
         startCmd: startCmd.trim(),
         workDir: detectedRuntime?.workDir || '/app',
         envVars: envVars.filter((v) => v.key),
