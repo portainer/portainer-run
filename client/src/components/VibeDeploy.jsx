@@ -8,6 +8,7 @@ import { fetchNamespaceOptions } from '../lib/deployK8s.js'
 import { checkEnvPermissions } from '../lib/envPermissions.js'
 import { GitOpsStep } from './deploy/GitOpsStep.jsx'
 import { checkIngress, checkLoadBalancer } from '../lib/readinessChecks.js'
+import { manualRefresh, schedulePostDeployRefreshes } from '../services/refreshDeployments.js'
 
 // ---------------------------------------------------------------------------
 // Runtime detection
@@ -261,36 +262,31 @@ function DropZone({ onFiles }) {
       onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
-      style={{
-        border: `1.5px dashed ${dragging ? 'var(--accent)' : 'var(--border2)'}`,
-        borderRadius: 8, padding: '32px 20px', textAlign: 'center',
-        background: dragging ? 'var(--accent-hover)' : 'transparent',
-        transition: 'border-color .15s, background .15s',
-      }}
+      className={`vibe-dropzone${dragging ? ' vibe-dropzone--dragging' : ''}`}
     >
       <input ref={folderRef} type="file" webkitdirectory="" multiple style={{ display: 'none' }}
         onChange={(e) => { if (e.target.files.length) readFileList(e.target.files) }} />
       <input ref={filesRef} type="file" multiple style={{ display: 'none' }}
         onChange={(e) => { if (e.target.files.length) readFileList(e.target.files) }} />
       <div style={{
-        width: 40, height: 40, background: 'var(--surface2)', border: '1px solid var(--border2)',
-        borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px',
+        width: 40, height: 40,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px',
       }}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.8">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.6">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
           <polyline points="17 8 12 3 7 8" />
           <line x1="12" y1="3" x2="12" y2="15" />
         </svg>
       </div>
-      <div style={{ fontSize: 13, color: 'var(--text)', marginBottom: 10 }}>
-        Drop a folder here, or select below
+      <div style={{ fontSize: 15, color: 'var(--text)', marginBottom: 14 }}>
+        Drop your project folder here
       </div>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => folderRef.current?.click()}>
-          Select folder
+          Upload folder
         </button>
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => filesRef.current?.click()}>
-          Select files
+          Upload files
         </button>
       </div>
     </div>
@@ -778,6 +774,8 @@ export function VibeDeploy() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
       pushToast(`${stagedParams.appName} deployed successfully`, 'ok')
+      void manualRefresh()
+      schedulePostDeployRefreshes()
       navigate(ROUTES.services)
       // Reset form
       setFiles([]); setStep(1); setStagedParams(null)
@@ -1264,6 +1262,15 @@ export function VibeDeploy() {
                   Next: Git Target →
                 </button>
               </div>
+              {(!appName || !envId || !resolvedNs) && (
+                <div style={{ textAlign: 'right', marginTop: 6, fontSize: 12, color: 'var(--amber)' }}>
+                  {[
+                    !appName && 'Enter an app name',
+                    !envId && 'Select a deployment target',
+                    !resolvedNs && 'Select a project space',
+                  ].filter(Boolean).join(' · ')}
+                </div>
+              )}
             </div>
           </div>
         )}
