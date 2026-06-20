@@ -435,11 +435,15 @@ async function handleVibeDeploy(req, res) {
       : buildRepoHttpsUrl(conn.payload)
     const gitopsAnnotations = { gitTargetId, gitBranch: branch, gitPath: manifestPath }
 
-    // 2. Commit source files to manifests git (upload mode only)
+    // 2. Prepare source file commits (upload mode only).
     //    Git source mode: files stay in their own repo — no commit needed here.
+    //    Source commits and the manifest are intentionally written in a single
+    //    atomic git commit below so there is never a window where the manifest
+    //    exists without its source files (or vice-versa).
     const { runtime } = vibeParams
+    let sourceCommits = []
     if (!isGitSource) {
-      let sourceCommits = sourceFiles
+      sourceCommits = sourceFiles
         .filter((f) => f.path && typeof f.content === 'string')
         .map((f) => ({
           path: `${sourcePath}/${sanitizeGitPath(f.path)}`,
@@ -463,13 +467,6 @@ async function handleVibeDeploy(req, res) {
           }
         }
       }
-
-      await commitFiles(
-        conn.payload,
-        branch,
-        `vibe: commit source for ${safeApp}`,
-        sourceCommits,
-      )
     }
 
     // 3. Build Kubernetes manifests
@@ -501,14 +498,18 @@ async function handleVibeDeploy(req, res) {
       gitToken: initCredToken,
     })
 
-    // 4. Serialize and commit manifests
+    // 4. Commit source files + manifest in a single atomic commit.
+    //    Previously these were two sequential commits, which meant the second
+    //    commitGitHub call could fetch a stale base_tree (or hit the silent
+    //    catch{} on a transient GET failure) and create a fresh tree containing
+    //    only the manifest — wiping the source files from the branch.
     const yamlContent = serializeManifests(manifests)
 
     await commitFiles(
       conn.payload,
       branch,
       `vibe: deploy ${safeApp} to ${ns}`,
-      [{ path: manifestPath, content: yamlContent }],
+      [...sourceCommits, { path: manifestPath, content: yamlContent }],
     )
 
     // 5. Create the git credentials Secret in Kubernetes using SOURCE repo credentials.
