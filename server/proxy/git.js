@@ -104,8 +104,12 @@ async function commitGitHub(payload, branch, message, files) {
     const commitData = await request('GET', `${base}/repos/${repo}/git/commits/${baseSha}`, headers)
     baseTree = commitData.tree.sha
     parents = [baseSha]
-  } catch {
-    // Empty repo or branch doesn't exist yet — start from scratch
+  } catch (e) {
+    // Only treat "not found" / empty-repo responses as "start from scratch".
+    // Re-throw everything else (rate limits, auth failures, network errors)
+    // so a transient GET failure cannot silently replace the entire branch tree.
+    const msg = (e?.message || '').toLowerCase()
+    if (!msg.includes('not found') && !msg.includes('git repository is empty')) throw e
   }
 
   // Create blobs
