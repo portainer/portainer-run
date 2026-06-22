@@ -7,6 +7,7 @@ const target = { target: api, secure: false, changeOrigin: true }
 
 export default defineConfig({
   plugins: [react()],
+  base: '/run/',
   build: { outDir: 'dist', assetsDir: 'assets' },
   server: {
     port: 5173,
