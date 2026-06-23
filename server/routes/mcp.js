@@ -88,14 +88,13 @@ const SERVER_INSTRUCTIONS = [
   '',
   'Large files (over 50 KB): when a file is too large to include inline in deploy_vibe_app without risk of truncation, use the staged transfer workflow:',
   '  1. Call file_stage_begin(session_id, path) — choose any unique session_id string.',
-  '  2. Split the file content into chunks of at most 20 KB each using bash: `split -b 20480 <file> /tmp/chunk_`',
-  '  3. Determine encoding: for HTML-only or plain text files use encoding "none". For JavaScript, TypeScript,',
-  '     PHP, shell scripts, or any file with backslashes, template literals, or regex, use encoding "base64".',
-  '     With base64: read each chunk and pipe through `base64 -w 0` before passing as data.',
-  '  4. Call file_stage_chunk for each chunk. Chunks can be sent in parallel — the server indexes them by',
-  '     chunk_index so arrival order does not matter. Issue multiple file_stage_chunk calls simultaneously.',
-  '  5. Once all chunks are confirmed received, call file_stage_commit(session_id).',
-  '  6. Pass the session_id in the stagedFileIds array of deploy_vibe_app instead of inlining the content.',
+  '  2. Split into 15 KB chunks: `split -b 15360 <file> /tmp/chunk_` — this produces chunk files /tmp/chunk_aa, /tmp/chunk_ab, etc.',
+  '  3. Determine encoding: plain HTML/CSS/JSON → encoding "none". JS/TS/PHP/shell or any file with backslashes → encoding "base64" (pipe each chunk through `base64 -w 0`).',
+  '  4. For each chunk, compute its MD5: `md5sum /tmp/chunk_XX | awk \'{print $1}\'` and pass as chunk_md5.',
+  '  5. Call file_stage_chunk for each chunk. Chunks can be sent in parallel — arrival order does not matter.',
+  '     The server verifies the checksum and returns an error if it fails — retry only that chunk.',
+  '  6. Once all chunks are confirmed received, call file_stage_commit(session_id).',
+  '  7. Pass the session_id in the stagedFileIds array of deploy_vibe_app instead of inlining the content.',
   '  Staged sessions expire after 30 minutes — complete the transfer and deploy within that window.',
 ].join('\n')
 
@@ -176,11 +175,13 @@ function buildTools() {
       'Send one chunk of a staged file. Chunks must use sequential chunk_index values (0, 1, 2 …) ' +
       'but can be sent in parallel — the server stores them by index so arrival order does not matter. ' +
       'Issue multiple file_stage_chunk calls simultaneously rather than waiting for each response. ' +
-      'Each chunk should be at most 20 KB of plain text — no encoding required. ' +
-      'For files containing backslashes, escape sequences, template literals, or regex (JavaScript, ' +
-      'TypeScript, shell scripts), use encoding "base64": read the chunk bytes and pipe through ' +
-      '`base64 -w 0` before passing as data. The server decodes before storing. ' +
-      'Once all chunks are sent, verify all next_expected values match, then call file_stage_commit.',
+      'Split files into 15 KB chunks: `split -b 15360 <file> /tmp/chunk_` ' +
+      'For plain text (HTML-only, CSS, JSON): pass raw content, encoding "none". ' +
+      'For files with backslashes, template literals, or regex (JS, TS, PHP, shell): use encoding "base64" — ' +
+      'pipe each chunk through `base64 -w 0` before passing as data. ' +
+      'Always compute a checksum: `md5sum /tmp/chunk_XX | awk \'{print $1}\'` and pass as chunk_md5. ' +
+      'The server verifies integrity and returns an error if the checksum fails — retry that chunk. ' +
+      'Once all chunks confirmed, call file_stage_commit.',
     inputSchema: {
       type: 'object',
       required: ['session_id', 'chunk_index', 'data'],
@@ -192,6 +193,10 @@ function buildTools() {
           type: 'string',
           enum: ['none', 'base64'],
           description: 'Encoding of the data field. Default: none. Use "base64" for files with special characters — read chunk bytes and pipe through `base64 -w 0`.',
+        },
+        chunk_md5: {
+          type: 'string',
+          description: 'MD5 checksum of the raw chunk file (before base64 encoding). Compute with `md5sum /tmp/chunk_XX | awk \'{print $1}\'`. Used by the server to detect truncation or corruption.',
         },
       },
     },
@@ -583,7 +588,7 @@ function toolFileStageBegin(args) {
 }
 
 function toolFileStageChunk(args) {
-  const { session_id, chunk_index, data, encoding = 'none' } = args
+  const { session_id, chunk_index, data, encoding = 'none', chunk_md5 } = args
   if (!session_id) throw new Error('session_id is required')
   if (chunk_index === undefined || chunk_index === null) throw new Error('chunk_index is required')
   if (data === undefined || data === null) throw new Error('data is required')
@@ -602,8 +607,23 @@ function toolFileStageChunk(args) {
     decoded = String(data)
   }
 
+  // Verify checksum if provided — catches truncation or corruption in transit
+  if (chunk_md5) {
+    const actual = crypto.createHash('md5').update(Buffer.from(decoded, 'utf8')).digest('hex')
+    // For base64 encoding, checksum is of the raw bytes, so compare against the decoded buffer
+    const rawMd5 = encoding === 'base64'
+      ? crypto.createHash('md5').update(Buffer.from(data, 'base64')).digest('hex')
+      : actual
+    if (rawMd5 !== chunk_md5.toLowerCase().trim()) {
+      throw new Error(
+        `Checksum mismatch for chunk ${chunk_index} — expected ${chunk_md5}, got ${rawMd5}. ` +
+        `The chunk was corrupted or truncated in transit. Resend this chunk.`
+      )
+    }
+  }
+
   entry.chunks.set(Number(chunk_index), decoded)
-  entry.createdAt = Date.now() // refresh TTL on activity
+  entry.createdAt = Date.now()
   const next_expected = Number(chunk_index) + 1
   return { received: true, chunk_index: Number(chunk_index), next_expected }
 }
