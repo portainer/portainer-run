@@ -33,6 +33,28 @@ import { getConnectionsForUser } from '../models/connection.js'
 import { handleVibe } from './vibe.js'
 import { resolveUrl } from '../env-status.js'
 
+// ---------------------------------------------------------------------------
+// Staging store — chunked file transfer for large files
+//
+// Keyed by caller-supplied session_id. Each entry holds the received chunks
+// (a Map<index, string>) until file_stage_commit assembles them into a single
+// content string. Committed entries are then referenced by deploy_vibe_app
+// via the stagedFileIds parameter.
+//
+// Entries expire after STAGING_TTL_MS of inactivity. purgeStagingStore() is
+// called on every file_stage_begin to reclaim memory without a background timer.
+// ---------------------------------------------------------------------------
+
+const stagingStore = new Map()
+const STAGING_TTL_MS = 30 * 60 * 1000 // 30 minutes
+
+function purgeStagingStore() {
+  const now = Date.now()
+  for (const [id, entry] of stagingStore) {
+    if (now - entry.createdAt > STAGING_TTL_MS) stagingStore.delete(id)
+  }
+}
+
 const MCP_VERSION = '2024-11-05'
 const SERVER_INFO = { name: 'portainer-run', version: '1.0.0' }
 
@@ -63,6 +85,15 @@ const SERVER_INSTRUCTIONS = [
   'Always show a summary of the chosen settings and get explicit confirmation before calling deploy_vibe_app.',
   '',
   'After deploying, report the access URL to the user. The deploy result has a "url" field; if it is null (NodePort/LoadBalancer addresses are assigned asynchronously), call get_app_status after a short wait to retrieve the URL.',
+  '',
+  'Large files (over 100 KB): when a file is too large to include inline in deploy_vibe_app without risk of truncation, use the staged transfer workflow:',
+  '  1. Call file_stage_begin(session_id, path) — choose any unique session_id string.',
+  '  2. Split the file content into plain text chunks of at most 200 KB each.',
+  '  3. Call file_stage_chunk(session_id, chunk_index, data) for each chunk, starting at chunk_index 0.',
+  '     Check that next_expected matches your next chunk_index before proceeding.',
+  '  4. Call file_stage_commit(session_id) — verifies completeness and makes the file available to deploy.',
+  '  5. Pass the session_id in the stagedFileIds array of deploy_vibe_app instead of inlining the content in files.',
+  '  Staged sessions expire after 30 minutes — complete the transfer and deploy within that window.',
 ].join('\n')
 
 // ---------------------------------------------------------------------------
@@ -109,6 +140,62 @@ function buildTools() {
       required: ['envId'],
       properties: {
         envId: { type: 'string', description: 'Environment ID from list_environments' },
+      },
+    },
+  })
+
+  tools.push({
+    name: 'file_stage_begin',
+    description:
+      'Start a staged file transfer session for a single file. Use this instead of inlining content ' +
+      'in deploy_vibe_app when a file exceeds ~100 KB. Call file_stage_chunk to send the content in ' +
+      'sequential chunks, then file_stage_commit to finalise. Pass the session_id to deploy_vibe_app ' +
+      'via the stagedFileIds parameter.',
+    inputSchema: {
+      type: 'object',
+      required: ['session_id', 'path'],
+      properties: {
+        session_id: {
+          type: 'string',
+          description: 'A unique identifier for this transfer session, e.g. a UUID or descriptive slug.',
+        },
+        path: {
+          type: 'string',
+          description: 'Relative file path as it will appear in the deployed app, e.g. index.html or src/app.js',
+        },
+      },
+    },
+  })
+
+  tools.push({
+    name: 'file_stage_chunk',
+    description:
+      'Send one chunk of a staged file. Call repeatedly with sequential chunk_index values ' +
+      '(0, 1, 2 …) until the complete file content has been sent. Each chunk should be at most ' +
+      '200 KB of plain text — no encoding required. Check next_expected matches your next ' +
+      'chunk_index before continuing; if it does not, resend the indicated chunk.',
+    inputSchema: {
+      type: 'object',
+      required: ['session_id', 'chunk_index', 'data'],
+      properties: {
+        session_id: { type: 'string', description: 'Session ID from file_stage_begin' },
+        chunk_index: { type: 'number', description: 'Zero-based chunk index. Send in order starting at 0.' },
+        data: { type: 'string', description: 'Plain text chunk content — no base64 or encoding needed.' },
+      },
+    },
+  })
+
+  tools.push({
+    name: 'file_stage_commit',
+    description:
+      'Finalise a staged file after all chunks have been sent. Assembles the chunks in index order, ' +
+      'verifies there are no gaps, and makes the file available to deploy_vibe_app via stagedFileIds. ' +
+      'Returns the assembled file path and size for verification.',
+    inputSchema: {
+      type: 'object',
+      required: ['session_id'],
+      properties: {
+        session_id: { type: 'string', description: 'Session ID from file_stage_begin' },
       },
     },
   })
@@ -188,6 +275,14 @@ function buildTools() {
           branch: {
             type: 'string',
             description: 'Git branch for manifests. Default: main.',
+          },
+          stagedFileIds: {
+            type: 'array',
+            description:
+              'Session IDs of files pre-staged via file_stage_begin / file_stage_chunk / file_stage_commit. ' +
+              'Staged files are merged with any inline files in the files array before deployment. ' +
+              'Use this for files larger than ~100 KB instead of inlining their content.',
+            items: { type: 'string' },
           },
         },
       },
@@ -453,6 +548,64 @@ function detectRuntimeForFiles(files, forcedId) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Staged file transfer — tool implementations
+// ---------------------------------------------------------------------------
+
+function toolFileStageBegin(args) {
+  const { session_id, path } = args
+  if (!session_id) throw new Error('session_id is required')
+  if (!path) throw new Error('path is required')
+  purgeStagingStore()
+  if (stagingStore.has(session_id)) {
+    throw new Error(`Session "${session_id}" already exists — use a different session_id or commit the existing session first`)
+  }
+  stagingStore.set(session_id, {
+    path,
+    chunks: new Map(),
+    committed: false,
+    content: null,
+    createdAt: Date.now(),
+  })
+  return { accepted: true, session_id, path }
+}
+
+function toolFileStageChunk(args) {
+  const { session_id, chunk_index, data } = args
+  if (!session_id) throw new Error('session_id is required')
+  if (chunk_index === undefined || chunk_index === null) throw new Error('chunk_index is required')
+  if (data === undefined || data === null) throw new Error('data is required')
+  const entry = stagingStore.get(session_id)
+  if (!entry) throw new Error(`Session "${session_id}" not found — call file_stage_begin first`)
+  if (entry.committed) throw new Error(`Session "${session_id}" is already committed`)
+  entry.chunks.set(Number(chunk_index), String(data))
+  entry.createdAt = Date.now() // refresh TTL on activity
+  const next_expected = Number(chunk_index) + 1
+  return { received: true, chunk_index: Number(chunk_index), next_expected }
+}
+
+function toolFileStageCommit(args) {
+  const { session_id } = args
+  if (!session_id) throw new Error('session_id is required')
+  const entry = stagingStore.get(session_id)
+  if (!entry) throw new Error(`Session "${session_id}" not found — call file_stage_begin first`)
+  if (entry.committed) throw new Error(`Session "${session_id}" is already committed`)
+  // Verify chunks are contiguous before assembling
+  const indices = Array.from(entry.chunks.keys()).sort((a, b) => a - b)
+  if (indices.length === 0) throw new Error(`Session "${session_id}" has no chunks — send at least one chunk before committing`)
+  for (let i = 0; i < indices.length; i++) {
+    if (indices[i] !== i) {
+      throw new Error(`Missing chunk ${i} in session "${session_id}" — received indices: ${indices.join(', ')}. Resend the missing chunk before committing.`)
+    }
+  }
+  const content = indices.map((i) => entry.chunks.get(i)).join('')
+  entry.content = content
+  entry.chunks = null // free the per-chunk map
+  entry.committed = true
+  entry.createdAt = Date.now() // refresh TTL post-commit
+  return { ok: true, session_id, path: entry.path, size: content.length }
+}
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 function pickNodeIp(nodes) {
@@ -500,12 +653,25 @@ async function toolDeployVibeApp(req, args, caller) {
 
   const {
     appName, envId, namespace, gitTargetId,
-    files = [], envVars, ingress = {}, branch = 'main',
-    runtime = 'auto',
+    files: inlineFiles = [], envVars, ingress = {}, branch = 'main',
+    runtime = 'auto', stagedFileIds = [],
   } = args
 
-  if (!appName || !envId || !namespace || !gitTargetId || !files.length) {
-    throw new Error('appName, envId, namespace, gitTargetId, and files are all required')
+  if (!appName || !envId || !namespace || !gitTargetId) {
+    throw new Error('appName, envId, namespace, and gitTargetId are all required')
+  }
+
+  // Resolve staged files and merge with any inline files
+  const stagedFiles = stagedFileIds.map((sid) => {
+    const entry = stagingStore.get(sid)
+    if (!entry) throw new Error(`Staged file session "${sid}" not found — ensure file_stage_commit was called and the session has not expired (30 min TTL)`)
+    if (!entry.committed) throw new Error(`Staged file session "${sid}" has not been committed — call file_stage_commit before deploying`)
+    return { path: entry.path, content: entry.content }
+  })
+  const files = [...inlineFiles, ...stagedFiles]
+
+  if (!files.length) {
+    throw new Error('At least one file is required — provide files inline or via stagedFileIds')
   }
 
   // Default exposure: when a base domain is configured we can derive a real
@@ -746,6 +912,15 @@ async function dispatch(method, params, req, caller) {
           break
         case 'list_ingress_classes':
           toolResult = await toolListIngressClasses(req, args)
+          break
+        case 'file_stage_begin':
+          toolResult = toolFileStageBegin(args)
+          break
+        case 'file_stage_chunk':
+          toolResult = toolFileStageChunk(args)
+          break
+        case 'file_stage_commit':
+          toolResult = toolFileStageCommit(args)
           break
         case 'deploy_vibe_app':
           toolResult = await toolDeployVibeApp(req, args, caller)
