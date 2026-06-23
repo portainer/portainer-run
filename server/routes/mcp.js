@@ -86,12 +86,13 @@ const SERVER_INSTRUCTIONS = [
   '',
   'After deploying, report the access URL to the user. The deploy result has a "url" field; if it is null (NodePort/LoadBalancer addresses are assigned asynchronously), call get_app_status after a short wait to retrieve the URL.',
   '',
-  'Large files (over 100 KB): when a file is too large to include inline in deploy_vibe_app without risk of truncation, use the staged transfer workflow:',
+  'Large files (over 50 KB): when a file is too large to include inline in deploy_vibe_app without risk of truncation, use the staged transfer workflow:',
   '  1. Call file_stage_begin(session_id, path) — choose any unique session_id string.',
-  '  2. Split the file content into plain text chunks of at most 200 KB each.',
-  '  3. Call file_stage_chunk(session_id, chunk_index, data) for each chunk, starting at chunk_index 0.',
-  '     Check that next_expected matches your next chunk_index before proceeding.',
-  '  4. Call file_stage_commit(session_id) — verifies completeness and makes the file available to deploy.',
+  '  2. Split the file content into plain text chunks of at most 20 KB each.',
+  '  3. Call file_stage_chunk for each chunk. Chunks can be sent in parallel — the server indexes them by',
+  '     chunk_index so arrival order does not matter. Issue multiple file_stage_chunk calls simultaneously',
+  '     rather than waiting for each response before sending the next.',
+  '  4. Once all chunks have been confirmed received (next_expected = total chunks), call file_stage_commit(session_id).',
   '  5. Pass the session_id in the stagedFileIds array of deploy_vibe_app instead of inlining the content in files.',
   '  Staged sessions expire after 30 minutes — complete the transfer and deploy within that window.',
 ].join('\n')
@@ -170,10 +171,11 @@ function buildTools() {
   tools.push({
     name: 'file_stage_chunk',
     description:
-      'Send one chunk of a staged file. Call repeatedly with sequential chunk_index values ' +
-      '(0, 1, 2 …) until the complete file content has been sent. Each chunk should be at most ' +
-      '200 KB of plain text — no encoding required. Check next_expected matches your next ' +
-      'chunk_index before continuing; if it does not, resend the indicated chunk.',
+      'Send one chunk of a staged file. Chunks must use sequential chunk_index values (0, 1, 2 …) ' +
+      'but can be sent in parallel — the server stores them by index so arrival order does not matter. ' +
+      'Issue multiple file_stage_chunk calls simultaneously rather than waiting for each response. ' +
+      'Each chunk should be at most 20 KB of plain text — no encoding required. ' +
+      'Once all chunks are sent, verify all next_expected values match, then call file_stage_commit.',
     inputSchema: {
       type: 'object',
       required: ['session_id', 'chunk_index', 'data'],
