@@ -88,12 +88,14 @@ const SERVER_INSTRUCTIONS = [
   '',
   'Large files (over 50 KB): when a file is too large to include inline in deploy_vibe_app without risk of truncation, use the staged transfer workflow:',
   '  1. Call file_stage_begin(session_id, path) — choose any unique session_id string.',
-  '  2. Split the file content into plain text chunks of at most 20 KB each.',
-  '  3. Call file_stage_chunk for each chunk. Chunks can be sent in parallel — the server indexes them by',
-  '     chunk_index so arrival order does not matter. Issue multiple file_stage_chunk calls simultaneously',
-  '     rather than waiting for each response before sending the next.',
-  '  4. Once all chunks have been confirmed received (next_expected = total chunks), call file_stage_commit(session_id).',
-  '  5. Pass the session_id in the stagedFileIds array of deploy_vibe_app instead of inlining the content in files.',
+  '  2. Split the file content into chunks of at most 20 KB each using bash: `split -b 20480 <file> /tmp/chunk_`',
+  '  3. Determine encoding: for HTML-only or plain text files use encoding "none". For JavaScript, TypeScript,',
+  '     PHP, shell scripts, or any file with backslashes, template literals, or regex, use encoding "base64".',
+  '     With base64: read each chunk and pipe through `base64 -w 0` before passing as data.',
+  '  4. Call file_stage_chunk for each chunk. Chunks can be sent in parallel — the server indexes them by',
+  '     chunk_index so arrival order does not matter. Issue multiple file_stage_chunk calls simultaneously.',
+  '  5. Once all chunks are confirmed received, call file_stage_commit(session_id).',
+  '  6. Pass the session_id in the stagedFileIds array of deploy_vibe_app instead of inlining the content.',
   '  Staged sessions expire after 30 minutes — complete the transfer and deploy within that window.',
 ].join('\n')
 
@@ -175,6 +177,9 @@ function buildTools() {
       'but can be sent in parallel — the server stores them by index so arrival order does not matter. ' +
       'Issue multiple file_stage_chunk calls simultaneously rather than waiting for each response. ' +
       'Each chunk should be at most 20 KB of plain text — no encoding required. ' +
+      'For files containing backslashes, escape sequences, template literals, or regex (JavaScript, ' +
+      'TypeScript, shell scripts), use encoding "base64": read the chunk bytes and pipe through ' +
+      '`base64 -w 0` before passing as data. The server decodes before storing. ' +
       'Once all chunks are sent, verify all next_expected values match, then call file_stage_commit.',
     inputSchema: {
       type: 'object',
@@ -182,7 +187,12 @@ function buildTools() {
       properties: {
         session_id: { type: 'string', description: 'Session ID from file_stage_begin' },
         chunk_index: { type: 'number', description: 'Zero-based chunk index. Send in order starting at 0.' },
-        data: { type: 'string', description: 'Plain text chunk content — no base64 or encoding needed.' },
+        data: { type: 'string', description: 'Chunk content — plain text, or base64-encoded bytes when encoding is "base64".' },
+        encoding: {
+          type: 'string',
+          enum: ['none', 'base64'],
+          description: 'Encoding of the data field. Default: none. Use "base64" for files with special characters — read chunk bytes and pipe through `base64 -w 0`.',
+        },
       },
     },
   })
@@ -573,14 +583,26 @@ function toolFileStageBegin(args) {
 }
 
 function toolFileStageChunk(args) {
-  const { session_id, chunk_index, data } = args
+  const { session_id, chunk_index, data, encoding = 'none' } = args
   if (!session_id) throw new Error('session_id is required')
   if (chunk_index === undefined || chunk_index === null) throw new Error('chunk_index is required')
   if (data === undefined || data === null) throw new Error('data is required')
   const entry = stagingStore.get(session_id)
   if (!entry) throw new Error(`Session "${session_id}" not found — call file_stage_begin first`)
   if (entry.committed) throw new Error(`Session "${session_id}" is already committed`)
-  entry.chunks.set(Number(chunk_index), String(data))
+
+  let decoded
+  if (encoding === 'base64') {
+    try {
+      decoded = Buffer.from(data, 'base64').toString('utf8')
+    } catch {
+      throw new Error(`Failed to decode base64 data for chunk ${chunk_index} — ensure the data field contains valid base64`)
+    }
+  } else {
+    decoded = String(data)
+  }
+
+  entry.chunks.set(Number(chunk_index), decoded)
   entry.createdAt = Date.now() // refresh TTL on activity
   const next_expected = Number(chunk_index) + 1
   return { received: true, chunk_index: Number(chunk_index), next_expected }
