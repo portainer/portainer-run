@@ -40,6 +40,11 @@ data:
   # If set, Ingress templates default to appname.BASE_DOMAIN as the host.
   # BASE_DOMAIN: "apps.example.com"
 
+  # ── File relay gateway ───────────────────────────────────────────────────────
+  # Required for staged file uploads via the run-gateway proxy.
+  # When set, large vibe deploy uploads use the gateway instead of inline MCP transfer.
+  # GATEWAY_URL: "https://run-gateway.portainer.ai"
+
   # ── AI model override ────────────────────────────────────────────────────────
   # OpenAI model to use (default: gpt-4o). No effect when using Anthropic.
   # OPENAI_MODEL: "gpt-4o"
