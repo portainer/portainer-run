@@ -26,7 +26,9 @@ import {
   FEATURE_MANIFEST_BUILDER,
   BASE_DOMAIN,
   CONFIG_NAMESPACE,
+  GATEWAY_URL,
 } from '../config.js'
+import { requestUploadSession, fetchStagedFiles } from '../lib/gateway.js'
 import { resolveCallerIdentity, extractToken, portainerGet } from '../lib/identity.js'
 import { resolvePortainerTarget } from '../resolve-portainer.js'
 import { getConnectionsForUser } from '../models/connection.js'
@@ -42,6 +44,14 @@ const SERVER_INFO = { name: 'portainer-run', version: '1.0.0' }
 // is told to gather the info the tool schema cannot enforce on its own.
 const SERVER_INSTRUCTIONS = [
   'Portainer-Run deploys applications to Kubernetes from source files via the deploy_vibe_app tool.',
+  '',
+  'FILE TRANSFER — two modes:',
+  '  Inline: pass files directly in the `files` parameter. Use this for small apps (total content under ~50 KB).',
+  '  Staged: for larger apps or when inline transfer is unreliable, use the gateway:',
+  '    1. Call request_upload_session — returns { sessionId, uploadUrl, expiresAt }.',
+  '    2. POST the file array as JSON to uploadUrl: Array<{ path: string, content: string }>.',
+  '    3. Call deploy_vibe_app with stagedSessionId instead of files.',
+  '  The session is single-use and expires in 5 minutes — upload and deploy immediately.',
   '',
   'CRITICAL — file content must be exact: every entry in `files` must contain the COMPLETE, verbatim content of the file, copied byte-for-byte. Never send a placeholder, summary, description, ellipsis ("..."), comment like "<!-- content here -->", or any truncated/abbreviated version. Whatever you send is committed to git and served to users as-is. This matters most for uploaded artifacts and HTML/CSS/JS files: when the user attaches or references a file (e.g. an HTML page), read it in full and reproduce its ENTIRE contents in the content field. If a file is genuinely too large to reproduce reliably, stop and tell the user — do not stub or guess it.',
   '',
@@ -115,15 +125,27 @@ function buildTools() {
 
   if (FEATURE_VIBE_DEPLOY) {
     tools.push({
+      name: 'request_upload_session',
+      description:
+        'Request a staged file upload session from the Portainer-Run gateway. ' +
+        'Use this when files are too large to pass inline, or when the AI platform ' +
+        'can upload files directly over HTTPS. Returns an uploadUrl the caller POSTs ' +
+        'files to as JSON (Array<{ path, content }>), and a sessionId to pass to ' +
+        'deploy_vibe_app as stagedSessionId. The session is single-use and expires in 5 minutes.',
+      inputSchema: { type: 'object', properties: {} },
+    })
+
+    tools.push({
       name: 'deploy_vibe_app',
       description:
-        'Deploy an application to Kubernetes via Portainer-Run. Pass the source files directly — ' +
-        'runtime detection, dependency installation, git commit, and Kubernetes deployment are all ' +
-        'handled automatically. Use list_environments, list_namespaces, and list_git_targets first ' +
-        'to get the required IDs.',
+        'Deploy an application to Kubernetes via Portainer-Run. Pass source files either ' +
+        'inline via `files`, or via `stagedSessionId` after uploading to the gateway with ' +
+        'request_upload_session. Runtime detection, dependency installation, git commit, ' +
+        'and Kubernetes deployment are all handled automatically. Use list_environments, ' +
+        'list_namespaces, and list_git_targets first to get the required IDs.',
       inputSchema: {
         type: 'object',
-        required: ['appName', 'envId', 'namespace', 'gitTargetId', 'files'],
+        required: ['appName', 'envId', 'namespace', 'gitTargetId'],
         properties: {
           appName: {
             type: 'string',
@@ -148,7 +170,7 @@ function buildTools() {
           },
           files: {
             type: 'array',
-            description: 'Application source files',
+            description: 'Application source files (inline). Use this for small apps. Mutually exclusive with stagedSessionId — provide one or the other.',
             items: {
               type: 'object',
               required: ['path', 'content'],
@@ -157,6 +179,10 @@ function buildTools() {
                 content: { type: 'string', description: 'The complete, verbatim file content, copied exactly (byte-for-byte). Never a placeholder, summary, ellipsis, or truncated version — this is committed to git and served as-is.' },
               },
             },
+          },
+          stagedSessionId: {
+            type: 'string',
+            description: 'Session ID returned by request_upload_session after files have been uploaded to the gateway uploadUrl. Use instead of `files` for larger apps. Mutually exclusive with `files`.',
           },
           envVars: {
             type: 'array',
@@ -495,18 +521,32 @@ async function resolveAppAccessUrl(target, token, envId, ns, appName, { attempts
   return last
 }
 
+async function toolRequestUploadSession() {
+  if (!FEATURE_VIBE_DEPLOY) throw new Error('Vibe Deploy is not enabled on this Portainer-Run instance')
+  return requestUploadSession()
+}
+
 async function toolDeployVibeApp(req, args, caller) {
   if (!FEATURE_VIBE_DEPLOY) throw new Error('Vibe Deploy is not enabled on this Portainer-Run instance')
 
   const {
     appName, envId, namespace, gitTargetId,
-    files = [], envVars, ingress = {}, branch = 'main',
-    runtime = 'auto',
+    files: inlineFiles = [], envVars, ingress = {}, branch = 'main',
+    runtime = 'auto', stagedSessionId,
   } = args
 
-  if (!appName || !envId || !namespace || !gitTargetId || !files.length) {
-    throw new Error('appName, envId, namespace, gitTargetId, and files are all required')
+  if (!appName || !envId || !namespace || !gitTargetId) {
+    throw new Error('appName, envId, namespace, and gitTargetId are all required')
   }
+  if (!stagedSessionId && !inlineFiles.length) {
+    throw new Error('Either files (inline) or stagedSessionId (gateway upload) is required')
+  }
+  if (stagedSessionId && inlineFiles.length) {
+    throw new Error('Provide either files or stagedSessionId — not both')
+  }
+
+  // Resolve files: fetch from gateway when stagedSessionId provided, otherwise use inline.
+  const files = stagedSessionId ? await fetchStagedFiles(stagedSessionId) : inlineFiles
 
   // Default exposure: when a base domain is configured we can derive a real
   // hostname, so default to Ingress; otherwise fall back to NodePort.
@@ -746,6 +786,9 @@ async function dispatch(method, params, req, caller) {
           break
         case 'list_ingress_classes':
           toolResult = await toolListIngressClasses(req, args)
+          break
+        case 'request_upload_session':
+          toolResult = await toolRequestUploadSession()
           break
         case 'deploy_vibe_app':
           toolResult = await toolDeployVibeApp(req, args, caller)
