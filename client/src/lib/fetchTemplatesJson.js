@@ -1,9 +1,11 @@
+import { serverFetch } from './api.js'
+
 /**
  * GET /templates — surfaces server JSON error body instead of bare "HTTP 502".
  * @returns {Promise<{ templates?: unknown[] } & Record<string, unknown>>}
  */
 export async function fetchTemplatesJson() {
-  const r = await fetch('/templates')
+  const r = await serverFetch('/templates')
   const text = await r.text()
   let j
   try {

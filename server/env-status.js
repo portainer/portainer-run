@@ -4,6 +4,7 @@ import crypto from 'node:crypto'
 import { CORS } from './lib/cors.js'
 import { createLimiter } from './lib/limit.js'
 import { resolvePortainerTarget } from './resolve-portainer.js'
+import { extractToken } from './lib/identity.js'
 
 const STATUS_TTL = 5 * 1000
 
@@ -21,7 +22,7 @@ function kubeCall(token, envId, kubePath, target) {
     () =>
       new Promise((resolve, reject) => {
         const upPath = `/api/endpoints/${envId}/kubernetes${kubePath}`
-        const headers = { Accept: 'application/json', 'X-API-Key': token }
+        const headers = { Accept: 'application/json', 'Cookie': `portainer_api_key=${token}` }
         const transport = target.isHttps ? https : http
         const req = transport.request(
           {
@@ -298,10 +299,10 @@ export async function handleEnvStatus(req, res, envId) {
     res.end()
     return
   }
-  const token = req.headers['x-api-key'] || ''
+  const token = extractToken(req)
   if (!token) {
     res.writeHead(401, { 'Content-Type': 'application/json', ...CORS })
-    res.end(JSON.stringify({ error: 'X-API-Key required' }))
+    res.end(JSON.stringify({ error: 'Unauthorized' }))
     return
   }
   const target = resolvePortainerTarget(req)

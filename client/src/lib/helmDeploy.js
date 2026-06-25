@@ -1,17 +1,8 @@
-import { useAppStore } from '../store/useAppStore.js'
-
-function serverHeaders() {
-  const { portainerBaseUrl, portainerFromServer, token } = useAppStore.getState()
-  const h = { 'Content-Type': 'application/json' }
-  if (token) h['X-API-Key'] = token
-  const u = (portainerBaseUrl || '').trim()
-  if (u && !portainerFromServer) h['X-Portainer-URL'] = u
-  return h
-}
+import { serverFetch } from './api.js'
 
 /**
  * Deploy a Helm chart via Portainer's Helm stack API.
- * Routed through the Portainer-Run server to keep the token server-side.
+ * Routed through the Portainer-Run server to keep the chart logic server-side.
  *
  * @param {object} p
  * @param {string} p.envId
@@ -23,9 +14,9 @@ function serverHeaders() {
  * @param {string} p.values  YAML string
  */
 export async function deployHelm({ envId, namespace, releaseName, chart, repo, version, values }) {
-  const res = await fetch('/api/helm/deploy', {
+  const res = await serverFetch('/api/helm/deploy', {
     method: 'POST',
-    headers: serverHeaders(),
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ envId, namespace, releaseName, chart, repo, version, values }),
   })
   const data = await res.json().catch(() => ({}))

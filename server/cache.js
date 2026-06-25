@@ -4,6 +4,7 @@ import { CACHE_DIR, CACHE_FILE } from './config.js'
 import { CORS } from './lib/cors.js'
 import { readBody } from './lib/http.js'
 import { resolvePortainerTarget } from './resolve-portainer.js'
+import { extractToken } from './lib/identity.js'
 
 if (!fs.existsSync(CACHE_DIR)) {
   fs.mkdirSync(CACHE_DIR, { recursive: true })
@@ -59,10 +60,10 @@ function writeCacheFile(data) {
  * @param {import('http').ServerResponse} res
  */
 export function handleCache(req, res) {
-  const token = req.headers['x-api-key'] || ''
+  const token = extractToken(req)
   if (!token) {
     res.writeHead(401, { 'Content-Type': 'application/json', ...CORS })
-    res.end(JSON.stringify({ error: 'X-API-Key header required' }))
+    res.end(JSON.stringify({ error: 'Unauthorized' }))
     return
   }
   const key = getCacheFileKeyOrReject(token, req, res)

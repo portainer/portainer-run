@@ -9,7 +9,7 @@ import {
 } from '../proxy/git.js'
 import { buildManifests, serializeManifests, buildManifestPath } from '../lib/manifestSerialize.js'
 import { resolvePortainerTarget } from '../resolve-portainer.js'
-import { resolveCallerIdentity } from '../lib/identity.js'
+import { resolveCallerIdentity, extractToken } from '../lib/identity.js'
 import https from 'node:https'
 import http from 'node:http'
 
@@ -36,7 +36,7 @@ import http from 'node:http'
  */
 export async function handleVibe(req, res, pathname) {
   // Require a Portainer API token on all vibe routes
-  if (!req.headers['x-api-key']) {
+  if (!extractToken(req)) {
     res.writeHead(401, { 'Content-Type': 'application/json', ...CORS })
     res.end(JSON.stringify({ error: 'Unauthorized' }))
     return true
@@ -566,7 +566,7 @@ async function handleVibeDeploy(req, res) {
 async function createKubernetesSecret(req, { envId, ns, name, data }) {
   const target = resolvePortainerTarget(req)
   if (!target) throw new Error('Cannot resolve Portainer target')
-  const userToken = req.headers['x-api-key'] || ''
+  const userToken = extractToken(req)
 
   // Base64-encode the secret values (Kubernetes Secret data must be base64)
   const encodedData = {}
@@ -616,7 +616,7 @@ async function createPortainerGitOpsStack(req, {
   const target = resolvePortainerTarget(req)
   if (!target) throw new Error('Cannot resolve Portainer target')
 
-  const userToken = req.headers['x-api-key'] || ''
+  const userToken = extractToken(req)
 
   const stackBody = {
     StackName: sanitizeStackName(appName),
@@ -655,7 +655,7 @@ function portainerRequest(target, userToken, method, path, body, contentType = '
   return new Promise((resolve, reject) => {
     const transport = target.isHttps ? https : http
     const headers = { 'Content-Type': contentType, Accept: 'application/json' }
-    if (userToken) headers['X-API-Key'] = userToken
+    if (userToken) headers['Cookie'] = `portainer_api_key=${userToken}`
     if (body) headers['Content-Length'] = Buffer.byteLength(body)
 
     const opts = {

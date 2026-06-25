@@ -18,7 +18,6 @@ import { handleCache } from './cache.js'
 import { handleEnvStatus } from './env-status.js'
 import { handleTemplates } from './templates.js'
 import { tryServeStatic } from './static.js'
-import { proxyToPortainer } from './proxy/portainer.js'
 import { proxyToAnthropic } from './proxy/anthropic.js'
 import { proxyToOpenAI } from './proxy/openai.js'
 import { handleConnections } from './routes/connections.js'
@@ -81,14 +80,6 @@ export async function handleRequest(req, res) {
       return
     }
     await handleEnvStatus(req, res, envId)
-    return
-  }
-
-  if (pathname.startsWith('/portainer-api/')) {
-    const body = await readBody(req)
-    const upstreamPath =
-      '/api/' + pathname.slice('/portainer-api/'.length) + (parsed.search || '')
-    proxyToPortainer(req, res, upstreamPath, body)
     return
   }
 
