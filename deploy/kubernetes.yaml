@@ -28,9 +28,9 @@ metadata:
   name: portainer-run-config
   namespace: portainer-run
 data:
-  PORTAINER_URL: "https://portainer.example.com:9443"
+  PORTAINER_URL: "https://portainer.portainer.svc.cluster.local:9443"
   # For deployments where Portainer-Run is in the same cluster as Portainer.
-  # PORTAINER_URL: "https://portainer.portainer.svc.cluster.local:9443" 
+  # PORTAINER_URL: "https://portainer.portainer.svc.cluster.local:9443"
 
   # ── Template catalogue ──────────────────────────────────────────────────────
   # URL of a custom templates.json. Defaults to the repo file if not set.

@@ -1,5 +1,5 @@
 # Stage 1: Build the Vite client
-FROM oven/bun:1-alpine AS build-ui
+FROM oven/bun:1 AS build-ui
 WORKDIR /build
 COPY client/package.json ./
 RUN bun install
@@ -8,14 +8,15 @@ RUN bun run build
 
 # Stage 2: Install server dependencies
 # bun:sqlite is built into Bun — no native build tools needed
-FROM oven/bun:1-alpine AS build-server
+FROM oven/bun:1 AS build-server
 WORKDIR /deps
 COPY server/package.json ./
 RUN bun install --production
 
 # Stage 3: Slim runtime image
-FROM oven/bun:1-alpine AS runtime
-RUN apk add --no-cache openssl
+FROM oven/bun:1 AS runtime
+RUN apt-get update && apt-get install -y --no-install-recommends openssl \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 # Client build artifacts
