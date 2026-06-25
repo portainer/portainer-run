@@ -28,6 +28,14 @@ db.exec(`
   );
 `)
 
+// Key-value store for internal config (e.g. gateway PSK)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS kv (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+`)
+
 // Safe migrations for existing databases that pre-date owner_id / shared columns
 for (const [col, def] of [['owner_id', "TEXT NOT NULL DEFAULT '_system'"], ['shared', 'INTEGER NOT NULL DEFAULT 0']]) {
   const exists = db.prepare(`PRAGMA table_info(connections)`).all().some((r) => r.name === col)

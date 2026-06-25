@@ -58,7 +58,8 @@ function resolveTemplateUrl() {
 }
 
 export const TEMPLATE_URL = resolveTemplateUrl()
-export const BASE_DOMAIN = process.env.BASE_DOMAIN || ''
+export const BASE_DOMAIN  = process.env.BASE_DOMAIN  || ''
+export const GATEWAY_URL  = (process.env.GATEWAY_URL || '').replace(/\/$/, '')
 
 function resolveConfigNamespace() {
   // When running in Kubernetes, the pod's own namespace is mounted at this path automatically.
