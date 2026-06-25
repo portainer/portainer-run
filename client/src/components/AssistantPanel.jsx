@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAppStore, visibleDeployments } from '../store/useAppStore.js'
+import { serverFetch } from '../lib/api.js'
 import { ROUTES, serviceDetailPath } from '../lib/routes.js'
 import { getAssistantModel } from '../lib/assistant/aiModel.js'
 import { mdToHtml } from '../lib/assistant/markdown.js'
@@ -91,7 +92,7 @@ export function AssistantPanel({ open, onClose }) {
       setThinking({ phase: 'analyse' })
       try {
         const ctx = buildAssistantContext(location.pathname)
-        const response = await fetch('/ai/triage', {
+        const response = await serverFetch('/ai/triage', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -286,7 +287,7 @@ ${deployInstructions}`
       : undefined
 
     try {
-      const response = await fetch('/ai/triage', {
+      const response = await serverFetch('/ai/triage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

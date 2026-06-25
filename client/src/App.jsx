@@ -1,8 +1,7 @@
 import { useEffect } from 'react'
 import { inflightDedupe } from './lib/inflightDedupe.js'
 import { useAppStore } from './store/useAppStore.js'
-import { loadServerConfig } from './services/config.js'
-import { tryAutoConnect } from './services/session.js'
+import { bootstrap } from './services/session.js'
 import { AppRoutes } from './AppRoutes.jsx'
 import { DeleteModal } from './components/DeleteModal.jsx'
 import { RestartModal } from './components/RestartModal.jsx'
@@ -12,10 +11,7 @@ export function App() {
   const connected = useAppStore((s) => s.connected)
 
   useEffect(() => {
-    void inflightDedupe('app:init-bootstrap', async () => {
-      await loadServerConfig()
-      await tryAutoConnect()
-    })
+    void inflightDedupe('app:init-bootstrap', () => bootstrap())
   }, [])
 
   return (

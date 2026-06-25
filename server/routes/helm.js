@@ -1,6 +1,7 @@
 import { readBody } from '../lib/http.js'
 import { CORS } from '../lib/cors.js'
 import { resolvePortainerTarget } from '../resolve-portainer.js'
+import { extractToken } from '../lib/identity.js'
 import https from 'node:https'
 import http from 'node:http'
 
@@ -17,7 +18,7 @@ export async function handleHelm(req, res, pathname) {
 }
 
 async function handleHelmDeploy(req, res) {
-  if (!req.headers['x-api-key']) {
+  if (!extractToken(req)) {
     return json(res, 401, { error: 'Unauthorized' })
   }
 
@@ -33,7 +34,7 @@ async function handleHelmDeploy(req, res) {
   const target = resolvePortainerTarget(req)
   if (!target) return json(res, 400, { error: 'Cannot resolve Portainer target' })
 
-  const userToken = req.headers['x-api-key'] || ''
+  const userToken = extractToken(req)
 
   const helmBody = JSON.stringify({
     Name: releaseName,
@@ -63,7 +64,7 @@ function portainerRequest(target, userToken, method, path, body) {
   return new Promise((resolve, reject) => {
     const transport = target.isHttps ? https : http
     const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
-    if (userToken) headers['X-API-Key'] = userToken
+    if (userToken) headers['Cookie'] = `portainer_api_key=${userToken}`
     if (body) headers['Content-Length'] = Buffer.byteLength(body)
 
     const opts = {

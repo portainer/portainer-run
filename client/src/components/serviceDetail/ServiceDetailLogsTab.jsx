@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { kubeFetch, portainerUrlHeaders } from '../../lib/api.js'
+import { kubeFetch, serverFetch } from '../../lib/api.js'
 import { inflightDedupe } from '../../lib/inflightDedupe.js'
 import { useAppStore } from '../../store/useAppStore.js'
 import { getAssistantModel } from '../../lib/assistant/aiModel.js'
@@ -181,7 +181,7 @@ ${truncated}
 Analyse this data and follow the instructions in your system prompt.`
 
       setAiHtml('<span style="color:var(--text-dim)">Running analysis…</span>')
-      const response = await fetch('/ai/triage', {
+      const response = await serverFetch('/ai/triage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -273,13 +273,7 @@ Analyse this data and follow the instructions in your system prompt.`
     setStreaming(true)
 
     try {
-      const r = await fetch(
-        `/portainer-api/endpoints/${envId}/kubernetes${path}`,
-        {
-          headers: { 'X-API-Key': token, ...portainerUrlHeaders() },
-          signal: controller.signal,
-        },
-      )
+      const r = await kubeFetch(token, envId, path, { signal: controller.signal })
       if (!r.ok) throw new Error('HTTP ' + r.status)
       if (!r.body) throw new Error('No response body')
       const reader = r.body.getReader()

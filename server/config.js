@@ -27,6 +27,7 @@ export const AI_PROVIDER =
 export const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o'
 export const PORT = parseInt(process.env.PORT || '443', 10)
 export const HTTP_PORT = parseInt(process.env.HTTP_PORT || '80', 10)
+export const SERVE_HTTP = process.env.SERVE_HTTP === '1'
 export const SSL_CERT_PATH = process.env.SSL_CERT || ''
 export const SSL_KEY_PATH = process.env.SSL_KEY || ''
 export const CERT_DIR = process.env.SSL_CERT_DIR || projectRoot

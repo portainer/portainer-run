@@ -9,7 +9,7 @@ import {
   deleteConnection,
 } from '../models/connection.js'
 import { testGitConnection, getBranches, listFiles } from '../proxy/git.js'
-import { resolveCallerIdentity, portainerGet } from '../lib/identity.js'
+import { resolveCallerIdentity, portainerGet, extractToken } from '../lib/identity.js'
 import https from 'node:https'
 import http from 'node:http'
 
@@ -19,7 +19,7 @@ import http from 'node:http'
 export async function handleConnections(req, res, pathname) {
   const method = req.method
 
-  if (!req.headers['x-api-key']) {
+  if (!extractToken(req)) {
     return json(res, 401, { error: 'Unauthorized' })
   }
 

@@ -17,7 +17,7 @@ export function portainerGet(target, token, path) {
       port: target.port,
       path,
       method: 'GET',
-      headers: { 'X-API-Key': token, 'Content-Type': 'application/json' },
+      headers: { 'Cookie': `portainer_api_key=${token}`, 'Content-Type': 'application/json' },
       rejectUnauthorized: false,
     }, (res) => {
       let body = ''
@@ -61,10 +61,17 @@ export async function resolveCallerIdentity(req) {
 }
 
 /**
- * Extract bearer token from Authorization header or X-API-Key header.
+ * Extract the Portainer JWT from the inbound request.
+ * Cookie (portainer_api_key) takes priority — this is the addon-gateway auth path.
+ * Falls back to Authorization: Bearer and X-API-Key for backward compatibility.
  * @param {import('http').IncomingMessage} req
  */
 export function extractToken(req) {
+  const cookieHeader = req.headers['cookie'] || ''
+  for (const part of cookieHeader.split(';')) {
+    const [k, ...v] = part.trim().split('=')
+    if (k.trim() === 'portainer_api_key') return v.join('=').trim()
+  }
   const auth = req.headers['authorization'] || ''
   if (auth.toLowerCase().startsWith('bearer ')) return auth.slice(7).trim()
   return req.headers['x-api-key'] || ''

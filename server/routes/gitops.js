@@ -1,7 +1,7 @@
 import { readBody } from '../lib/http.js'
 import { CORS } from '../lib/cors.js'
 import { getConnectionById } from '../models/connection.js'
-import { resolveCallerIdentity } from '../lib/identity.js'
+import { resolveCallerIdentity, extractToken } from '../lib/identity.js'
 import { commitFiles, ensureBranch, buildRepoHttpsUrl, deleteFile, deleteDirectory, fetchFile } from '../proxy/git.js'
 import { buildManifests, serializeManifests, buildManifestPath } from '../lib/manifestSerialize.js'
 import { serializeManifestBuilder } from '../lib/manifestBuilderSerialize.js'
@@ -25,7 +25,7 @@ import http from 'node:http'
  */
 export async function handleGitOps(req, res, pathname) {
   // Require a Portainer API token on all GitOps routes
-  if (!req.headers['x-api-key']) {
+  if (!extractToken(req)) {
     res.writeHead(401, { 'Content-Type': 'application/json', ...CORS })
     res.end(JSON.stringify({ error: 'Unauthorized' }))
     return true
@@ -230,7 +230,7 @@ async function handleValidate(req, res) {
   const target = resolvePortainerTarget(req)
   if (!target) return json(res, 400, { error: 'Cannot resolve Portainer target' })
 
-  const userToken = req.headers['x-api-key'] || ''
+  const userToken = extractToken(req)
 
   // Build manifests using the correct serializer for the param shape
   let manifests = []
@@ -346,7 +346,7 @@ async function createPortainerGitOpsStack(req, {
   const target = resolvePortainerTarget(req)
   if (!target) throw new Error('Cannot resolve Portainer target — check PORTAINER_URL or X-Portainer-URL header')
 
-  const userToken = req.headers['x-api-key'] || ''
+  const userToken = extractToken(req)
 
   const stackBody = {
     StackName: sanitizeStackName(appName),
@@ -389,7 +389,7 @@ async function patchDeploymentStackAnnotation(req, { envId, ns, appName, stackId
   const target = resolvePortainerTarget(req)
   if (!target) return
 
-  const userToken = req.headers['x-api-key'] || ''
+  const userToken = extractToken(req)
   const patch = JSON.stringify({
     metadata: { annotations: { 'portainer-run/stack-id': stackId } },
   })
@@ -412,7 +412,7 @@ function portainerRequest(target, userToken, method, path, body, contentType = '
   return new Promise((resolve, reject) => {
     const transport = target.isHttps ? https : http
     const headers = { 'Content-Type': contentType, Accept: 'application/json' }
-    if (userToken) headers['X-API-Key'] = userToken
+    if (userToken) headers['Cookie'] = `portainer_api_key=${userToken}`
     if (body) headers['Content-Length'] = Buffer.byteLength(body)
 
     const opts = {
