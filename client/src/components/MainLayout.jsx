@@ -197,7 +197,7 @@ export function MainLayout() {
         <div className="app-header-brand">
           <Link to={ROUTES.dashboard} className="app-header-brand-link" title="Portainer-Run — Dashboard">
             <div className="logo">
-              <img src="/portainer-logo.png" alt="Portainer" className="logo-wordmark" />
+              <img src={`${import.meta.env.BASE_URL}portainer-logo.png`} alt="Portainer" className="logo-wordmark" />
               <div className="logo-run-row">
                 <div className="logo-run-square" />
                 <span className="logo-run">RUN</span>

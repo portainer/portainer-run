@@ -54,6 +54,15 @@ data:
   # PORT: "443"
   # HTTP_PORT: "80"
 
+  # ── Addon-gateway mode ───────────────────────────────────────────────────
+  # Served as a Portainer addon at <portainer>/addons/portainer-run/. TLS
+  # terminates at the Portainer gateway, which proxies plain HTTP to us, so we
+  # serve HTTP directly. Without this we run HTTPS + an HTTP→HTTPS redirect on
+  # port 80; the gateway hits that redirect and bounces the browser to the
+  # cluster DNS name, out of the Portainer base URL.
+  SERVE_HTTP: "1"
+  PORT: "80"
+
   # ── Cache directory ──────────────────────────────────────────────────────────
   # Override the directory used for persistent cache (default: /app/data).
   # Must match the mountPath of the volume in the Deployment if changed.
@@ -129,7 +138,7 @@ spec:
     spec:
       containers:
         - name: portainer-run
-          image: portainer/portainer-run:latest
+          image: portainerci/portainer-run:pr-31
           imagePullPolicy: Always
           ports:
             - name: https
@@ -205,8 +214,8 @@ spec:
           livenessProbe:
             httpGet:
               path: /config
-              port: 443
-              scheme: HTTPS
+              port: 80
+              scheme: HTTP
             initialDelaySeconds: 15
             periodSeconds: 30
             failureThreshold: 3
@@ -214,8 +223,8 @@ spec:
           readinessProbe:
             httpGet:
               path: /config
-              port: 443
-              scheme: HTTPS
+              port: 80
+              scheme: HTTP
             initialDelaySeconds: 10
             periodSeconds: 10
 
