@@ -1,4 +1,4 @@
-import { kubeFetch } from './api.js'
+import { apiFetch, kubeFetch } from './api.js'
 import { inflightDedupe } from './inflightDedupe.js'
 import { GPU_RESOURCE_KEYS } from './deployFormModel.js'
 
@@ -11,7 +11,7 @@ export { GPU_RESOURCE_KEYS } from './deployFormModel.js'
  */
 export async function fetchNamespaceOptions(token, envId) {
   return inflightDedupe(`k8s:ns-options:${envId}`, async () => {
-  const r = await kubeFetch(token, envId, '/api/v1/namespaces')
+  const r = await apiFetch(token, `/kubernetes/${envId}/namespaces`)
   if (r.status === 403 || r.status === 401) {
     return {
       ok: true,
@@ -27,20 +27,8 @@ export async function fetchNamespaceOptions(token, envId) {
       manual: true,
     }
   }
-  const json = await r.json().catch(() => ({}))
-  const allNss = (json.items || []).map((n) => n.metadata.name)
-  const accessible = (
-    await Promise.all(
-      allNss.map(async (ns) => {
-        const pr = await kubeFetch(
-          token,
-          envId,
-          `/apis/apps/v1/namespaces/${ns}/deployments?limit=1`,
-        )
-        return pr.ok ? ns : null
-      }),
-    )
-  ).filter(Boolean)
+  const list = await r.json().catch(() => [])
+  const accessible = (Array.isArray(list) ? list : []).map((n) => n.Name)
   if (!accessible.length) {
     return {
       ok: true,
