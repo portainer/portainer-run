@@ -9,7 +9,7 @@ import {
 } from '../proxy/git.js'
 import { buildManifests, serializeManifests, buildManifestPath } from '../lib/manifestSerialize.js'
 import { resolvePortainerTarget } from '../resolve-portainer.js'
-import { resolveCallerIdentity, extractToken } from '../lib/identity.js'
+import { resolveCallerIdentity, extractToken, portainerAuthHeaders } from '../lib/identity.js'
 import https from 'node:https'
 import http from 'node:http'
 
@@ -655,7 +655,7 @@ function portainerRequest(target, userToken, method, path, body, contentType = '
   return new Promise((resolve, reject) => {
     const transport = target.isHttps ? https : http
     const headers = { 'Content-Type': contentType, Accept: 'application/json' }
-    if (userToken) headers['Cookie'] = `portainer_api_key=${userToken}`
+    if (userToken) Object.assign(headers, portainerAuthHeaders(userToken))
     if (body) headers['Content-Length'] = Buffer.byteLength(body)
 
     const opts = {

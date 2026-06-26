@@ -116,9 +116,9 @@ A common deployment pattern is Vibe Deploy only (`FEATURE_SIMPLE_DEPLOY=false FE
 
 ## MCP endpoint
 
-Portainer-Run exposes an MCP (Model Context Protocol) endpoint at `POST /mcp` that allows AI coding tools to deploy applications directly.
+Portainer-Run exposes an MCP (Model Context Protocol) endpoint at `POST /mcp` that allows AI coding tools to deploy applications directly. When Portainer-Run runs as a Portainer addon, this endpoint is reached through the Portainer addon gateway at `https://<portainer-host>/addons/portainer-run/mcp` (the gateway authenticates the request, then strips the `/addons/portainer-run` prefix before forwarding to `/mcp`).
 
-Authentication uses either `Authorization: Bearer <portainer-token>` or `X-API-Key: <portainer-token>`. The token is validated against Portainer's `/users/me` endpoint on first use and cached for five minutes.
+Authentication accepts a Portainer **API access token** via `X-API-Key: <token>` (recommended for MCP clients — these tokens are long-lived, unlike browser session JWTs), the browser session JWT via the `portainer_api_key` cookie (the addon-gateway path), or `Authorization: Bearer <jwt>`. Portainer-Run validates the credential against the same Portainer instance, routing it by type to match Portainer's own auth: tokens with the `ptr_` prefix go via `X-API-Key`, JWTs via the session cookie. The result is validated against Portainer's `/users/me` endpoint on first use and cached for five minutes.
 
 The server returns workflow guidance in the MCP `initialize` response (`instructions`). Compliant clients surface this to the model automatically, so it knows to gather the required deployment details (environment, namespace, git target, exposure, ingress host, port behaviour) and confirm them before deploying — without the user having to prompt for it.
 
@@ -136,7 +136,7 @@ Available tools:
 
 `get_app_status` — returns the running status of a deployed application from the server-side cache, plus a live access `url` resolved from the Service/Ingress (NodePort, LoadBalancer, or Ingress).
 
-To connect Claude Desktop, add the following to `claude_desktop_config.json` (requires Node.js for `mcp-remote`):
+To connect Claude Desktop, add the following to `claude_desktop_config.json` (requires Node.js for `mcp-remote`). Use a Portainer API access token (Account → Access Tokens) so the connection does not expire with a browser session:
 
 ```json
 {
@@ -145,9 +145,9 @@ To connect Claude Desktop, add the following to `claude_desktop_config.json` (re
       "command": "npx",
       "args": [
         "mcp-remote@latest",
-        "https://your-portainer-run/mcp",
+        "https://<portainer-host>/addons/portainer-run/mcp",
         "--header",
-        "Authorization: Bearer YOUR_PORTAINER_TOKEN"
+        "X-API-Key: YOUR_PORTAINER_API_TOKEN"
       ]
     }
   }
@@ -159,9 +159,9 @@ Config file location: `%APPDATA%\Claude\claude_desktop_config.json` on Windows, 
 To verify the endpoint is working before connecting a client:
 
 ```bash
-curl -k -X POST https://your-portainer-run/mcp \
+curl -k -X POST https://<portainer-host>/addons/portainer-run/mcp \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "X-API-Key: YOUR_PORTAINER_API_TOKEN" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
 
