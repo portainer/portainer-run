@@ -94,6 +94,12 @@ function NavLinks({ onNav, isAdmin, features }) {
               </svg>
               Cluster Readiness
             </NavLink>
+            <a className="nav-item" href="/" onClick={onNav}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M19 12H5M12 19l-7-7 7-7" />
+              </svg>
+              Portainer
+            </a>
           </div>
         </>
       )}
