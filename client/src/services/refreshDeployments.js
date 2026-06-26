@@ -29,7 +29,7 @@ export function cancelRefreshTimer() {
 export async function refreshCache(manual = false) {
   const st = useAppStore.getState
   const g = st()
-  const { token, cache, setCacheStatus, setCache } = g
+  const { token, cache, setCacheStatus, setCache, isAdmin } = g
   if (!token) return
   if (cache.fetching && !manual) return
 
@@ -51,7 +51,7 @@ export async function refreshCache(manual = false) {
   try {
     await Promise.all(
       envs.map(async (env) => {
-        const deps = await fetchEnvDeployments(token, env)
+        const deps = await fetchEnvDeployments(token, env, isAdmin)
         st().setCache((prev) => {
           const next = [...prev.deployments.filter((d) => d._envId !== env.Id), ...deps]
           // Do not set fetching:true here — it is already true and will be cleared in finally
