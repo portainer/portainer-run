@@ -527,7 +527,10 @@ export function VibeDeploy() {
     })
   }, [envId, token])
 
-  // Fetch ingresses already deployed in the selected namespace to derive the base domain per class
+  // Fetch ingresses already deployed in the selected namespace to derive the base domain per class.
+  // Admin-configured ingresses (no managed-by=portainer-run label) are used as-is — their host IS
+  // the base domain. App-deployed ingresses (managed-by=portainer-run) have host={appName}.{base},
+  // so we strip the first segment. Admin ingresses take priority; managed ones are the fallback.
   useEffect(() => {
     if (!envId || !resolvedNs || !token) {
       setIngressHostMap({})
@@ -537,12 +540,24 @@ export function VibeDeploy() {
       .then(async (r) => {
         if (!r.ok) { setIngressHostMap({}); return }
         const data = await r.json()
+        const items = data.items || []
+        const adminIngresses = items.filter(
+          (item) => item.metadata?.labels?.['managed-by'] !== 'portainer-run'
+        )
+        // Prefer admin-configured ingresses as the source of truth.
+        // Fall back to managed ingresses only if no admin ones exist yet.
+        const sources = adminIngresses.length > 0 ? adminIngresses : items
+        const usingManaged = adminIngresses.length === 0
         const map = {}
-        for (const item of (data.items || [])) {
+        for (const item of sources) {
           const cls = item.spec?.ingressClassName
             || item.metadata?.annotations?.['kubernetes.io/ingress.class']
             || ''
-          const host = item.spec?.rules?.[0]?.host || ''
+          let host = item.spec?.rules?.[0]?.host || ''
+          // Managed ingresses have host={appName}.{baseDomain} — strip the app prefix
+          if (usingManaged && host.includes('.')) {
+            host = host.substring(host.indexOf('.') + 1)
+          }
           if (cls && host) map[cls] = host
         }
         setIngressHostMap(map)
