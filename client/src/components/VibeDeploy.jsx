@@ -5,6 +5,7 @@ import { ROUTES } from '../lib/routes.js'
 import { listGitTargets } from '../lib/gitTargets.js'
 import { useAppStore, visibleEnvironments, isEnvDisabled } from '../store/useAppStore.js'
 import { fetchNamespaceOptions } from '../lib/deployK8s.js'
+import { kubeFetch } from '../lib/api.js'
 import { checkEnvPermissions } from '../lib/envPermissions.js'
 import { GitOpsStep } from './deploy/GitOpsStep.jsx'
 import { checkIngress, checkLoadBalancer } from '../lib/readinessChecks.js'
@@ -356,7 +357,7 @@ export function VibeDeploy() {
   const envPermissions = useAppStore((s) => s.envPermissions)
   const patchEnvPermissions = useAppStore((s) => s.patchEnvPermissions)
   const pushToast = useAppStore((s) => s.pushToast)
-  const baseDomain = useAppStore((s) => s.baseDomain || '')
+  const [ingressHostMap, setIngressHostMap] = useState({})
 
   // ---- Step tracking ----
   // 1=files, 2=runtime, 3=envvars, 4=deployconfig, 5=gitops
@@ -511,11 +512,11 @@ export function VibeDeploy() {
         defaultIngressClass: defaultClass,
       }
       setEnvCapabilities(caps)
-      // Auto-set expose type: prefer Ingress when available and baseDomain is configured
+      // Auto-set expose type: prefer Ingress when it is available on the cluster
       setExposeType((prev) => {
         if (prev === 'LoadBalancer' && !caps.lbOk) return 'NodePort'
         if (prev === 'Ingress' && !caps.ingressOk) return 'NodePort'
-        if (caps.ingressOk && baseDomain) return 'Ingress'
+        if (caps.ingressOk) return 'Ingress'
         return prev
       })
       // Auto-populate ingress class from cluster default
@@ -524,14 +525,37 @@ export function VibeDeploy() {
       // On error, show all options (permissive fallback)
       setEnvCapabilities({ ingressOk: true, lbOk: true, probing: false, ingressClasses: [], defaultIngressClass: null })
     })
-  }, [envId, token, baseDomain])
+  }, [envId, token])
 
-  // Re-derive ingress host when appName changes and baseDomain is set
+  // Fetch ingresses already deployed in the selected namespace to derive the base domain per class
   useEffect(() => {
-    if (exposeType === 'Ingress' && baseDomain && appName) {
-      setIngHost(`${appName}.${baseDomain}`)
+    if (!envId || !resolvedNs || !token) {
+      setIngressHostMap({})
+      return
     }
-  }, [appName, exposeType, baseDomain])
+    kubeFetch(token, envId, `/apis/networking.k8s.io/v1/namespaces/${resolvedNs}/ingresses`)
+      .then(async (r) => {
+        if (!r.ok) { setIngressHostMap({}); return }
+        const data = await r.json()
+        const map = {}
+        for (const item of (data.items || [])) {
+          const cls = item.spec?.ingressClassName
+            || item.metadata?.annotations?.['kubernetes.io/ingress.class']
+            || ''
+          const host = item.spec?.rules?.[0]?.host || ''
+          if (cls && host) map[cls] = host
+        }
+        setIngressHostMap(map)
+      })
+      .catch(() => setIngressHostMap({}))
+  }, [envId, resolvedNs, token])
+
+  // Re-derive ingress host when appName or active ingress class changes
+  useEffect(() => {
+    if (exposeType !== 'Ingress' || !appName) return
+    const base = ingressHostMap[ingClass] || ''
+    if (base) setIngHost(`${appName}.${base}`)
+  }, [appName, exposeType, ingClass, ingressHostMap])
 
   useEffect(() => {
     if (!envId || !token) {
@@ -1201,30 +1225,33 @@ export function VibeDeploy() {
                 <div className="frow">
                   <div className="field">
                     <label>Hostname</label>
-                    {baseDomain ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-                        <input
-                          type="text"
-                          value={appName}
-                          onChange={(e) => setAppName(e.target.value.replace(/[^a-z0-9-]/gi, '-').toLowerCase())}
-                          style={{ borderRadius: '6px 0 0 6px', borderRight: 'none', flex: '0 0 auto', width: 140 }}
-                        />
-                        <span style={{
-                          padding: '8px 12px',
-                          background: 'var(--surface2)',
-                          border: '1px solid var(--border2)',
-                          borderRadius: '0 6px 6px 0',
-                          fontFamily: 'var(--mono)',
-                          fontSize: 13,
-                          color: 'var(--text-dim)',
-                          whiteSpace: 'nowrap',
-                        }}>
-                          .{baseDomain}
-                        </span>
-                      </div>
-                    ) : (
-                      <input type="text" value={ingHost} onChange={(e) => setIngHost(e.target.value)} placeholder="app.example.com" />
-                    )}
+                    {(() => {
+                      const activeBaseDomain = ingressHostMap[ingClass] || ''
+                      return activeBaseDomain ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                          <input
+                            type="text"
+                            value={appName}
+                            onChange={(e) => setAppName(e.target.value.replace(/[^a-z0-9-]/gi, '-').toLowerCase())}
+                            style={{ borderRadius: '6px 0 0 6px', borderRight: 'none', flex: '0 0 auto', width: 140 }}
+                          />
+                          <span style={{
+                            padding: '8px 12px',
+                            background: 'var(--surface2)',
+                            border: '1px solid var(--border2)',
+                            borderRadius: '0 6px 6px 0',
+                            fontFamily: 'var(--mono)',
+                            fontSize: 13,
+                            color: 'var(--text-dim)',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            .{activeBaseDomain}
+                          </span>
+                        </div>
+                      ) : (
+                        <input type="text" value={ingHost} onChange={(e) => setIngHost(e.target.value)} placeholder="app.example.com" />
+                      )
+                    })()}
                   </div>
                   <div className="field">
                     <label>Ingress class</label>
