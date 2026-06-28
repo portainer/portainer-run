@@ -356,6 +356,7 @@ export function VibeDeploy() {
   const envPermissions = useAppStore((s) => s.envPermissions)
   const patchEnvPermissions = useAppStore((s) => s.patchEnvPermissions)
   const pushToast = useAppStore((s) => s.pushToast)
+  const baseDomain = useAppStore((s) => s.baseDomain || '')
 
   // ---- Step tracking ----
   // 1=files, 2=runtime, 3=envvars, 4=deployconfig, 5=gitops
@@ -412,7 +413,7 @@ export function VibeDeploy() {
 
   // ---- Env capabilities (for expose type filtering) ----
   // null = not yet probed, true = available, false = not available
-  const [envCapabilities, setEnvCapabilities] = useState({ ingressOk: null, lbOk: null, probing: false })
+  const [envCapabilities, setEnvCapabilities] = useState({ ingressOk: null, lbOk: null, probing: false, ingressClasses: [], defaultIngressClass: null })
 
   // ---- Step 5: gitops (stagedParams) ----
   const [stagedParams, setStagedParams] = useState(null)
@@ -493,31 +494,45 @@ export function VibeDeploy() {
   // Probe env capabilities when envId changes (for expose type filtering)
   useEffect(() => {
     if (!envId || !token) {
-      setEnvCapabilities({ ingressOk: null, lbOk: null, probing: false })
+      setEnvCapabilities({ ingressOk: null, lbOk: null, probing: false, ingressClasses: [], defaultIngressClass: null })
       return
     }
-    setEnvCapabilities({ ingressOk: null, lbOk: null, probing: true })
+    setEnvCapabilities({ ingressOk: null, lbOk: null, probing: true, ingressClasses: [], defaultIngressClass: null })
     Promise.all([
       checkIngress(token, envId),
       checkLoadBalancer(token, envId),
     ]).then(([ingressResult, lbResult]) => {
+      const defaultClass = ingressResult.defaultClass || (ingressResult.classes?.length === 1 ? ingressResult.classes[0].name : null)
       const caps = {
         ingressOk: ingressResult.ok !== false,
         lbOk: lbResult.ok !== false,
         probing: false,
+        ingressClasses: ingressResult.classes || [],
+        defaultIngressClass: defaultClass,
       }
       setEnvCapabilities(caps)
-      // Reset expose type if currently-selected option is no longer available
+      // Auto-set expose type: prefer Ingress when available and baseDomain is configured
       setExposeType((prev) => {
         if (prev === 'LoadBalancer' && !caps.lbOk) return 'NodePort'
         if (prev === 'Ingress' && !caps.ingressOk) return 'NodePort'
+        if (caps.ingressOk && baseDomain) return 'Ingress'
         return prev
       })
+      // Auto-populate ingress class from cluster default
+      if (defaultClass) setIngClass(defaultClass)
     }).catch(() => {
       // On error, show all options (permissive fallback)
-      setEnvCapabilities({ ingressOk: true, lbOk: true, probing: false })
+      setEnvCapabilities({ ingressOk: true, lbOk: true, probing: false, ingressClasses: [], defaultIngressClass: null })
     })
-  }, [envId, token])
+  }, [envId, token, baseDomain])
+
+  // Re-derive ingress host when appName changes and baseDomain is set
+  useEffect(() => {
+    if (exposeType === 'Ingress' && baseDomain && appName) {
+      setIngHost(`${appName}.${baseDomain}`)
+    }
+  }, [appName, exposeType, baseDomain])
+
   useEffect(() => {
     if (!envId || !token) {
       setNsList([]); setNamespace(''); setManualNs(false)
@@ -1186,11 +1201,53 @@ export function VibeDeploy() {
                 <div className="frow">
                   <div className="field">
                     <label>Hostname</label>
-                    <input type="text" value={ingHost} onChange={(e) => setIngHost(e.target.value)} placeholder="app.example.com" />
+                    {baseDomain ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                        <input
+                          type="text"
+                          value={appName}
+                          onChange={(e) => setAppName(e.target.value.replace(/[^a-z0-9-]/gi, '-').toLowerCase())}
+                          style={{ borderRadius: '6px 0 0 6px', borderRight: 'none', flex: '0 0 auto', width: 140 }}
+                        />
+                        <span style={{
+                          padding: '8px 12px',
+                          background: 'var(--surface2)',
+                          border: '1px solid var(--border2)',
+                          borderRadius: '0 6px 6px 0',
+                          fontFamily: 'var(--mono)',
+                          fontSize: 13,
+                          color: 'var(--text-dim)',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          .{baseDomain}
+                        </span>
+                      </div>
+                    ) : (
+                      <input type="text" value={ingHost} onChange={(e) => setIngHost(e.target.value)} placeholder="app.example.com" />
+                    )}
                   </div>
                   <div className="field">
                     <label>Ingress class</label>
-                    <input type="text" value={ingClass} onChange={(e) => setIngClass(e.target.value)} placeholder="nginx" />
+                    {envCapabilities.ingressClasses.length > 1 ? (
+                      <select
+                        value={ingClass}
+                        onChange={(e) => setIngClass(e.target.value)}
+                        style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border2)', borderRadius: 6, color: 'var(--text-bright)', fontFamily: 'var(--mono)', fontSize: 13, padding: '9px 12px' }}
+                      >
+                        {envCapabilities.ingressClasses.map((c) => (
+                          <option key={c.name} value={c.name}>{c.name}{c.isDefault ? ' (default)' : ''}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={ingClass}
+                        onChange={(e) => setIngClass(e.target.value)}
+                        placeholder="nginx"
+                        readOnly={envCapabilities.ingressClasses.length === 1}
+                        style={envCapabilities.ingressClasses.length === 1 ? { opacity: 0.6, cursor: 'default' } : {}}
+                      />
+                    )}
                   </div>
                 </div>
               )}
