@@ -35,10 +35,17 @@ export async function checkIngress(token, envId) {
       ),
     )
     if (classes.length > 0) {
+      const mapped = classes.map((c) => ({
+        name: c.metadata.name,
+        isDefault: c.metadata?.annotations?.['ingressclass.kubernetes.io/is-default-class'] === 'true',
+      }))
+      const defaultClass = (mapped.find((c) => c.isDefault) || mapped[0]).name
       return {
         ok: true,
-        label: classes.map((c) => c.metadata.name).join(', '),
+        label: mapped.map((c) => c.name).join(', '),
         detail: `${classes.length} ingress type(s) defined`,
+        classes: mapped,
+        defaultClass,
       }
     }
     if (controllerPods.length > 0) {
@@ -46,12 +53,16 @@ export async function checkIngress(token, envId) {
         ok: null,
         label: 'Controller found',
         detail: 'No IngressClass defined but controller pods running',
+        classes: [],
+        defaultClass: null,
       }
     }
     return {
       ok: false,
       label: 'Not found',
       detail: 'No IngressClass or ingress controller pods detected',
+      classes: [],
+      defaultClass: null,
     }
   } catch (e) {
     return { ok: false, label: 'Error', detail: e instanceof Error ? e.message : String(e) }
