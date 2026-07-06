@@ -103,6 +103,7 @@ function ServiceRowContent({
   const envPermissions = useAppStore((s) => s.envPermissions)
   const patchEnvPermissions = useAppStore((s) => s.patchEnvPermissions)
   const features = useAppStore((s) => s.features)
+  const isAdmin = useAppStore((s) => s.isAdmin)
   const vibeOnly = !!(features.vibeDeploy && !features.simpleDeploy && !features.manifestBuilder)
   const permKey = `${d._envId}:${d.metadata.namespace}`
   const perms = envPermissions[permKey] ?? null
@@ -118,6 +119,9 @@ function ServiceRowContent({
   const envId = d._envId
   const envName = d._envName || '—'
   const created = d.metadata?.creationTimestamp
+  const deployedBy = d.metadata?.labels?.['io.portainer.kubernetes.application.owner']
+    || d.metadata?.labels?.['io.portainer.kubernetes.application.owner.id']
+    || '—'
   const { border, dot, label } = rowClasses(d)
   const extra = getExtraForApp(envStatusClientCache, envId, name)
 
@@ -181,6 +185,7 @@ function ServiceRowContent({
         )}
       </div>
       <div className="svc-age">{age(created)}</div>
+      {isAdmin && <div className="svc-deployer" title={deployedBy}>{deployedBy}</div>}
       <div className="svc-actions" onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
@@ -218,6 +223,7 @@ export function ServicesPage() {
   const envStatusClientCache = useAppStore((s) => s.envStatusClientCache)
   const setDeleteTarget = useAppStore((s) => s.setDeleteTarget)
   const features = useAppStore((s) => s.features)
+  const isAdmin = useAppStore((s) => s.isAdmin)
   const [deployMenuOpen, setDeployMenuOpen] = useState(false)
   const vibeOnly = !!(features.vibeDeploy && !features.simpleDeploy && !features.manifestBuilder)
 
@@ -486,7 +492,7 @@ export function ServicesPage() {
         ) : null}
 
         {!initialLoading && deps.length > 0 ? (
-          <div className={`services-page-list${vibeOnly ? ' services-page-list--vibe-only' : ''}`}>
+          <div className={`services-page-list${vibeOnly ? ' services-page-list--vibe-only' : ''}${isAdmin ? ' services-page-list--with-deployer' : ''}`}>
             <SortableList
               items={listItems}
               sort={listSort}
@@ -522,6 +528,7 @@ export function ServicesPage() {
                   <span>Health</span>
                   <span>Access</span>
                   <span>Deployed</span>
+                  {isAdmin && <span className="svc-l-header-deployer">Deployed by</span>}
                   <span />
                 </div>
               )}
