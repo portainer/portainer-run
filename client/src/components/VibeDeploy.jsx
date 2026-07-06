@@ -432,7 +432,7 @@ export function VibeDeploy() {
 
   // ---- Derived tags for file list ----
   const runtimeFile = detectedRuntime
-    ? files.find((f) => f.name === 'package.json' || f.name === 'requirements.txt' || f.name === 'Gemfile')
+    ? files.find((f) => f.name === 'package.json' || f.name === 'requirements.txt' || f.name === 'Gemfile' || f.name === 'server.js')
     : null
 
   // ---- Effects ----
@@ -945,7 +945,7 @@ export function VibeDeploy() {
                             key={f.webkitRelativePath || f.name}
                             file={f}
                             tag={
-                              (f.name === 'package.json' || f.name === 'requirements.txt' || f.name === 'Gemfile') ? 'runtime'
+                              (f.name === 'package.json' || f.name === 'requirements.txt' || f.name === 'Gemfile' || f.name === 'server.js') ? 'runtime'
                               : (f.name === '.env.example' || f.name.endsWith('.env.example')) ? 'env'
                               : null
                             }
