@@ -43,7 +43,10 @@ const RUNTIMES = [
     id: 'node',
     label: 'Node.js 22',
     image: 'node:22',
-    detect: (names) => names.includes('package.json'),
+    detect: (names) => {
+      const base = names.map((n) => n.split('/').pop())
+      return base.includes('package.json') || base.includes('server.js')
+    },
     defaultCmd: (files) => {
       const pkg = files.find((f) => f.name === 'package.json')
       if (pkg) {
