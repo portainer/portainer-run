@@ -1094,7 +1094,7 @@ export function VibeDeploy() {
                       background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 5,
                       padding: '7px 10px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>{v.key}</div>
-                    <div class="field">
+                    <div className="field">
                       <input
                         type={SECRET_PATTERN.test(v.key) ? 'password' : 'text'}
                         value={v.value}
