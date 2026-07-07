@@ -1078,12 +1078,14 @@ export function VibeDeploy() {
                       background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 5,
                       padding: '7px 10px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>{v.key}</div>
-                    <input
-                      type={SECRET_PATTERN.test(v.key) ? 'password' : 'text'}
-                      value={v.value}
-                      placeholder={SECRET_PATTERN.test(v.key) ? '••••••••' : 'value'}
-                      onChange={(e) => setEnvVars((prev) => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x))}
-                    />
+                    <div class="field">
+                      <input
+                        type={SECRET_PATTERN.test(v.key) ? 'password' : 'text'}
+                        value={v.value}
+                        placeholder={SECRET_PATTERN.test(v.key) ? '••••••••' : 'value'}
+                        onChange={(e) => setEnvVars((prev) => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x))}
+                      />
+                    </div>
                     <button type="button" className="btn btn-ghost btn-xs"
                       onClick={() => setEnvVars((prev) => prev.filter((_, j) => j !== i))}
                       style={{ padding: '5px 8px' }}>✕</button>
