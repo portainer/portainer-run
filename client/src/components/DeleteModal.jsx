@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useAppStore } from '../store/useAppStore.js'
 import { kubeFetch } from '../lib/api.js'
 import { refreshCache } from '../services/refreshDeployments.js'
-import { gitOpsDeleteManifest } from '../lib/gitTargets.js'
+import { deleteAppManifest } from '../lib/gitTargets.js'
 import { ROUTES } from '../lib/routes.js'
 
 export function DeleteModal() {
@@ -63,9 +63,9 @@ export function DeleteModal() {
       //    (parallel commits with the same parent SHA cause non-fast-forward errors)
       if (isGitOps && deleteManifest) {
         try {
-          await gitOpsDeleteManifest({ gitTargetId, branch: gitBranch, gitPath, appName: name })
+          await deleteAppManifest({ gitTargetId, branch: gitBranch, gitPath, appName: name })
           if (isVibeDeploy && vibeSourcePath) {
-            await gitOpsDeleteManifest({ gitTargetId, branch: gitBranch, gitPath: vibeSourcePath, appName: name })
+            await deleteAppManifest({ gitTargetId, branch: gitBranch, gitPath: vibeSourcePath, appName: name })
           }
         } catch (e) {
           useAppStore.getState().pushToast(

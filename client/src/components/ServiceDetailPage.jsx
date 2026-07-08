@@ -5,6 +5,7 @@ import ResourceDetailTabs from '../design-system/react/ResourceDetailTabs.jsx'
 import ActionBar from '../design-system/react/ActionBar.jsx'
 import { icons } from '../design-system/icons.js'
 import { useAppStore, visibleEnvironments } from '../store/useAppStore.js'
+import { useEnvStatusOnDeployments, getExtraForApp } from '../hooks/useEnvStatus.js'
 import { serviceDetailPath } from '../lib/routes.js'
 import { kubeFetch } from '../lib/api.js'
 import { age } from '../lib/utils.js'
@@ -28,19 +29,26 @@ import ServiceDetailRevisionsTab from './serviceDetail/ServiceDetailRevisionsTab
 import ServiceDetailEditTab from './serviceDetail/ServiceDetailEditTab.jsx'
 
 /** Match old-implementation: Overview → Containers → Metrics → Logs → Revisions → Edit */
-const TABS = [
+const SIMPLE_TABS = [
   { id: 'overview', label: 'Overview', icon: icons.tabOverview },
-  { id: 'containers', label: 'Containers', icon: icons.tabItems },
   { id: 'metrics', label: 'Metrics', icon: icons.monitor },
   { id: 'logs', label: 'Logs', icon: icons.logs },
-  { id: 'revisions', label: 'Revisions', icon: icons.clock },
   { id: 'edit', label: 'Edit', icon: icons.edit },
 ]
+
+const TECH_TABS = [
+  { id: 'app-internals', label: 'App internals', icon: icons.tabItems },
+  { id: 'revisions', label: 'Revisions', icon: icons.clock },
+]
+
+const ALL_TABS = [...SIMPLE_TABS, ...TECH_TABS]
+const TECH_TAB_IDS = new Set(TECH_TABS.map((t) => t.id))
 
 const LEGACY_TAB_REDIRECT = {
   details: 'overview',
   events: 'overview',
   yaml: 'overview',
+  containers: 'app-internals',
 }
 
 function leafTabIds(tabs) {
@@ -55,7 +63,7 @@ function leafTabIds(tabs) {
   return ids
 }
 
-const VALID_TABS = new Set(leafTabIds(TABS))
+const VALID_TABS = new Set(leafTabIds(ALL_TABS))
 
 function Kv({ pairs }) {
   return (
@@ -70,21 +78,6 @@ function Kv({ pairs }) {
       ))}
     </div>
   )
-}
-
-function formatEnvVar(e) {
-  if (e.value != null) return `${e.name}=${e.value}`
-  if (e.valueFrom?.fieldRef) return `${e.name}=(fieldRef)`
-  if (e.valueFrom?.resourceFieldRef) return `${e.name}=(resourceFieldRef)`
-  if (e.valueFrom?.configMapKeyRef) {
-    const r = e.valueFrom.configMapKeyRef
-    return `${e.name}=configmap(${r.name}/${r.key})`
-  }
-  if (e.valueFrom?.secretKeyRef) {
-    const r = e.valueFrom.secretKeyRef
-    return `${e.name}=secret(${r.name}/${r.key})`
-  }
-  return `${e.name}=*`
 }
 
 function OverviewExposure({ token, envId, namespace, name }) {
@@ -173,6 +166,142 @@ function headerStatusClass(status, statusColor) {
   return 'status-stopped'
 }
 
+// Keys whose values are treated as sensitive and masked by default.
+const SECRET_PATTERN = /SECRET|KEY|TOKEN|PASSWORD|PASS|AUTH|CREDENTIAL/i
+
+// Plain-language, business-builder friendly status line for the simple Overview.
+function friendlyStatus(d, reason) {
+  const { status, statusLabel } = headerStatusFromDeployment(d)
+  const base =
+    status === 'running' ? 'Your app is live and running.'
+      : status === 'stopped' ? 'Your app is switched off.'
+      : status === 'pending' ? 'Your app is starting up.'
+      : status === 'partial' ? 'Your app is running, but not fully healthy.'
+      : status === 'error' ? "Your app isn't running right now."
+      : statusLabel
+  return { status, base, reason: reason || '' }
+}
+
+// Display value for an env entry, resolving valueFrom references to a note.
+function envDisplayValue(e) {
+  if (e.value != null) return e.value
+  if (e.valueFrom?.secretKeyRef) {
+    const r = e.valueFrom.secretKeyRef
+    return `secret(${r.name}/${r.key})`
+  }
+  if (e.valueFrom?.configMapKeyRef) {
+    const r = e.valueFrom.configMapKeyRef
+    return `configmap(${r.name}/${r.key})`
+  }
+  if (e.valueFrom?.fieldRef) return '(fieldRef)'
+  if (e.valueFrom?.resourceFieldRef) return '(resourceFieldRef)'
+  return '*'
+}
+
+// A single env value with click-to-reveal masking for secret-pattern keys.
+function EnvValue({ envKey, value }) {
+  const [revealed, setRevealed] = useState(false)
+  const isSecret = SECRET_PATTERN.test(envKey)
+  if (!isSecret) {
+    return <span style={{ fontFamily: 'var(--mono)', fontSize: 12, wordBreak: 'break-all' }}>{value}</span>
+  }
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ fontFamily: 'var(--mono)', fontSize: 12, wordBreak: 'break-all' }}>
+        {revealed ? value : '••••••••'}
+      </span>
+      <button
+        type="button"
+        className="btn btn-ghost btn-xs"
+        style={{ padding: '2px 8px' }}
+        onClick={() => setRevealed((r) => !r)}
+      >
+        {revealed ? 'Hide' : 'Reveal'}
+      </button>
+    </span>
+  )
+}
+
+/**
+ * Simple, business-builder Overview. Reads everything from the live cluster
+ * objects already in hand (deployment + env-status cache), so it has no
+ * dependency on the git target or the local database.
+ */
+function SimpleOverview({ d, extra }) {
+  const { status, base, reason } = friendlyStatus(d, extra?.reason)
+  const container = d.spec?.template?.spec?.containers?.[0]
+  const envs = (container?.env || [])
+    .filter((e) => e && typeof e.name === 'string' && e.value != null)
+    .map((e) => ({ key: e.name, value: String(e.value) }))
+  const dotColor =
+    status === 'running' ? 'var(--green)'
+      : status === 'error' ? 'var(--red)'
+      : status === 'stopped' ? 'var(--text-dim)'
+      : 'var(--amber)'
+
+  const accessUrl = extra?.accessUrl || null
+  const accessLabel = extra?.accessLabel || null
+
+  return (
+    <>
+      <div className="dp-section">
+        <div className="dp-section-title">Status</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
+          <span style={{ fontSize: 14 }}>{base}</span>
+        </div>
+        {reason && (
+          <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-dim)' }}>{reason}</div>
+        )}
+      </div>
+
+      <div className="dp-section">
+        <div className="dp-section-title">Address</div>
+        {accessUrl ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+            <a
+              className="btn btn-primary"
+              href={accessUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open your app
+            </a>
+            <a
+              href={accessUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-dim)', wordBreak: 'break-all' }}
+            >
+              {accessUrl}
+            </a>
+          </div>
+        ) : (
+          <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>
+            {accessLabel || 'Not exposed publicly.'}
+          </div>
+        )}
+      </div>
+
+      <div className="dp-section">
+        <div className="dp-section-title">Environment variables</div>
+        {envs.length === 0 ? (
+          <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>No environment variables set.</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 220px) 1fr', gap: '8px 16px', alignItems: 'center' }}>
+            {envs.map((e, i) => (
+              <div key={`${e.key}-${i}`} style={{ display: 'contents' }}>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-dim)', wordBreak: 'break-all' }}>{e.key}</div>
+                <div><EnvValue envKey={e.key} value={e.value} /></div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
 export function ServiceDetailIndexRedirect() {
   const { envId, namespace, name } = useParams()
   return (
@@ -215,6 +344,22 @@ export function ServiceDetailPage() {
   const tab = tabParam || 'overview'
   const patchEnvPermissions = useAppStore((s) => s.patchEnvPermissions)
   const perms = (envId && namespace) ? (envPermissions[`${envId}:${namespace}`] ?? null) : null
+
+  // Live status + access URL for this app, reusing the same env-status feed as
+  // the Applications page. Reads from live cluster objects, not git or the DB.
+  const envStatusClientCache = useAppStore((s) => s.envStatusClientCache)
+  const statusDeps = useMemo(
+    () => (d ? [{ _envId: String(envId), metadata: { namespace, resourceVersion: d.metadata?.resourceVersion } }] : []),
+    [d, envId, namespace],
+  )
+  useEnvStatusOnDeployments(statusDeps, token)
+  const extra = getExtraForApp(envStatusClientCache, String(envId), name)
+
+  // Technical detail reveal. Ephemeral: resets on every visit, not persisted.
+  const [technical, setTechnical] = useState(() => TECH_TAB_IDS.has(tab))
+  useEffect(() => {
+    if (TECH_TAB_IDS.has(tab)) setTechnical(true)
+  }, [tab])
 
   // Fire permission check on mount using known env+namespace
   useEffect(() => {
@@ -526,6 +671,20 @@ export function ServiceDetailPage() {
     [navigate, envId, namespace, name],
   )
 
+  const toggleTechnical = useCallback(() => {
+    setTechnical((prev) => {
+      const next = !prev
+      // If hiding while on a technical tab, return to the simple Overview so the
+      // tab bar and body stay in sync.
+      if (!next && TECH_TAB_IDS.has(tab)) {
+        navigate(serviceDetailPath(envId, namespace, name, 'overview'))
+      }
+      return next
+    })
+  }, [tab, navigate, envId, namespace, name])
+
+  const visibleTabs = technical ? ALL_TABS : SIMPLE_TABS
+
   const { status, statusLabel, statusColor } = useMemo(() => headerStatusFromDeployment(d), [d])
 
   const cCount = d?.spec?.template?.spec?.containers?.length || 0
@@ -655,13 +814,15 @@ export function ServiceDetailPage() {
               right={
                 actionBarBusy ? null : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <button
-                      type="button"
-                      className="action-bar-btn action-bar-btn-migrate"
-                      onClick={openMigrateDialog}
-                    >
-                      <span className="action-bar-btn-label">Migrate</span>
-                    </button>
+                    {technical && (
+                      <button
+                        type="button"
+                        className="action-bar-btn action-bar-btn-migrate"
+                        onClick={openMigrateDialog}
+                      >
+                        <span className="action-bar-btn-label">Migrate</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="action-bar-btn action-bar-btn-danger"
@@ -696,10 +857,20 @@ export function ServiceDetailPage() {
 
         <div className="service-detail-tabs-panel">
           <ResourceDetailTabs
-            tabs={TABS}
+            tabs={visibleTabs}
             activeTab={tab}
             onTabChange={onTabChange}
             tabBasePath={basePath}
+            actions={
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={toggleTechnical}
+                aria-expanded={technical}
+              >
+                {technical ? 'Hide technical details' : 'Show technical details'}
+              </button>
+            }
           />
         </div>
 
@@ -711,6 +882,12 @@ export function ServiceDetailPage() {
           ) : null}
 
           {tab === 'overview' && d && (
+            <ServiceTabPanel>
+              <SimpleOverview d={d} extra={extra} />
+            </ServiceTabPanel>
+          )}
+
+          {tab === 'app-internals' && d && (
             <ServiceTabPanel>
               <div className="dp-section">
                 <div className="dp-section-title">Status</div>
@@ -760,6 +937,16 @@ export function ServiceDetailPage() {
                 })()}
               </div>
               <div className="dp-section">
+                <div className="dp-section-title">Environment variables</div>
+                {(() => {
+                  const env = d.spec?.template?.spec?.containers?.[0]?.env || []
+                  const pairs = env.length
+                    ? env.map((e) => [e.name, envDisplayValue(e)])
+                    : [['(none)', '—']]
+                  return <Kv pairs={pairs} />
+                })()}
+              </div>
+              <div className="dp-section">
                 <div className="dp-section-title">Exposure</div>
                 <OverviewExposure
                   token={token}
@@ -778,71 +965,63 @@ export function ServiceDetailPage() {
                   }
                 />
               </div>
-            </ServiceTabPanel>
-          )}
-
-          {tab === 'containers' && d && (
-            <ServiceTabPanel>
-              {(d.spec?.template?.spec?.containers || []).length === 0 ? (
-                <p style={{ color: 'var(--text-dim)' }}>No containers.</p>
-              ) : (
-                (d.spec?.template?.spec?.containers || []).map((c, i) => {
-                  const ports =
-                    (c.ports || [])
-                      .map((p) => `${p.containerPort}/${p.protocol || 'TCP'}`)
-                      .join(', ') || '—'
-                  const res = c.resources || {}
-                  const envVars =
-                    (c.env || []).map((e) => formatEnvVar(e)).join('\n') || '—'
-                  const mounts = (c.volumeMounts || [])
-                    .map((v) => v.mountPath + ' → ' + v.name)
-                    .join(', ')
-                  return (
-                    <div key={c.name || i} className="container-card" style={{ marginBottom: 12 }}>
-                      <div className="container-card-head">
-                        <span className="cname">{c.name}</span>
-                        {i === 0 ? (
-                          <span className="cprimary">primary</span>
-                        ) : (
-                          <span
-                            style={{
-                              fontFamily: 'var(--mono)',
-                              fontSize: 10,
-                              color: 'var(--text-dim)',
-                            }}
-                          >
-                            sidecar
-                          </span>
-                        )}
-                      </div>
-                      <div className="container-card-body">
-                        <div className="kv" style={{ rowGap: 8 }}>
-                          <div className="kv-key">Image</div>
-                          <div className="kv-val">{c.image}</div>
-                          <div className="kv-key">Ports</div>
-                          <div className="kv-val">{ports}</div>
-                          <div className="kv-key">Pull policy</div>
-                          <div className="kv-val">{c.imagePullPolicy || 'IfNotPresent'}</div>
-                          <div className="kv-key">CPU request/limit</div>
-                          <div className="kv-val">
-                            {res.requests?.cpu || '—'} / {res.limits?.cpu || '—'}
+              <div className="dp-section">
+                <div className="dp-section-title">Containers</div>
+                {(d.spec?.template?.spec?.containers || []).length === 0 ? (
+                  <p style={{ color: 'var(--text-dim)' }}>No containers.</p>
+                ) : (
+                  (d.spec?.template?.spec?.containers || []).map((c, i) => {
+                    const ports =
+                      (c.ports || [])
+                        .map((p) => `${p.containerPort}/${p.protocol || 'TCP'}`)
+                        .join(', ') || '—'
+                    const res = c.resources || {}
+                    const mounts = (c.volumeMounts || [])
+                      .map((v) => v.mountPath + ' → ' + v.name)
+                      .join(', ')
+                    return (
+                      <div key={c.name || i} className="container-card" style={{ marginBottom: 12 }}>
+                        <div className="container-card-head">
+                          <span className="cname">{c.name}</span>
+                          {i === 0 ? (
+                            <span className="cprimary">primary</span>
+                          ) : (
+                            <span
+                              style={{
+                                fontFamily: 'var(--mono)',
+                                fontSize: 10,
+                                color: 'var(--text-dim)',
+                              }}
+                            >
+                              sidecar
+                            </span>
+                          )}
+                        </div>
+                        <div className="container-card-body">
+                          <div className="kv" style={{ rowGap: 8 }}>
+                            <div className="kv-key">Image</div>
+                            <div className="kv-val">{c.image}</div>
+                            <div className="kv-key">Ports</div>
+                            <div className="kv-val">{ports}</div>
+                            <div className="kv-key">Pull policy</div>
+                            <div className="kv-val">{c.imagePullPolicy || 'IfNotPresent'}</div>
+                            <div className="kv-key">CPU request/limit</div>
+                            <div className="kv-val">
+                              {res.requests?.cpu || '—'} / {res.limits?.cpu || '—'}
+                            </div>
+                            <div className="kv-key">Mem request/limit</div>
+                            <div className="kv-val">
+                              {res.requests?.memory || '—'} / {res.limits?.memory || '—'}
+                            </div>
+                            <div className="kv-key">Volume mounts</div>
+                            <div className="kv-val">{mounts || '—'}</div>
                           </div>
-                          <div className="kv-key">Mem request/limit</div>
-                          <div className="kv-val">
-                            {res.requests?.memory || '—'} / {res.limits?.memory || '—'}
-                          </div>
-                          <div className="kv-key">Env vars</div>
-                          <div className="kv-val" style={{ whiteSpace: 'pre-wrap' }}>
-                            {envVars}
-                          </div>
-                          <div className="kv-key">Volume mounts</div>
-                          <div className="kv-val">{mounts || '—'}</div>
                         </div>
                       </div>
-                    </div>
-                  )
-                })
-              )}
+                    )
+                  })
+                )}
+              </div>
             </ServiceTabPanel>
           )}
 

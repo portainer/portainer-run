@@ -1,13 +1,8 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAppStore } from './store/useAppStore.js'
 import { MainLayout } from './components/MainLayout.jsx'
-import { DashboardPage } from './components/DashboardPage.jsx'
 import { ServicesPage } from './components/ServicesPage.jsx'
-import { DeployPage } from './components/DeployPage.jsx'
-import { ManifestBuilderPage } from './components/deployManifest/ManifestBuilderPage.jsx'
 import { ReadinessPage } from './components/ReadinessPage.jsx'
-import { CataloguePage } from './components/CataloguePage.jsx'
-import { SecretsPage } from './components/SecretsPage.jsx'
 import { GitTargetsPage } from './components/GitTargetsPage.jsx'
 import {
   ServiceDetailIndexRedirect,
@@ -39,13 +34,6 @@ function AuthedLayout() {
   return <MainLayout />
 }
 
-/** Redirects to dashboard if a feature flag is disabled. */
-function FeatureGate({ flag, children }) {
-  const features = useAppStore((s) => s.features)
-  if (features[flag] === false) return <Navigate to={ROUTES.services} replace />
-  return children
-}
-
 export function AppRoutes() {
   return (
     <Routes>
@@ -62,11 +50,7 @@ export function AppRoutes() {
           element={<ServiceDetailPage />}
         />
         <Route path="deploy" element={<Navigate to={ROUTES.deploy} replace />} />
-        <Route path="deploy/simple" element={<FeatureGate flag="simpleDeploy"><DeployPage /></FeatureGate>} />
-        <Route path="deploy/manifest" element={<FeatureGate flag="manifestBuilder"><ManifestBuilderPage /></FeatureGate>} />
-        <Route path="deploy/vibe" element={<FeatureGate flag="vibeDeploy"><VibeDeploy /></FeatureGate>} />
-        <Route path="catalogue" element={<FeatureGate flag="catalogue"><CataloguePage /></FeatureGate>} />
-        <Route path="secrets" element={<FeatureGate flag="secrets"><SecretsPage /></FeatureGate>} />
+        <Route path="deploy/vibe" element={<VibeDeploy />} />
         <Route path="readiness" element={<ReadinessPage />} />
         <Route path="git-targets" element={<GitTargetsPage />} />
         <Route path="*" element={<Navigate to={ROUTES.services} replace />} />

@@ -56,8 +56,11 @@ import { serverFetch } from '../../lib/api.js'
 import { restartDeployment } from '../../lib/restartDeployment.js'
 import { refreshCache } from '../../services/refreshDeployments.js'
 
+// Mirrors the deploy form: values whose key looks sensitive are masked.
+const SECRET_PATTERN = /SECRET|KEY|TOKEN|PASSWORD|PASS|AUTH|CREDENTIAL/i
+
 /**
- * Edit tab for Vibe Deploy apps.
+ * Edit tab for deployed apps.
  * Lets the user upload a new set of files from Claude, commits them to the
  * existing git source path, then triggers a rollout restart so the init
  * container re-runs and syncs the new files into the PV.
@@ -89,6 +92,12 @@ export default function VibeEditTab({ d, envId, namespace, name, gitOpsInfo, onS
   const [savingExposure, setSavingExposure] = useState(false)
   const [exposureError, setExposureError] = useState('')
 
+  // Environment variables — populated from the committed manifest on mount
+  const [envVars, setEnvVars] = useState([]) // [{ key, value }]
+  const [envLoaded, setEnvLoaded] = useState(false)
+  const [savingEnv, setSavingEnv] = useState(false)
+  const [envError, setEnvError] = useState('')
+
   const gitPath = gitOpsInfo?.gitPath || ''
 
   useEffect(() => {
@@ -104,6 +113,18 @@ export default function VibeEditTab({ d, envId, namespace, name, gitOpsInfo, onS
         if (data.ingClass) setIngClass(data.ingClass)
       })
       .catch(() => {})
+  }, [gitOpsInfo?.gitTargetId, gitOpsInfo?.gitBranch, gitPath])
+
+  // Load current environment variables from the committed manifest
+  useEffect(() => {
+    if (!gitOpsInfo?.gitTargetId || !gitOpsInfo?.gitBranch || !gitPath) return
+    serverFetch(`/api/vibe/manifest-env?gitTargetId=${gitOpsInfo.gitTargetId}&branch=${encodeURIComponent(gitOpsInfo.gitBranch)}&gitPath=${encodeURIComponent(gitPath)}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data && Array.isArray(data.env)) setEnvVars(data.env)
+        setEnvLoaded(true)
+      })
+      .catch(() => setEnvLoaded(true))
   }, [gitOpsInfo?.gitTargetId, gitOpsInfo?.gitBranch, gitPath])
 
   async function handleSaveExposure() {
@@ -136,6 +157,35 @@ export default function VibeEditTab({ d, envId, namespace, name, gitOpsInfo, onS
       setExposureError(e?.message || 'Update failed')
     } finally {
       setSavingExposure(false)
+    }
+  }
+
+  async function handleSaveEnv() {
+    if (!gitOpsInfo?.gitTargetId || !gitPath) {
+      setEnvError('Missing git target information')
+      return
+    }
+    setSavingEnv(true)
+    setEnvError('')
+    try {
+      const res = await serverFetch('/api/vibe/update-env', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gitTargetId: gitOpsInfo.gitTargetId,
+          branch: gitOpsInfo.gitBranch,
+          gitPath,
+          envVars: envVars.filter((v) => v.key && v.key.trim()),
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
+      pushToast('Settings updated — Portainer will reconcile shortly', 'ok')
+      setEnvError('')
+    } catch (e) {
+      setEnvError(e?.message || 'Update failed')
+    } finally {
+      setSavingEnv(false)
     }
   }
 
@@ -210,7 +260,7 @@ export default function VibeEditTab({ d, envId, namespace, name, gitOpsInfo, onS
   async function handleUpdate() {
     if (!files.length) { setError('Add at least one file to update'); return }
     if (!gitOpsInfo?.gitTargetId || !gitBranch || !sourcePath) {
-      setError('Missing git target information — this deployment may not have been created via Vibe Deploy')
+      setError('Missing git target information — this deployment may not have been created by Portainer-Run')
       return
     }
 
@@ -313,6 +363,54 @@ export default function VibeEditTab({ d, envId, namespace, name, gitOpsInfo, onS
             <button type="button" className="btn btn-primary btn-sm"
               onClick={() => void handleSaveExposure()} disabled={savingExposure}>
               {savingExposure ? 'Saving…' : 'Save Exposure'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* App settings (environment variables) */}
+      <div className="form-section" style={{ marginBottom: 16 }}>
+        <div className="form-section-head">App settings</div>
+        <div className="form-section-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="hint" style={{ marginBottom: 4 }}>
+            Add or adjust the values your app runs with. Saving applies them securely and restarts the app.
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {envVars.map((v, i) => (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '160px 1fr auto', gap: 8, alignItems: 'center' }}>
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <input
+                    type="text"
+                    value={v.key}
+                    placeholder="NAME"
+                    style={{ fontFamily: 'var(--mono)', fontSize: 12 }}
+                    onChange={(e) => setEnvVars((prev) => prev.map((x, j) => j === i ? { ...x, key: e.target.value } : x))}
+                  />
+                </div>
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <input
+                    type={SECRET_PATTERN.test(v.key) ? 'password' : 'text'}
+                    value={v.value}
+                    placeholder={SECRET_PATTERN.test(v.key) ? '••••••••' : 'value'}
+                    onChange={(e) => setEnvVars((prev) => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x))}
+                  />
+                </div>
+                <button type="button" className="btn btn-ghost btn-xs"
+                  onClick={() => setEnvVars((prev) => prev.filter((_, j) => j !== i))}
+                  style={{ padding: '5px 8px' }}>✕</button>
+              </div>
+            ))}
+          </div>
+          <button type="button" className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }}
+            onClick={() => setEnvVars((prev) => [...prev, { key: '', value: '' }])}>
+            + Add variable
+          </button>
+          <div className="hint">Values marked with •••• are treated as sensitive and hidden from view.</div>
+          {envError && <div style={{ color: 'var(--red)', fontSize: 12, fontFamily: 'var(--mono)' }}>{envError}</div>}
+          <div>
+            <button type="button" className="btn btn-primary btn-sm"
+              onClick={() => void handleSaveEnv()} disabled={savingEnv || !envLoaded}>
+              {savingEnv ? 'Saving…' : 'Save Settings'}
             </button>
           </div>
         </div>

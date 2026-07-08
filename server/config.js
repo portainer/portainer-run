@@ -34,31 +34,6 @@ export const CERT_DIR = process.env.SSL_CERT_DIR || projectRoot
 export const CACHE_DIR = process.env.CACHE_DIR || path.join(projectRoot, 'data')
 export const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || ''
 
-/** Default catalogue: same sample JSON as the repo, served from Git (raw). */
-const DEFAULT_TEMPLATE_URL =
-  'https://raw.githubusercontent.com/portainer/portainer-run/develop/templates.json'
-
-function resolveTemplateUrl() {
-  const raw = (process.env.TEMPLATE_URL || '').trim()
-  if (!raw) return DEFAULT_TEMPLATE_URL
-  try {
-    const u = new URL(raw)
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') {
-      console.warn(
-        `\n⚠️  TEMPLATE_URL must start with http:// or https:// (not "${raw.slice(0, 60)}${raw.length > 60 ? '…' : ''}"). Using default Git catalogue URL.\n`,
-      )
-      return DEFAULT_TEMPLATE_URL
-    }
-    return raw
-  } catch {
-    console.warn(
-      `\n⚠️  Invalid TEMPLATE_URL "${raw.slice(0, 80)}${raw.length > 80 ? '…' : ''}". It must be a full URL to a JSON catalogue (not the app route /templates). Using default Git catalogue URL.\n`,
-    )
-    return DEFAULT_TEMPLATE_URL
-  }
-}
-
-export const TEMPLATE_URL = resolveTemplateUrl()
 export const BASE_DOMAIN  = process.env.BASE_DOMAIN  || ''
 export const GATEWAY_URL  = (process.env.GATEWAY_URL || '').replace(/\/$/, '')
 
@@ -75,20 +50,6 @@ function resolveConfigNamespace() {
 export const CONFIG_NAMESPACE = resolveConfigNamespace()
 export const CACHE_FILE = path.join(CACHE_DIR, 'cache.json')
 
-// ---------------------------------------------------------------------------
-// Feature flags — default all on; set to 'false' to disable
-// ---------------------------------------------------------------------------
-function flag(name, def = true) {
-  const v = process.env[name]
-  if (!v) return def
-  return v.toLowerCase() !== 'false' && v !== '0'
-}
-
-export const FEATURE_VIBE_DEPLOY      = flag('FEATURE_VIBE_DEPLOY')
-export const FEATURE_SIMPLE_DEPLOY    = flag('FEATURE_SIMPLE_DEPLOY')
-export const FEATURE_MANIFEST_BUILDER = flag('FEATURE_MANIFEST_BUILDER')
-export const FEATURE_CATALOGUE        = flag('FEATURE_CATALOGUE')
-export const FEATURE_SECRETS          = flag('FEATURE_SECRETS')
 export const DIST_DIR = path.join(projectRoot, 'client', 'dist')
 export const LEGACY_HTML = path.join(
   projectRoot,

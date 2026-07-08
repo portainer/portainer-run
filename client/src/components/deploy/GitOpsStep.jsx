@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { listGitTargets, listBranches, gitOpsValidate } from '../../lib/gitTargets.js'
+import { listGitTargets, listBranches } from '../../lib/gitTargets.js'
 import { ROUTES } from '../../lib/routes.js'
 
 const POLL_INTERVALS = [
@@ -13,19 +13,17 @@ const POLL_INTERVALS = [
 
 /**
  * GitOps step — shown after the user fills the deploy form.
- * Lets the user pick a saved git target, branch, poll interval, and optionally
- * dry-run validate manifests before committing.
+ * Lets the user pick a saved git target, branch, and poll interval before committing.
  *
  * @param {object} props
  * @param {string} props.appName
  * @param {string} props.ns
  * @param {string} props.envId
- * @param {object} props.deployParams   — full staged deploy params for dry-run
  * @param {(selection: { gitTargetId, branch, pathPrefix, pollInterval }) => void} props.onConfirm
  * @param {() => void} props.onBack
  * @param {boolean} props.deploying
  */
-export function GitOpsStep({ appName, ns, envId, deployParams, manifestBuilderParams, onConfirm, onBack, deploying, sectionTitle }) {
+export function GitOpsStep({ appName, ns, envId, onConfirm, onBack, deploying, sectionTitle }) {
   const [targets, setTargets] = useState([])
   const [loadingTargets, setLoadingTargets] = useState(true)
   const [selectedTargetId, setSelectedTargetId] = useState('')
@@ -36,10 +34,6 @@ export function GitOpsStep({ appName, ns, envId, deployParams, manifestBuilderPa
   const [useCustomBranch, setUseCustomBranch] = useState(false)
   const [pollInterval, setPollInterval] = useState('5m')
   const [error, setError] = useState('')
-
-  // Dry-run state
-  const [validating, setValidating] = useState(false)
-  const [validateResults, setValidateResults] = useState(null)
 
   useEffect(() => {
     void (async () => {
@@ -78,29 +72,12 @@ export function GitOpsStep({ appName, ns, envId, deployParams, manifestBuilderPa
   const pathPrefix = selectedTarget?.payload?.pathPrefix || ''
   const resolvedPath = [pathPrefix, ns, `${appName}.yaml`].filter(Boolean).join('/')
 
-  async function handleValidate() {
-    if ((!deployParams && !manifestBuilderParams) || !envId) { setError('Deploy params not available for validation'); return }
-    setValidating(true)
-    setValidateResults(null)
-    setError('')
-    try {
-      const r = await gitOpsValidate({ deployParams, manifestBuilderParams, envId })
-      setValidateResults(r.results || [])
-    } catch (e) {
-      setError('Validation failed: ' + (e.message || 'Unknown error'))
-    } finally {
-      setValidating(false)
-    }
-  }
-
   function handleConfirm() {
     if (!selectedTargetId) { setError('Select a Git target'); return }
     if (!resolvedBranch) { setError('Select or enter a branch'); return }
     setError('')
     onConfirm({ gitTargetId: selectedTargetId, branch: resolvedBranch, pathPrefix, pollInterval })
   }
-
-  const validateAllPassed = validateResults && validateResults.every((r) => r.status === 'pass' || r.status === 'warn')
 
   return (
     <div className="form-section">
@@ -206,79 +183,6 @@ export function GitOpsStep({ appName, ns, envId, deployParams, manifestBuilderPa
               </select>
               <div className="hint">How often Portainer polls git for changes.</div>
             </div>
-          </div>
-        )}
-
-        {/* Deployment summary */}
-        {manifestBuilderParams && (
-          <div style={{ background: 'var(--surface2, var(--bg2))', border: '1px solid var(--border)', borderRadius: 6, padding: '12px 16px', marginBottom: 4 }}>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>Deployment summary</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: '4px 12px', fontSize: 12, fontFamily: 'var(--mono)' }}>
-              <span style={{ color: 'var(--text-dim)' }}>Application</span>
-              <span style={{ color: 'var(--text-bright)' }}>{manifestBuilderParams.appName}</span>
-              <span style={{ color: 'var(--text-dim)' }}>Namespace</span>
-              <span style={{ color: 'var(--text-bright)' }}>{manifestBuilderParams.namespace || ns}</span>
-              <span style={{ color: 'var(--text-dim)' }}>Type</span>
-              <span style={{ color: 'var(--text-bright)' }}>{manifestBuilderParams.deploymentType || 'Deployment'}</span>
-              <span style={{ color: 'var(--text-dim)' }}>Image</span>
-              <span style={{ color: 'var(--text-bright)' }}>{manifestBuilderParams.image}</span>
-              {manifestBuilderParams.services?.length > 0 && <>
-                <span style={{ color: 'var(--text-dim)' }}>Services</span>
-                <span style={{ color: 'var(--text-bright)' }}>{manifestBuilderParams.services.map((s) => `${s.type}:${s.containerPort}`).join(', ')}</span>
-              </>}
-              {manifestBuilderParams.volumes?.length > 0 && <>
-                <span style={{ color: 'var(--text-dim)' }}>Storage</span>
-                <span style={{ color: 'var(--text-bright)' }}>{manifestBuilderParams.volumes.length} volume(s)</span>
-              </>}
-              {manifestBuilderParams.autoScalingEnabled && <>
-                <span style={{ color: 'var(--text-dim)' }}>Auto-scaling</span>
-                <span style={{ color: 'var(--text-bright)' }}>{manifestBuilderParams.minInstances}–{manifestBuilderParams.maxInstances} instances</span>
-              </>}
-            </div>
-          </div>
-        )}
-
-        {/* Dry-run validation */}
-        {selectedTargetId && (deployParams || manifestBuilderParams) && (
-          <div>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => void handleValidate()}
-              disabled={validating || deploying}
-              style={{ marginBottom: validateResults ? 10 : 0 }}
-            >
-              {validating ? 'Validating…' : 'Dry-run validate'}
-            </button>
-            <div className="hint" style={{ marginTop: 4 }}>
-              Checks manifests against the Kubernetes API without committing anything.
-            </div>
-
-            {validateResults && (
-              <div style={{
-                marginTop: 8, background: 'var(--surface2, var(--bg2))',
-                border: `1px solid ${validateAllPassed ? 'var(--green)' : 'var(--red)'}`,
-                borderRadius: 6, padding: '10px 14px',
-                display: 'flex', flexDirection: 'column', gap: 6,
-              }}>
-                {validateResults.map((r, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 12 }}>
-                    <span style={{
-                      flexShrink: 0, fontFamily: 'var(--mono)',
-                      color: r.status === 'pass' ? 'var(--green)' : r.status === 'warn' ? 'var(--amber)' : 'var(--red)',
-                    }}>
-                      {r.status === 'pass' ? '✓' : r.status === 'warn' ? '!' : '✕'}
-                    </span>
-                    <span style={{ fontFamily: 'var(--mono)', color: 'var(--text-dim)', flexShrink: 0 }}>
-                      {r.kind}/{r.name}
-                    </span>
-                    <span style={{ color: r.status === 'pass' ? 'var(--text-dim)' : r.status === 'warn' ? 'var(--amber)' : 'var(--red)' }}>
-                      {r.message}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         )}
 
