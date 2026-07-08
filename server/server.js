@@ -9,7 +9,6 @@ import {
   PORT,
   PORTAINER_URL,
   SSL_CERT_PATH,
-  TEMPLATE_URL,
   BASE_DOMAIN,
 } from './config.js'
 import { handleRequest } from './handler.js'
@@ -31,7 +30,6 @@ httpsServer.listen(PORT, () => {
     `    TLS:       ${SSL_CERT_PATH ? 'provided certs' : 'self-signed (portainer-run.crt)'}`
   )
   console.log(`    Cache:     ${CACHE_FILE}`)
-  console.log(`    Templates: ${TEMPLATE_URL}`)
   console.log(
     `    Domain:    ${BASE_DOMAIN || '(not set — NodePort fallback)'}`
   )

@@ -7,11 +7,11 @@
  * Transport:  POST /mcp
  * Auth:       Authorization: Bearer <portainer-token>  OR  X-API-Key: <token>
  *
- * Tools (feature-flag gated):
+ * Tools:
  *   list_environments   — Kubernetes environments available in Portainer
  *   list_namespaces     — Namespaces for a given environment
  *   list_git_targets    — Git targets accessible to the caller
- *   deploy_vibe_app     — Deploy app source files via Vibe Deploy pipeline
+ *   deploy_app          — Deploy app source files via the Deploy pipeline
  *   get_app_status      — Running status of a deployed app
  */
 
@@ -21,9 +21,6 @@ import { readBody } from '../lib/http.js'
 import { CORS } from '../lib/cors.js'
 import { CACHE_FILE } from '../config.js'
 import {
-  FEATURE_VIBE_DEPLOY,
-  FEATURE_SIMPLE_DEPLOY,
-  FEATURE_MANIFEST_BUILDER,
   BASE_DOMAIN,
   CONFIG_NAMESPACE,
   GATEWAY_URL,
@@ -43,21 +40,21 @@ const SERVER_INFO = { name: 'portainer-run', version: '1.0.0' }
 // self-describing so the user does not have to prompt for it — the model
 // is told to gather the info the tool schema cannot enforce on its own.
 const SERVER_INSTRUCTIONS = [
-  'Portainer-Run deploys applications to Kubernetes from source files via the deploy_vibe_app tool.',
+  'Portainer-Run deploys applications to Kubernetes from source files via the deploy_app tool.',
   '',
   'FILE TRANSFER — two modes:',
   '  Inline: pass files directly in the `files` parameter. Use this for small apps (total content under ~50 KB).',
   '  Staged: for larger apps or when inline transfer is unreliable, use the gateway:',
   '    1. Call request_upload_session — returns { sessionId, uploadUrl, expiresAt }.',
   '    2. POST the file array as JSON to uploadUrl: Array<{ path: string, content: string }>.',
-  '    3. Call deploy_vibe_app with stagedSessionId instead of files.',
+  '    3. Call deploy_app with stagedSessionId instead of files.',
   '  The session is single-use and expires in 5 minutes — upload and deploy immediately.',
   '',
   'CRITICAL — file content must be exact: every entry in `files` must contain the COMPLETE, verbatim content of the file, copied byte-for-byte. Never send a placeholder, summary, description, ellipsis ("..."), comment like "<!-- content here -->", or any truncated/abbreviated version. Whatever you send is committed to git and served to users as-is. This matters most for uploaded artifacts and HTML/CSS/JS files: when the user attaches or references a file (e.g. an HTML page), read it in full and reproduce its ENTIRE contents in the content field. If a file is genuinely too large to reproduce reliably, stop and tell the user — do not stub or guess it.',
   '',
-  'CRITICAL — read before you deploy: fully read and assemble the COMPLETE contents of every file BEFORE calling deploy_vibe_app. Do not deploy first and then re-deploy to "fix" or fill in the content — re-deploying the same app fails (the stack already exists) and can leave the placeholder version running. Call deploy_vibe_app exactly once per app, with every file already complete.',
+  'CRITICAL — read before you deploy: fully read and assemble the COMPLETE contents of every file BEFORE calling deploy_app. Do not deploy first and then re-deploy to "fix" or fill in the content — re-deploying the same app fails (the stack already exists) and can leave the placeholder version running. Call deploy_app exactly once per app, with every file already complete.',
   '',
-  'Before calling deploy_vibe_app, gather and confirm the following with the user. Do not assume defaults silently — ask when anything is unknown or ambiguous:',
+  'Before calling deploy_app, gather and confirm the following with the user. Do not assume defaults silently — ask when anything is unknown or ambiguous:',
   '1. Environment — call list_environments. If more than one is returned, ask which to use.',
   '2. Namespace — call list_namespaces. If more than one is returned, ask which to use.',
   '3. Git target — call list_git_targets. If none exist, tell the user to create one in the Portainer-Run UI (git targets cannot be created via MCP) and stop. If several exist, ask which.',
@@ -68,9 +65,9 @@ const SERVER_INSTRUCTIONS = [
   '',
   'Static sites: if the app is plain HTML/CSS/JS with no server-side logic, deploy it as a static site — send only the static files (index.html, css, js, assets) and set runtime to "nginx". Do NOT scaffold a Node/Express (or any) server to serve static files; adding a package.json would make it deploy as a Node app instead of nginx.',
   '',
-  'Port: deploy_vibe_app has no port parameter. The service port is inferred from the detected runtime (Node 3000, Python 8000, php/nginx 80, Ruby 9292). Make the app listen on that runtime default and bind 0.0.0.0. If the app must use a non-standard port, warn the user that the MCP deploy may expose the wrong port and the app could be unreachable.',
+  'Port: deploy_app has no port parameter. The service port is inferred from the detected runtime (Node 3000, Python 8000, php/nginx 80, Ruby 9292). Make the app listen on that runtime default and bind 0.0.0.0. If the app must use a non-standard port, warn the user that the MCP deploy may expose the wrong port and the app could be unreachable.',
   '',
-  'Always show a summary of the chosen settings and get explicit confirmation before calling deploy_vibe_app.',
+  'Always show a summary of the chosen settings and get explicit confirmation before calling deploy_app.',
   '',
   'After deploying, report the access URL to the user. The deploy result has a "url" field; if it is null (NodePort/LoadBalancer addresses are assigned asynchronously), call get_app_status after a short wait to retrieve the URL.',
 ].join('\n')
@@ -111,7 +108,7 @@ function buildTools() {
     description:
       'List the IngressClasses defined in a Kubernetes environment, including which one is the cluster default. ' +
       'Call this when deploying with exposeType "Ingress" to choose the correct ingress class. If you omit ' +
-      'ingressClass on deploy_vibe_app, the cluster default (if any) is applied automatically. ' +
+      'ingressClass on deploy_app, the cluster default (if any) is applied automatically. ' +
       'The response also reports baseDomain and ingressHostRequired: when ingressHostRequired is true there is ' +
       'no base domain to derive a hostname from, so you must supply a full ingress.host — ask the user for it.',
     inputSchema: {
@@ -123,102 +120,100 @@ function buildTools() {
     },
   })
 
-  if (FEATURE_VIBE_DEPLOY) {
-    tools.push({
-      name: 'request_upload_session',
-      description:
-        'Request a staged file upload session from the Portainer-Run gateway. ' +
-        'Use this when files are too large to pass inline, or when the AI platform ' +
-        'can upload files directly over HTTPS. Returns an uploadUrl the caller POSTs ' +
-        'files to as JSON (Array<{ path, content }>), and a sessionId to pass to ' +
-        'deploy_vibe_app as stagedSessionId. The session is single-use and expires in 5 minutes.',
-      inputSchema: { type: 'object', properties: {} },
-    })
+  tools.push({
+    name: 'request_upload_session',
+    description:
+      'Request a staged file upload session from the Portainer-Run gateway. ' +
+      'Use this when files are too large to pass inline, or when the AI platform ' +
+      'can upload files directly over HTTPS. Returns an uploadUrl the caller POSTs ' +
+      'files to as JSON (Array<{ path, content }>), and a sessionId to pass to ' +
+      'deploy_app as stagedSessionId. The session is single-use and expires in 5 minutes.',
+    inputSchema: { type: 'object', properties: {} },
+  })
 
-    tools.push({
-      name: 'deploy_vibe_app',
-      description:
-        'Deploy an application to Kubernetes via Portainer-Run. Pass source files either ' +
-        'inline via `files`, or via `stagedSessionId` after uploading to the gateway with ' +
-        'request_upload_session. Runtime detection, dependency installation, git commit, ' +
-        'and Kubernetes deployment are all handled automatically. Use list_environments, ' +
-        'list_namespaces, and list_git_targets first to get the required IDs.',
-      inputSchema: {
-        type: 'object',
-        required: ['appName', 'envId', 'namespace', 'gitTargetId'],
-        properties: {
-          appName: {
-            type: 'string',
-            description: 'Application name — lowercase alphanumeric and hyphens only, e.g. my-expense-tracker',
-          },
-          envId: {
-            type: 'string',
-            description: 'Target Kubernetes environment ID (from list_environments)',
-          },
-          namespace: {
-            type: 'string',
-            description: 'Kubernetes namespace to deploy into (from list_namespaces)',
-          },
-          gitTargetId: {
-            type: 'string',
-            description: 'Git target ID for manifest storage (from list_git_targets). Git targets cannot be created via MCP — if none exist, direct the user to add one in the Portainer-Run UI first.',
-          },
-          runtime: {
-            type: 'string',
-            enum: ['auto', 'node', 'python', 'php', 'ruby', 'nginx'],
-            description: 'Runtime override. Default: auto (detected from the files). Set to "nginx" to deploy a static HTML/CSS/JS site — send only the static files (index.html, css, js, assets) and do NOT scaffold a Node/Express or other server to serve them.',
-          },
-          files: {
-            type: 'array',
-            description: 'Application source files (inline). Use this for small apps. Mutually exclusive with stagedSessionId — provide one or the other.',
-            items: {
-              type: 'object',
-              required: ['path', 'content'],
-              properties: {
-                path: { type: 'string', description: 'Relative file path, e.g. server.js or public/index.html' },
-                content: { type: 'string', description: 'The complete, verbatim file content, copied exactly (byte-for-byte). Never a placeholder, summary, ellipsis, or truncated version — this is committed to git and served as-is.' },
-              },
-            },
-          },
-          stagedSessionId: {
-            type: 'string',
-            description: 'Session ID returned by request_upload_session after files have been uploaded to the gateway uploadUrl. Use instead of `files` for larger apps. Mutually exclusive with `files`.',
-          },
-          envVars: {
-            type: 'array',
-            description: 'Environment variables for the app. Auto-detected from .env.example in files if omitted.',
-            items: {
-              type: 'object',
-              required: ['key', 'value'],
-              properties: {
-                key: { type: 'string' },
-                value: { type: 'string' },
-              },
-            },
-          },
-          exposeType: {
-            type: 'string',
-            enum: ['none', 'NodePort', 'LoadBalancer', 'Ingress'],
-            description: 'How to expose the app externally. Default: Ingress when the server has a base domain configured (a hostname can be derived), otherwise NodePort.',
-          },
-          ingress: {
+  tools.push({
+    name: 'deploy_app',
+    description:
+      'Deploy an application to Kubernetes via Portainer-Run. Pass source files either ' +
+      'inline via `files`, or via `stagedSessionId` after uploading to the gateway with ' +
+      'request_upload_session. Runtime detection, dependency installation, git commit, ' +
+      'and Kubernetes deployment are all handled automatically. Use list_environments, ' +
+      'list_namespaces, and list_git_targets first to get the required IDs.',
+    inputSchema: {
+      type: 'object',
+      required: ['appName', 'envId', 'namespace', 'gitTargetId'],
+      properties: {
+        appName: {
+          type: 'string',
+          description: 'Application name — lowercase alphanumeric and hyphens only, e.g. my-expense-tracker',
+        },
+        envId: {
+          type: 'string',
+          description: 'Target Kubernetes environment ID (from list_environments)',
+        },
+        namespace: {
+          type: 'string',
+          description: 'Kubernetes namespace to deploy into (from list_namespaces)',
+        },
+        gitTargetId: {
+          type: 'string',
+          description: 'Git target ID for manifest storage (from list_git_targets). Git targets cannot be created via MCP — if none exist, direct the user to add one in the Portainer-Run UI first.',
+        },
+        runtime: {
+          type: 'string',
+          enum: ['auto', 'node', 'python', 'php', 'ruby', 'nginx'],
+          description: 'Runtime override. Default: auto (detected from the files). Set to "nginx" to deploy a static HTML/CSS/JS site — send only the static files (index.html, css, js, assets) and do NOT scaffold a Node/Express or other server to serve them.',
+        },
+        files: {
+          type: 'array',
+          description: 'Application source files (inline). Use this for small apps. Mutually exclusive with stagedSessionId — provide one or the other.',
+          items: {
             type: 'object',
-            description:
-              'Ingress settings, used only when exposeType is "Ingress". If host is omitted and a base domain is configured, defaults to <appName>.<baseDomain>.',
+            required: ['path', 'content'],
             properties: {
-              host: { type: 'string', description: 'Full ingress hostname, e.g. my-app.example.com. Required when exposeType is "Ingress" unless the server has a base domain configured (check list_ingress_classes — ingressHostRequired). If no base domain is configured, ask the user for the hostname.' },
-              path: { type: 'string', description: 'Ingress path. Default: /' },
-              ingressClass: { type: 'string', description: 'Ingress class name, e.g. nginx. Call list_ingress_classes to see options. If omitted, the cluster default IngressClass is applied automatically.' },
+              path: { type: 'string', description: 'Relative file path, e.g. server.js or public/index.html' },
+              content: { type: 'string', description: 'The complete, verbatim file content, copied exactly (byte-for-byte). Never a placeholder, summary, ellipsis, or truncated version — this is committed to git and served as-is.' },
             },
-          },
-          branch: {
-            type: 'string',
-            description: 'Git branch for manifests. Default: main.',
           },
         },
+        stagedSessionId: {
+          type: 'string',
+          description: 'Session ID returned by request_upload_session after files have been uploaded to the gateway uploadUrl. Use instead of `files` for larger apps. Mutually exclusive with `files`.',
+        },
+        envVars: {
+          type: 'array',
+          description: 'Environment variables for the app. Auto-detected from .env.example in files if omitted.',
+          items: {
+            type: 'object',
+            required: ['key', 'value'],
+            properties: {
+              key: { type: 'string' },
+              value: { type: 'string' },
+            },
+          },
+        },
+        exposeType: {
+          type: 'string',
+          enum: ['none', 'NodePort', 'LoadBalancer', 'Ingress'],
+          description: 'How to expose the app externally. Default: Ingress when the server has a base domain configured (a hostname can be derived), otherwise NodePort.',
+        },
+        ingress: {
+          type: 'object',
+          description:
+            'Ingress settings, used only when exposeType is "Ingress". If host is omitted and a base domain is configured, defaults to <appName>.<baseDomain>.',
+          properties: {
+            host: { type: 'string', description: 'Full ingress hostname, e.g. my-app.example.com. Required when exposeType is "Ingress" unless the server has a base domain configured (check list_ingress_classes — ingressHostRequired). If no base domain is configured, ask the user for the hostname.' },
+            path: { type: 'string', description: 'Ingress path. Default: /' },
+            ingressClass: { type: 'string', description: 'Ingress class name, e.g. nginx. Call list_ingress_classes to see options. If omitted, the cluster default IngressClass is applied automatically.' },
+          },
+        },
+        branch: {
+          type: 'string',
+          description: 'Git branch for manifests. Default: main.',
+        },
       },
-    })
-  }
+    },
+  })
 
   tools.push({
     name: 'get_app_status',
@@ -522,13 +517,10 @@ async function resolveAppAccessUrl(target, token, envId, ns, appName, { attempts
 }
 
 async function toolRequestUploadSession() {
-  if (!FEATURE_VIBE_DEPLOY) throw new Error('Vibe Deploy is not enabled on this Portainer-Run instance')
   return requestUploadSession()
 }
 
 async function toolDeployVibeApp(req, args, caller) {
-  if (!FEATURE_VIBE_DEPLOY) throw new Error('Vibe Deploy is not enabled on this Portainer-Run instance')
-
   const {
     appName, envId, namespace, gitTargetId,
     files: inlineFiles = [], envVars, ingress = {}, branch = 'main',
@@ -610,13 +602,26 @@ async function toolDeployVibeApp(req, args, caller) {
   // Build a minimal stream-compatible mock request
   const token = extractToken(req)
   const portainerUrl = req.headers['x-portainer-url'] || req.headers['X-Portainer-URL'] || ''
+
+  // Resolve the environment name so committed git paths match the UI, which
+  // writes under the environment NAME rather than the numeric ID. Falls back
+  // to the ID-based path (handled downstream) if the lookup is unavailable.
+  let resolvedEnvName = ''
+  try {
+    const target = resolvePortainerTarget(req)
+    if (target) {
+      const ep = await portainerGet(target, token, `/api/endpoints/${envId}`)
+      if (ep && ep.Name) resolvedEnvName = ep.Name
+    }
+  } catch { /* fall back to envId-based path */ }
+
   const mockBodyBuf = Buffer.from(JSON.stringify({
     gitTargetId,
     branch,
     pathPrefix: '',
     pollInterval: '5m',
     envId,
-    envName: '',
+    envName: resolvedEnvName,
     deployParams: {
       appName: safeAppName,
       ns: namespace,
@@ -790,7 +795,7 @@ async function dispatch(method, params, req, caller) {
         case 'request_upload_session':
           toolResult = await toolRequestUploadSession()
           break
-        case 'deploy_vibe_app':
+        case 'deploy_app':
           toolResult = await toolDeployVibeApp(req, args, caller)
           break
         case 'get_app_status':

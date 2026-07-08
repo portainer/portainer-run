@@ -102,9 +102,6 @@ function ServiceRowContent({
   const setRestartTarget = useAppStore((s) => s.setRestartTarget)
   const envPermissions = useAppStore((s) => s.envPermissions)
   const patchEnvPermissions = useAppStore((s) => s.patchEnvPermissions)
-  const features = useAppStore((s) => s.features)
-  const isAdmin = useAppStore((s) => s.isAdmin)
-  const vibeOnly = !!(features.vibeDeploy && !features.simpleDeploy && !features.manifestBuilder)
   const permKey = `${d._envId}:${d.metadata.namespace}`
   const perms = envPermissions[permKey] ?? null
 
@@ -147,10 +144,10 @@ function ServiceRowContent({
         </div>
       </div>
       <div className="svc-env" title={envName}>
-        {!vibeOnly && <span className="ns-badge">{envName}</span>}
+        <span className="ns-badge">{envName}</span>
       </div>
       <div className="svc-ns">
-        {!vibeOnly && <span className="ns-badge">{ns}</span>}
+        <span className="ns-badge">{ns}</span>
       </div>
       <div className="status-cell">
         <span className="status-light">
@@ -185,7 +182,7 @@ function ServiceRowContent({
         )}
       </div>
       <div className="svc-age">{age(created)}</div>
-      {isAdmin && <div className="svc-deployer" title={deployedBy}>{deployedBy}</div>}
+      <div className="svc-deployer" title={deployedBy}>{deployedBy}</div>
       <div className="svc-actions" onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
@@ -222,23 +219,9 @@ export function ServicesPage() {
   const disabledEnvs = useAppStore((s) => s.disabledEnvs)
   const envStatusClientCache = useAppStore((s) => s.envStatusClientCache)
   const setDeleteTarget = useAppStore((s) => s.setDeleteTarget)
-  const features = useAppStore((s) => s.features)
-  const isAdmin = useAppStore((s) => s.isAdmin)
-  const [deployMenuOpen, setDeployMenuOpen] = useState(false)
-  const vibeOnly = !!(features.vibeDeploy && !features.simpleDeploy && !features.manifestBuilder)
-
-  const enabledDeployFeatures = [
-    features.vibeDeploy      && { label: 'Vibe Deploy',       route: ROUTES.deployVibe },
-    features.simpleDeploy    && { label: 'Simple Deploy',     route: ROUTES.deploy },
-    features.manifestBuilder && { label: 'Manifest Builder',  route: ROUTES.deployManifest },
-  ].filter(Boolean)
 
   function handleDeployClick() {
-    if (enabledDeployFeatures.length === 1) {
-      navigate(enabledDeployFeatures[0].route)
-    } else if (enabledDeployFeatures.length > 1) {
-      setDeployMenuOpen((o) => !o)
-    }
+    navigate(ROUTES.deploy)
   }
   const pushToast = useAppStore((s) => s.pushToast)
 
@@ -337,52 +320,14 @@ export function ServicesPage() {
           <div className="page-sub">Your deployed applications, across all environments</div>
         </div>
         <div className="page-header-aside">
-          {enabledDeployFeatures.length > 0 && (
-            <div style={{ position: 'relative' }}>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={handleDeployClick}
-                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-              >
-                + Deploy
-                {enabledDeployFeatures.length > 1 && (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginLeft: 2 }}>
-                    <path d="M6 9l6 6 6-6" />
-                  </svg>
-                )}
-              </button>
-              {deployMenuOpen && enabledDeployFeatures.length > 1 && (
-                <>
-                  <div
-                    style={{ position: 'fixed', inset: 0, zIndex: 99 }}
-                    onClick={() => setDeployMenuOpen(false)}
-                  />
-                  <div style={{
-                    position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 100,
-                    background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 6,
-                    overflow: 'hidden', minWidth: 180, boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-                  }}>
-                    {enabledDeployFeatures.map((f) => (
-                      <button key={f.route} type="button"
-                        onClick={() => { setDeployMenuOpen(false); navigate(f.route) }}
-                        style={{
-                          display: 'block', width: '100%', textAlign: 'left',
-                          padding: '9px 14px', fontSize: 13, fontFamily: 'var(--mono)',
-                          background: 'transparent', border: 'none', cursor: 'pointer',
-                          color: 'var(--text)', borderBottom: '1px solid var(--border2)',
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg3)'}
-                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                      >
-                        {f.label}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={handleDeployClick}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            + Deploy
+          </button>
           <div
             className="cache-header-status"
             title={cacheStatus === 'cached' ? 'Data was restored from your last session; fetching live data from the cluster' : undefined}
@@ -463,8 +408,8 @@ export function ServicesPage() {
                 <div className="list-column-headers">
                   <div className="svc-l-header">
                     <span className="svc-l-header-name"><span>Name</span></span>
-                    {!vibeOnly && <span>Environment</span>}
-                    {!vibeOnly && <span>Project space</span>}
+                    <span>Environment</span>
+                    <span>Project space</span>
                     <span>Health</span>
                     <span>Access</span>
                     <span>Deployed</span>
@@ -492,7 +437,7 @@ export function ServicesPage() {
         ) : null}
 
         {!initialLoading && deps.length > 0 ? (
-          <div className={`services-page-list${vibeOnly ? ' services-page-list--vibe-only' : ''}${isAdmin ? ' services-page-list--with-deployer' : ''}`}>
+          <div className="services-page-list services-page-list--with-deployer">
             <SortableList
               items={listItems}
               sort={listSort}
@@ -523,12 +468,12 @@ export function ServicesPage() {
               renderColumnHeaders={() => (
                 <div className="svc-l-header">
                   <span className="svc-l-header-name"><span>Name</span></span>
-                  {!vibeOnly && <span>Environment</span>}
-                  {!vibeOnly && <span>Project space</span>}
+                  <span>Environment</span>
+                  <span>Project space</span>
                   <span>Health</span>
                   <span>Access</span>
                   <span>Deployed</span>
-                  {isAdmin && <span className="svc-l-header-deployer">Deployed by</span>}
+                  <span className="svc-l-header-deployer">Deployed by</span>
                   <span />
                 </div>
               )}
