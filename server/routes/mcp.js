@@ -15,11 +15,8 @@
  *   get_app_status      — Running status of a deployed app
  */
 
-import fs from 'node:fs'
-import crypto from 'node:crypto'
 import { readBody } from '../lib/http.js'
 import { CORS } from '../lib/cors.js'
-import { CACHE_FILE } from '../config.js'
 import {
   BASE_DOMAIN,
   CONFIG_NAMESPACE,
@@ -42,15 +39,13 @@ const SERVER_INFO = { name: 'portainer-run', version: '1.0.0' }
 const SERVER_INSTRUCTIONS = [
   'Portainer-Run deploys applications to Kubernetes from source files via the deploy_app tool.',
   '',
-  'FILE TRANSFER — two modes:',
-  '  Inline: pass files directly in the `files` parameter. Use this for small apps (total content under ~50 KB).',
-  '  Staged: for larger apps or when inline transfer is unreliable, use the gateway:',
+  'FILE TRANSFER — all files are uploaded to the gateway, then deployed:',
   '    1. Call request_upload_session — returns { sessionId, uploadUrl, expiresAt }.',
   '    2. POST the file array as JSON to uploadUrl: Array<{ path: string, content: string }>.',
-  '    3. Call deploy_app with stagedSessionId instead of files.',
+  '    3. Call deploy_app with that stagedSessionId.',
   '  The session is single-use and expires in 5 minutes — upload and deploy immediately.',
   '',
-  'CRITICAL — file content must be exact: every entry in `files` must contain the COMPLETE, verbatim content of the file, copied byte-for-byte. Never send a placeholder, summary, description, ellipsis ("..."), comment like "<!-- content here -->", or any truncated/abbreviated version. Whatever you send is committed to git and served to users as-is. This matters most for uploaded artifacts and HTML/CSS/JS files: when the user attaches or references a file (e.g. an HTML page), read it in full and reproduce its ENTIRE contents in the content field. If a file is genuinely too large to reproduce reliably, stop and tell the user — do not stub or guess it.',
+  'CRITICAL — upload exact, complete files: each uploaded file must contain the COMPLETE content of that file. Never upload a placeholder, summary, description, ellipsis ("..."), a comment like "<!-- content here -->" or "// rest of file", or any truncated or abbreviated version. Whatever you upload is committed to git and served to users as-is, and the server rejects the deploy if it detects a stub. When the user attaches or references a file (e.g. an HTML page), read it in full and upload its ENTIRE contents. If a file is genuinely too large to reproduce reliably, stop and tell the user — do not stub or guess it.',
   '',
   'CRITICAL — read before you deploy: fully read and assemble the COMPLETE contents of every file BEFORE calling deploy_app. Do not deploy first and then re-deploy to "fix" or fill in the content — re-deploying the same app fails (the stack already exists) and can leave the placeholder version running. Call deploy_app exactly once per app, with every file already complete.',
   '',
@@ -124,7 +119,7 @@ function buildTools() {
     name: 'request_upload_session',
     description:
       'Request a staged file upload session from the Portainer-Run gateway. ' +
-      'Use this when files are too large to pass inline, or when the AI platform ' +
+      'Use this to stage source files before deploying. The AI platform ' +
       'can upload files directly over HTTPS. Returns an uploadUrl the caller POSTs ' +
       'files to as JSON (Array<{ path, content }>), and a sessionId to pass to ' +
       'deploy_app as stagedSessionId. The session is single-use and expires in 5 minutes.',
@@ -134,14 +129,14 @@ function buildTools() {
   tools.push({
     name: 'deploy_app',
     description:
-      'Deploy an application to Kubernetes via Portainer-Run. Pass source files either ' +
-      'inline via `files`, or via `stagedSessionId` after uploading to the gateway with ' +
-      'request_upload_session. Runtime detection, dependency installation, git commit, ' +
-      'and Kubernetes deployment are all handled automatically. Use list_environments, ' +
-      'list_namespaces, and list_git_targets first to get the required IDs.',
+      'Deploy an application to Kubernetes via Portainer-Run. First call request_upload_session ' +
+      'and POST the complete source files to the returned uploadUrl, then call this with the ' +
+      'stagedSessionId. Runtime detection, dependency installation, git commit, and Kubernetes ' +
+      'deployment are all handled automatically. Use list_environments, list_namespaces, and ' +
+      'list_git_targets first to get the required IDs.',
     inputSchema: {
       type: 'object',
-      required: ['appName', 'envId', 'namespace', 'gitTargetId'],
+      required: ['appName', 'envId', 'namespace', 'gitTargetId', 'stagedSessionId'],
       properties: {
         appName: {
           type: 'string',
@@ -162,27 +157,15 @@ function buildTools() {
         runtime: {
           type: 'string',
           enum: ['auto', 'node', 'python', 'php', 'ruby', 'nginx'],
-          description: 'Runtime override. Default: auto (detected from the files). Set to "nginx" to deploy a static HTML/CSS/JS site — send only the static files (index.html, css, js, assets) and do NOT scaffold a Node/Express or other server to serve them.',
-        },
-        files: {
-          type: 'array',
-          description: 'Application source files (inline). Use this for small apps. Mutually exclusive with stagedSessionId — provide one or the other.',
-          items: {
-            type: 'object',
-            required: ['path', 'content'],
-            properties: {
-              path: { type: 'string', description: 'Relative file path, e.g. server.js or public/index.html' },
-              content: { type: 'string', description: 'The complete, verbatim file content, copied exactly (byte-for-byte). Never a placeholder, summary, ellipsis, or truncated version — this is committed to git and served as-is.' },
-            },
-          },
+          description: 'Runtime override. Default: auto (detected from the uploaded files). Set to "nginx" to deploy a static HTML/CSS/JS site — upload only the static files (index.html, css, js, assets) and do NOT scaffold a Node/Express or other server to serve them.',
         },
         stagedSessionId: {
           type: 'string',
-          description: 'Session ID returned by request_upload_session after files have been uploaded to the gateway uploadUrl. Use instead of `files` for larger apps. Mutually exclusive with `files`.',
+          description: 'Session ID from request_upload_session, after the complete source files have been POSTed to its uploadUrl. This is the only way to supply files.',
         },
         envVars: {
           type: 'array',
-          description: 'Environment variables for the app. Auto-detected from .env.example in files if omitted.',
+          description: 'Environment variables for the app. Auto-detected from an uploaded .env.example if omitted.',
           items: {
             type: 'object',
             required: ['key', 'value'],
@@ -516,6 +499,35 @@ async function resolveAppAccessUrl(target, token, envId, ns, appName, { attempts
   return last
 }
 
+// Markers that strongly indicate a placeholder or truncated file rather than
+// real content. Deliberately phrase- and comment-based so legitimate uses of
+// "..." (spread/rest, e.g. `const { a, ...rest } = x`) and short-but-real files
+// are not flagged.
+const PLACEHOLDER_MARKERS = [
+  { re: /\brest of (the )?(file|code|content|implementation|component|markup|styles?|script|document)\b/i, reason: 'a "rest of the file" note' },
+  { re: /\b(your|the|actual|full|real|original|complete) (code|content|file|markup|implementation) (here|goes here|belongs here|below|above)\b/i, reason: 'a "content goes here" note' },
+  { re: /\b(content|code|file|markup|output|section|html|body) (omitted|truncated|snipped|abbreviated|redacted|shortened)\b/i, reason: 'an "omitted/truncated" note' },
+  { re: /(\/\/|#|<!--|\/\*)\s*\.\.\.\s*(rest|remainder|more|omitted|truncat|unchanged|same|continue|abbreviat|snip)/i, reason: 'a comment ellipsis placeholder' },
+  { re: /\[\s*(omitted|truncated|placeholder|snip|redacted)\s*\]/i, reason: 'a bracketed placeholder' },
+  { re: /\bplaceholder (file|content)\b/i, reason: 'a "placeholder content" note' },
+  { re: /\bpaste (the )?(full|real|actual|original|complete|entire) (file|content|code|contents)\b/i, reason: 'a "paste the full file" note' },
+  { re: /\bTODO:\s*(paste|insert|fill in|add the|replace with)/i, reason: 'a TODO to fill in content' },
+]
+
+// Scan uploaded files for obvious stub/placeholder content. Returns the first
+// offending { path, reason } or null. Conservative by design — a false negative
+// is preferable to rejecting a legitimate file.
+function detectPlaceholderContent(files) {
+  for (const f of files) {
+    const content = typeof f?.content === 'string' ? f.content : ''
+    if (!content) continue
+    for (const m of PLACEHOLDER_MARKERS) {
+      if (m.re.test(content)) return { path: f?.path || '(unknown)', reason: m.reason }
+    }
+  }
+  return null
+}
+
 async function toolRequestUploadSession() {
   return requestUploadSession()
 }
@@ -523,22 +535,35 @@ async function toolRequestUploadSession() {
 async function toolDeployVibeApp(req, args, caller) {
   const {
     appName, envId, namespace, gitTargetId,
-    files: inlineFiles = [], envVars, ingress = {}, branch = 'main',
+    envVars, ingress = {}, branch = 'main',
     runtime = 'auto', stagedSessionId,
   } = args
 
   if (!appName || !envId || !namespace || !gitTargetId) {
     throw new Error('appName, envId, namespace, and gitTargetId are all required')
   }
-  if (!stagedSessionId && !inlineFiles.length) {
-    throw new Error('Either files (inline) or stagedSessionId (gateway upload) is required')
+  if (!/^\d+$/.test(String(envId))) {
+    throw new Error('envId must be the numeric environment ID from list_environments')
   }
-  if (stagedSessionId && inlineFiles.length) {
-    throw new Error('Provide either files or stagedSessionId — not both')
+  if (!stagedSessionId) {
+    throw new Error('stagedSessionId is required. Call request_upload_session, POST the complete files to its uploadUrl, then call deploy_app with the returned sessionId.')
   }
 
-  // Resolve files: fetch from gateway when stagedSessionId provided, otherwise use inline.
-  const files = stagedSessionId ? await fetchStagedFiles(stagedSessionId) : inlineFiles
+  // All files arrive via the gateway upload session — there is no inline path.
+  const files = await fetchStagedFiles(stagedSessionId)
+  if (!Array.isArray(files) || files.length === 0) {
+    throw new Error('No files found for this upload session. Start a new session with request_upload_session, upload the files, then retry.')
+  }
+
+  // Reject obvious placeholder / truncated content before it reaches git. This
+  // catches a model that uploaded a stub instead of the real file.
+  const stub = detectPlaceholderContent(files)
+  if (stub) {
+    throw new Error(
+      `Upload rejected: "${stub.path}" looks like a placeholder or truncated file (found ${stub.reason}). ` +
+      'Upload the complete, unmodified contents of every file via a new upload session, then retry.',
+    )
+  }
 
   // Default exposure: when a base domain is configured we can derive a real
   // hostname, so default to Ingress; otherwise fall back to NodePort.
@@ -715,45 +740,63 @@ async function toolDeployVibeApp(req, args, caller) {
 
 async function toolGetAppStatus(req, args) {
   const { appName, envId, namespace } = args
+  if (!appName || !envId || !namespace) {
+    throw new Error('appName, envId, and namespace are all required')
+  }
+  if (!/^\d+$/.test(String(envId))) {
+    throw new Error('envId must be the numeric environment ID from list_environments')
+  }
   const token = extractToken(req)
   const target = resolvePortainerTarget(req)
+  if (!target) {
+    return { found: false, message: 'Could not resolve the Portainer target for this request.' }
+  }
 
-  // Compute cache key the same way server/cache.js does: sha256(token:target.key)
-  let deployments = []
-  try {
-    if (target && fs.existsSync(CACHE_FILE)) {
-      const cache = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'))
-      const cacheKey = crypto.createHash('sha256').update(token + ':' + target.key).digest('hex')
-      const entry = cache[cacheKey] || {}
-      deployments = entry.deployments || []
-    }
-  } catch { /* cache miss */ }
-
-  const dep = deployments.find(
-    (d) => d.name === appName && String(d.envId) === String(envId) && d.namespace === namespace
-  )
+  // Ask the cluster directly for the Deployment rather than trusting the
+  // browser-populated cache, which a headless MCP workflow never fills. A short
+  // retry covers the brief window where Portainer is still reconciling the
+  // freshly committed GitOps stack.
+  const depPath = `/api/endpoints/${envId}/kubernetes/apis/apps/v1/namespaces/${namespace}/deployments/${appName}`
+  let dep = null
+  for (let i = 0; i < 4; i++) {
+    dep = await portainerGet(target, token, depPath).catch(() => null)
+    if (dep && dep.kind === 'Deployment') break
+    dep = null
+    if (i < 3) await sleep(1500)
+  }
 
   if (!dep) {
     return { found: false, message: `No application found for ${appName} in ${namespace}` }
   }
 
-  // Resolve a live access URL (cache may predate the Service getting its address).
+  const desired = dep.spec?.replicas ?? 1
+  const ready = dep.status?.readyReplicas || 0
+  const available = dep.status?.availableReplicas || 0
+  const unavailableCond = (dep.status?.conditions || [])
+    .find((c) => c.type === 'Available' && c.status === 'False')
+  const status =
+    desired === 0 ? 'stopped'
+      : ready >= desired && available >= desired ? 'running'
+      : ready > 0 ? 'partial'
+      : unavailableCond ? 'error'
+      : 'pending'
+  const container = dep.spec?.template?.spec?.containers?.[0]
+
+  // Resolve a live access URL (Service/Ingress may still be settling).
   let access = null
-  if (target) {
-    try {
-      access = await resolveAppAccessUrl(target, token, envId, namespace, appName)
-    } catch { /* best effort */ }
-  }
+  try {
+    access = await resolveAppAccessUrl(target, token, envId, namespace, appName)
+  } catch { /* best effort */ }
 
   return {
     found: true,
-    appName: dep.name,
-    namespace: dep.namespace,
-    status: dep.status || 'unknown',
-    ready: dep.readyReplicas || 0,
-    desired: dep.replicas || 1,
-    image: dep.image,
-    nodePort: dep.nodePort || null,
+    appName,
+    namespace,
+    status,
+    ready,
+    desired,
+    image: container?.image || null,
+    reason: unavailableCond?.message || null,
     url: access?.url || null,
     accessLabel: access?.label || null,
   }

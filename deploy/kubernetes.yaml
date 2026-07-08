@@ -39,7 +39,7 @@ data:
   # ── File relay gateway ───────────────────────────────────────────────────────
   # Required for staged file uploads via the run-gateway proxy.
   # When set, large vibe deploy uploads use the gateway instead of inline MCP transfer.
-  # GATEWAY_URL: "https://run-gateway.portainer.ai"
+  GATEWAY_URL: "https://run-gateway.portainer.ai"
 
   # ── AI model override ────────────────────────────────────────────────────────
   # OpenAI model to use (default: gpt-4o). No effect when using Anthropic.
