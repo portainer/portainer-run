@@ -17,7 +17,6 @@ export default defineConfig({
       '/ai': target,
       '/cache': target,
       '/env-status': target,
-      '/templates': target,
     },
   },
 })

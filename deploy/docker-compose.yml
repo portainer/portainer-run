@@ -37,10 +37,6 @@ services:
       # Explicit provider override (auto-detected from key if not set):
       # - AI_PROVIDER=anthropic
 
-      # ── Template catalogue ────────────────────────────────────────────────
-      # URL of a custom templates.json file. Defaults to the repo file.
-      # - TEMPLATE_URL=https://your-server.com/templates.json
-
       # ── Ingress base domain ───────────────────────────────────────────────
       # If set, Ingress templates default to appname.BASE_DOMAIN as the host.
       # - BASE_DOMAIN=apps.example.com
@@ -66,13 +62,6 @@ services:
       # - SSL_CERT=/certs/fullchain.pem
       # - SSL_KEY=/certs/privkey.pem
       # - SSL_CERT_DIR=/certs
-
-      # ── Feature flags (all on by default; set to 'false' to disable) ──────
-      - FEATURE_VIBE_DEPLOY=true
-      - FEATURE_SIMPLE_DEPLOY=false
-      - FEATURE_MANIFEST_BUILDER=false
-      - FEATURE_CATALOGUE=false
-      - FEATURE_SECRETS=false
 
     volumes:
       # ── Persistent session cache ──────────────────────────────────────────

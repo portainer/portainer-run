@@ -22,13 +22,6 @@ export const useAppStore = create((set, get) => ({
   aiProvider: 'anthropic',
   baseDomain: '',
   configNamespace: 'kube-system',
-  features: {
-    vibeDeploy: true,
-    simpleDeploy: true,
-    manifestBuilder: true,
-    catalogue: true,
-    secrets: true,
-  },
   /** @type {Record<string, { reason?: string, disabledAt?: string }>} */
   disabledEnvs: {},
   cache: { ...initialCache },
@@ -69,7 +62,6 @@ export const useAppStore = create((set, get) => ({
   setAi: (isAiAvailable, aiProvider, baseDomain) =>
     set({ isAiAvailable, aiProvider, baseDomain: baseDomain || '' }),
   setConfigNamespace: (v) => set({ configNamespace: v || 'kube-system' }),
-  setFeatures: (features) => set({ features }),
   setDisabledEnvs: (disabledEnvs) => set({ disabledEnvs }),
   setCache: (updater) =>
     set((s) => (typeof updater === 'function' ? { cache: updater(s.cache) } : { cache: updater })),

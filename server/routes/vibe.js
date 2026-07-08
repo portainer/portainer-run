@@ -6,8 +6,11 @@ import {
   ensureBranch,
   buildRepoHttpsUrl,
   fetchFile,
+  deleteFile,
+  deleteDirectory,
 } from '../proxy/git.js'
 import { buildManifests, serializeManifests, buildManifestPath } from '../lib/manifestSerialize.js'
+import yaml from 'js-yaml'
 import { resolvePortainerTarget } from '../resolve-portainer.js'
 import { resolveCallerIdentity } from '../lib/identity.js'
 import https from 'node:https'
@@ -56,6 +59,18 @@ export async function handleVibe(req, res, pathname) {
 
   if (pathname === '/api/vibe/manifest-exposure' && req.method === 'GET') {
     return handleVibeManifestExposure(req, res)
+  }
+
+  if (pathname === '/api/vibe/manifest-env' && req.method === 'GET') {
+    return handleVibeManifestEnv(req, res)
+  }
+
+  if (pathname === '/api/vibe/update-env' && req.method === 'POST') {
+    return handleVibeUpdateEnv(req, res)
+  }
+
+  if (pathname === '/api/vibe/delete-manifest' && req.method === 'POST') {
+    return handleVibeDeleteManifest(req, res)
   }
 
   return null
@@ -277,6 +292,10 @@ function buildVibeManifests({
     workingDir: workDirSafe,
     ports: [{ containerPort: port, protocol: 'TCP' }],
     volumeMounts: [{ name: 'app-data', mountPath: workDirSafe }],
+    resources: {
+      requests: { cpu: '100m', memory: '1Gi' },
+      limits: { cpu: '1', memory: '4Gi' },
+    },
     ...(containerEnv.length > 0 ? { env: containerEnv } : {}),
   }
   // Remove undefined command
@@ -929,5 +948,189 @@ async function handleVibeManifestExposure(req, res) {
   } catch (err) {
     console.error('[vibe manifest-exposure error]', err.message || err)
     return json(res, 500, { error: err.message || 'Failed to read manifest' })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Vibe environment-variable reader / writer
+// ---------------------------------------------------------------------------
+
+/** Locate the Deployment document and its main application container. */
+function findDeploymentContainer(docs) {
+  const deployment = docs.find((d) => d && d.kind === 'Deployment')
+  if (!deployment) return { deployment: null, container: null, podSpec: null }
+  const podSpec = deployment.spec?.template?.spec || {}
+  const containers = podSpec.containers || []
+  const appName = deployment.metadata?.name
+  const container = containers.find((c) => c.name === appName) || containers[0] || null
+  return { deployment, container, podSpec }
+}
+
+/**
+ * GET /api/vibe/manifest-env?gitTargetId=&branch=&gitPath=
+ *
+ * Reads the committed manifest and returns the application container's
+ * environment variables as [{ key, value }] so the edit form can
+ * pre-populate. The manifest in git is the source of truth.
+ */
+async function handleVibeManifestEnv(req, res) {
+  const url = new URL(req.url, 'http://localhost')
+  const gitTargetId = url.searchParams.get('gitTargetId')
+  const branch = url.searchParams.get('branch')
+  const gitPath = url.searchParams.get('gitPath')
+
+  if (!gitTargetId || !branch || !gitPath) {
+    return json(res, 400, { error: 'gitTargetId, branch and gitPath are required' })
+  }
+
+  const conn = getConnectionById(gitTargetId)
+  if (!conn) return json(res, 404, { error: 'Git target not found' })
+  const caller = await resolveCallerIdentity(req)
+  if (!caller?.isAdmin && conn.owner_id !== (caller?.userId || '_unknown') && !conn.shared) {
+    return json(res, 403, { error: 'Forbidden — git target not accessible' })
+  }
+
+  try {
+    const content = await fetchFile(conn.payload, branch, gitPath)
+    if (!content) return json(res, 404, { error: 'Manifest not found' })
+
+    const docs = yaml.loadAll(content)
+    const { container } = findDeploymentContainer(docs)
+    const env = (container?.env || [])
+      .filter((e) => e && typeof e.name === 'string' && e.value !== undefined)
+      .map((e) => ({ key: e.name, value: String(e.value) }))
+
+    return json(res, 200, { env })
+  } catch (err) {
+    console.error('[vibe manifest-env error]', err.message || err)
+    return json(res, 500, { error: err.message || 'Failed to read manifest' })
+  }
+}
+
+/**
+ * POST /api/vibe/update-env
+ * Body: { gitTargetId, branch, gitPath, envVars: [{ key, value }] }
+ *
+ * Fetches the committed manifest, rewrites the application container's env
+ * array, and regenerates the vibe-env init container so the .env file written
+ * into the volume stays in sync. Portainer reconciles on the next poll cycle.
+ */
+async function handleVibeUpdateEnv(req, res) {
+  const body = await readBody(req)
+  const data = parseJson(body)
+  if (!data) return json(res, 400, { error: 'Invalid request body' })
+
+  const { gitTargetId, branch, gitPath, envVars } = data
+  if (!gitTargetId || !branch || !gitPath) {
+    return json(res, 400, { error: 'gitTargetId, branch and gitPath are required' })
+  }
+  if (!Array.isArray(envVars)) {
+    return json(res, 400, { error: 'envVars must be an array of { key, value }' })
+  }
+
+  const conn = getConnectionById(gitTargetId)
+  if (!conn) return json(res, 404, { error: 'Git target not found' })
+  const caller = await resolveCallerIdentity(req)
+  if (!caller?.isAdmin && conn.owner_id !== (caller?.userId || '_unknown') && !conn.shared) {
+    return json(res, 403, { error: 'Forbidden — git target not accessible' })
+  }
+
+  try {
+    const content = await fetchFile(conn.payload, branch, gitPath)
+    if (!content) return json(res, 404, { error: 'Manifest file not found in git' })
+
+    const docs = yaml.loadAll(content)
+    const { deployment, container, podSpec } = findDeploymentContainer(docs)
+    if (!deployment || !container) {
+      return json(res, 404, { error: 'No Deployment container found in manifest' })
+    }
+
+    // Normalise the incoming variables (drop blank keys, coerce values to string).
+    const cleaned = envVars
+      .filter((v) => v && typeof v.key === 'string' && v.key.trim())
+      .map((v) => ({ key: v.key.trim(), value: String(v.value ?? '') }))
+
+    // 1. Container env array.
+    if (cleaned.length > 0) {
+      container.env = cleaned.map((v) => ({ name: v.key, value: v.value }))
+    } else {
+      delete container.env
+    }
+
+    // 2. vibe-env init container — writes the .env file into the volume.
+    //    Regenerated wholesale to mirror the deploy path exactly.
+    const workDir = container.workingDir || '/app'
+    podSpec.initContainers = (podSpec.initContainers || []).filter((c) => c.name !== 'vibe-env')
+    if (cleaned.length > 0) {
+      const envFileContent = cleaned
+        .map((v) => `${v.key}=${v.value.replace(/\n/g, '\\n')}`)
+        .join('\n')
+      const escaped = envFileContent.replace(/'/g, "'\\''")
+      podSpec.initContainers.push({
+        name: 'vibe-env',
+        image: 'busybox:1.36',
+        command: ['sh', '-c', `printf '%s' '${escaped}' > ${workDir}/.env`],
+        volumeMounts: [{ name: 'app-data', mountPath: workDir }],
+      })
+    }
+    if (podSpec.initContainers.length === 0) delete podSpec.initContainers
+
+    const updatedYaml = serializeManifests(docs)
+
+    const safeApp = sanitizeStackName(deployment.metadata?.name || 'app')
+    await commitFiles(conn.payload, branch, `vibe: update environment variables for ${safeApp}`, [
+      { path: gitPath, content: updatedYaml },
+    ])
+
+    return json(res, 200, { ok: true })
+  } catch (err) {
+    console.error('[vibe update-env error]', err.message || err)
+    return json(res, 500, { error: err.message || 'Update failed' })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Manifest / source deletion (app removal)
+// ---------------------------------------------------------------------------
+
+/**
+ * POST /api/vibe/delete-manifest
+ * Body: { gitTargetId, branch, gitPath, appName }
+ *
+ * Removes a committed manifest file or source directory from git when an
+ * application is deleted. Paths ending in an extension are treated as files;
+ * extensionless paths (source directories) are removed recursively.
+ */
+async function handleVibeDeleteManifest(req, res) {
+  const body = await readBody(req)
+  const data = parseJson(body)
+  if (!data) return json(res, 400, { error: 'Invalid request body' })
+
+  const { gitTargetId, branch, appName } = data
+  const gitPath = sanitizeGitPath(data.gitPath)
+  if (!gitTargetId || !branch || !gitPath) {
+    return json(res, 400, { error: 'gitTargetId, branch and gitPath are required' })
+  }
+
+  const conn = getConnectionById(gitTargetId)
+  if (!conn) return json(res, 404, { error: 'Git target not found' })
+  const caller = await resolveCallerIdentity(req)
+  if (!caller?.isAdmin && conn.owner_id !== (caller?.userId || '_unknown') && !conn.shared) {
+    return json(res, 403, { error: 'Forbidden — git target not accessible' })
+  }
+
+  try {
+    // Paths without an extension are source directories; paths with an
+    // extension (.yaml/.yml) are manifest files.
+    const isDirectory = !gitPath.match(/\.[a-zA-Z0-9]+$/)
+    if (isDirectory) {
+      await deleteDirectory(conn.payload, branch, gitPath, `remove: ${appName || gitPath}`)
+    } else {
+      await deleteFile(conn.payload, branch, gitPath, `remove: ${appName || gitPath}`)
+    }
+    return json(res, 200, { ok: true })
+  } catch (err) {
+    console.error('[vibe delete-manifest error]', err.message || err)
+    return json(res, 502, { error: err.message || 'Delete failed' })
   }
 }

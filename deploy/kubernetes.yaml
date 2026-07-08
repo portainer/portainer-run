@@ -32,10 +32,6 @@ data:
   # For deployments where Portainer-Run is in the same cluster as Portainer.
   # PORTAINER_URL: "https://portainer.portainer.svc.cluster.local:9443" 
 
-  # ── Template catalogue ──────────────────────────────────────────────────────
-  # URL of a custom templates.json. Defaults to the repo file if not set.
-  # TEMPLATE_URL: "https://your-server.com/templates.json"
-
   # ── Ingress base domain ─────────────────────────────────────────────────────
   # If set, Ingress templates default to appname.BASE_DOMAIN as the host.
   # BASE_DOMAIN: "apps.example.com"
@@ -58,13 +54,6 @@ data:
   # Override the directory used for persistent cache (default: /app/data).
   # Must match the mountPath of the volume in the Deployment if changed.
   # CACHE_DIR: "/app/data"
-
-  # ── Feature flags (all on by default; set to 'false' to disable) ────────────
-  FEATURE_VIBE_DEPLOY: "true"
-  FEATURE_SIMPLE_DEPLOY: "false"
-  FEATURE_MANIFEST_BUILDER: "false"
-  FEATURE_CATALOGUE: "false"
-  FEATURE_SECRETS: "false"
 
 ---
 # Secret — sensitive values

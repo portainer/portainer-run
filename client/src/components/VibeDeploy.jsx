@@ -882,9 +882,9 @@ export function VibeDeploy() {
     <div className="page active">
       <div className="page-header">
         <div>
-          <div className="page-title">Vibe Deploy</div>
+          <div className="page-title">Deploy</div>
           <div className="page-sub">
-            Drop your vibe coded files — we handle git, runtime detection, and deployment.
+            Drop the files your AI coding tool generated: we handle git, runtime detection, and deployment.
           </div>
         </div>
       </div>
@@ -1089,12 +1089,24 @@ export function VibeDeploy() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {envVars.map((v, i) => (
                   <div key={i} style={{ display: 'grid', gridTemplateColumns: '160px 1fr auto', gap: 8, alignItems: 'center' }}>
-                    <div style={{
-                      fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-dim)',
-                      background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 5,
-                      padding: '7px 10px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>{v.key}</div>
-                    <div class="field">
+                    {v.custom ? (
+                      <div className="field" style={{ marginBottom: 0 }}>
+                        <input
+                          type="text"
+                          value={v.key}
+                          placeholder="NAME"
+                          style={{ fontFamily: 'var(--mono)', fontSize: 12 }}
+                          onChange={(e) => setEnvVars((prev) => prev.map((x, j) => j === i ? { ...x, key: e.target.value } : x))}
+                        />
+                      </div>
+                    ) : (
+                      <div style={{
+                        fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-dim)',
+                        background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 5,
+                        padding: '7px 10px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>{v.key}</div>
+                    )}
+                    <div className="field">
                       <input
                         type={SECRET_PATTERN.test(v.key) ? 'password' : 'text'}
                         value={v.value}
@@ -1109,7 +1121,7 @@ export function VibeDeploy() {
                 ))}
               </div>
               <button type="button" className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }}
-                onClick={() => setEnvVars((prev) => [...prev, { key: '', value: '' }])}>
+                onClick={() => setEnvVars((prev) => [...prev, { key: '', value: '', custom: true }])}>
                 + Add variable
               </button>
               <div className="hint">Values marked with •••• are treated as sensitive and hidden from view.</div>
@@ -1338,7 +1350,6 @@ export function VibeDeploy() {
             appName={stagedParams.appName}
             ns={stagedParams.ns}
             envId={stagedParams.envId}
-            deployParams={stagedParams}
             onConfirm={handleGitOpsConfirm}
             onBack={() => { setStep(4); setDeployConfigConfirmed(false); setStagedParams(null) }}
             deploying={deploying}
