@@ -44,7 +44,7 @@ services:
       # ── File relay gateway ────────────────────────────────────────────────
       # Required for staged file uploads via the run-gateway proxy.
       # When set, large vibe deploy uploads use the gateway instead of inline MCP transfer.
-      # - GATEWAY_URL=https://run-gateway.portainer.ai
+      - GATEWAY_URL=https://run-gateway.portainer.ai
 
       # ── Custom ports ──────────────────────────────────────────────────────
       # Change if 443/80 conflict with other services on the host.
