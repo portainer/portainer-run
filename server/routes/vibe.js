@@ -176,6 +176,14 @@ const INIT_ENV_RESOURCES = {
   requests: { cpu: '50m', memory: '64Mi' },
   limits: { cpu: '250m', memory: '256Mi' },
 }
+// The dependency installer does real work (npm/pip/bundle) and can spike memory.
+// Init containers run sequentially, so this limit governs init-phase scheduling
+// (Kubernetes takes the max across init containers). Raise the limit if apps
+// pull heavy dependency trees that OOM at 2Gi.
+const INIT_INSTALL_RESOURCES = {
+  requests: { cpu: '100m', memory: '256Mi' },
+  limits: { cpu: '1', memory: '2Gi' },
+}
 
 function buildVibeManifests({
   appName,
@@ -276,6 +284,7 @@ function buildVibeManifests({
       name: 'vibe-install',
       image: runtimeImage || 'node:22',
       command: ['sh', '-c', installCmd],
+      resources: INIT_INSTALL_RESOURCES,
       volumeMounts: [{ name: 'app-data', mountPath: workDirSafe }],
     })
   }
