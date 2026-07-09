@@ -164,6 +164,27 @@ function getInstallCommand(runtime, workDir) {
  * @param {string} p.gitUsername
  * @param {string} p.gitToken
  */
+// Sane resource defaults for the short-lived init containers, so a cluster with
+// a ResourceQuota or LimitRange does not reject the pod. The clone container
+// gets more memory headroom (git checks out the source tree); the env writer is
+// tiny. The dependency installer is intentionally not defaulted here.
+const INIT_CLONE_RESOURCES = {
+  requests: { cpu: '50m', memory: '128Mi' },
+  limits: { cpu: '250m', memory: '512Mi' },
+}
+const INIT_ENV_RESOURCES = {
+  requests: { cpu: '50m', memory: '64Mi' },
+  limits: { cpu: '250m', memory: '256Mi' },
+}
+// The dependency installer does real work (npm/pip/bundle) and can spike memory.
+// Init containers run sequentially, so this limit governs init-phase scheduling
+// (Kubernetes takes the max across init containers). Raise the limit if apps
+// pull heavy dependency trees that OOM at 2Gi.
+const INIT_INSTALL_RESOURCES = {
+  requests: { cpu: '100m', memory: '256Mi' },
+  limits: { cpu: '1', memory: '2Gi' },
+}
+
 function buildVibeManifests({
   appName,
   ns,
@@ -244,6 +265,7 @@ function buildVibeManifests({
     name: 'vibe-sync',
     image: 'alpine/git:latest',
     command: cloneCmd,
+    resources: INIT_CLONE_RESOURCES,
     volumeMounts: [{ name: 'app-data', mountPath: workDirSafe }],
   }
   if (gitToken) {
@@ -262,6 +284,7 @@ function buildVibeManifests({
       name: 'vibe-install',
       image: runtimeImage || 'node:22',
       command: ['sh', '-c', installCmd],
+      resources: INIT_INSTALL_RESOURCES,
       volumeMounts: [{ name: 'app-data', mountPath: workDirSafe }],
     })
   }
@@ -278,6 +301,7 @@ function buildVibeManifests({
       name: 'vibe-env',
       image: 'busybox:1.36',
       command: ['sh', '-c', `printf '%s' '${escapedContent}' > ${workDirSafe}/.env`],
+      resources: INIT_ENV_RESOURCES,
       volumeMounts: [{ name: 'app-data', mountPath: workDirSafe }],
     })
   }
@@ -1070,6 +1094,7 @@ async function handleVibeUpdateEnv(req, res) {
         name: 'vibe-env',
         image: 'busybox:1.36',
         command: ['sh', '-c', `printf '%s' '${escaped}' > ${workDir}/.env`],
+        resources: INIT_ENV_RESOURCES,
         volumeMounts: [{ name: 'app-data', mountPath: workDir }],
       })
     }
