@@ -164,6 +164,19 @@ function getInstallCommand(runtime, workDir) {
  * @param {string} p.gitUsername
  * @param {string} p.gitToken
  */
+// Sane resource defaults for the short-lived init containers, so a cluster with
+// a ResourceQuota or LimitRange does not reject the pod. The clone container
+// gets more memory headroom (git checks out the source tree); the env writer is
+// tiny. The dependency installer is intentionally not defaulted here.
+const INIT_CLONE_RESOURCES = {
+  requests: { cpu: '50m', memory: '128Mi' },
+  limits: { cpu: '250m', memory: '512Mi' },
+}
+const INIT_ENV_RESOURCES = {
+  requests: { cpu: '50m', memory: '64Mi' },
+  limits: { cpu: '250m', memory: '256Mi' },
+}
+
 function buildVibeManifests({
   appName,
   ns,
@@ -244,6 +257,7 @@ function buildVibeManifests({
     name: 'vibe-sync',
     image: 'alpine/git:latest',
     command: cloneCmd,
+    resources: INIT_CLONE_RESOURCES,
     volumeMounts: [{ name: 'app-data', mountPath: workDirSafe }],
   }
   if (gitToken) {
@@ -278,6 +292,7 @@ function buildVibeManifests({
       name: 'vibe-env',
       image: 'busybox:1.36',
       command: ['sh', '-c', `printf '%s' '${escapedContent}' > ${workDirSafe}/.env`],
+      resources: INIT_ENV_RESOURCES,
       volumeMounts: [{ name: 'app-data', mountPath: workDirSafe }],
     })
   }
@@ -1070,6 +1085,7 @@ async function handleVibeUpdateEnv(req, res) {
         name: 'vibe-env',
         image: 'busybox:1.36',
         command: ['sh', '-c', `printf '%s' '${escaped}' > ${workDir}/.env`],
+        resources: INIT_ENV_RESOURCES,
         volumeMounts: [{ name: 'app-data', mountPath: workDir }],
       })
     }
