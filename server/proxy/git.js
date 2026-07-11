@@ -388,6 +388,142 @@ export async function deleteDirectory(payload, branch, dirPath, message) {
 }
 
 /**
+ * Delete multiple paths (a mix of files and directories) in a SINGLE commit.
+ *
+ * Doing file + directory removals as separate commits races GitHub's
+ * read-after-write ref propagation: the second operation can read a stale
+ * branch SHA and fail the ref update with a non-fast-forward error. Removing
+ * everything in one commit closes that window entirely.
+ *
+ * @param {object} payload
+ * @param {string} branch
+ * @param {string[]} paths   file paths and/or directory paths to remove
+ * @param {string} message
+ */
+export async function deletePaths(payload, branch, paths, message) {
+  const clean = (paths || []).map((p) => String(p || '').replace(/\/+$/, '')).filter(Boolean)
+  if (clean.length === 0) return { ok: true, deleted: 0 }
+  const { provider } = payload
+  if (provider === 'github') return deletePathsGitHub(payload, branch, clean, message)
+  if (provider === 'gitlab') return deletePathsGitLab(payload, branch, clean, message)
+  return deletePathsGitea(payload, branch, clean, message)
+}
+
+/** True when a blob path should be removed given the requested paths. */
+function matchesAnyPath(blobPath, paths) {
+  for (const p of paths) {
+    // Exact file match, or any blob under a directory prefix.
+    if (blobPath === p || blobPath.startsWith(p + '/')) return true
+  }
+  return false
+}
+
+/**
+ * GitHub: remove all requested files and directory subtrees in one commit
+ * using the Git Data API (ref → commit → tree → new tree → new commit → ref).
+ */
+async function deletePathsGitHub(payload, branch, paths, message) {
+  const { repo } = payload
+  const headers = buildHeaders(payload)
+  const base = githubApiBase(payload)
+
+  const refData = await request('GET', `${base}/repos/${repo}/git/ref/heads/${branch}`, headers)
+  const commitSha = refData.object.sha
+  const commitData = await request('GET', `${base}/repos/${repo}/git/commits/${commitSha}`, headers)
+  const treeSha = commitData.tree.sha
+  const treeData = await request('GET', `${base}/repos/${repo}/git/trees/${treeSha}?recursive=1`, headers)
+
+  const allBlobs = treeData.tree.filter((e) => e.type === 'blob')
+  const remaining = allBlobs.filter((entry) => !matchesAnyPath(entry.path, paths))
+  if (remaining.length === allBlobs.length) return { ok: true, deleted: 0 }
+
+  const newTree = await request('POST', `${base}/repos/${repo}/git/trees`, headers, {
+    tree: remaining.map((e) => ({ path: e.path, mode: e.mode, type: e.type, sha: e.sha })),
+  })
+  const newCommit = await request('POST', `${base}/repos/${repo}/git/commits`, headers, {
+    message,
+    tree: newTree.sha,
+    parents: [commitSha],
+  })
+  await request('PATCH', `${base}/repos/${repo}/git/refs/heads/${branch}`, headers, {
+    sha: newCommit.sha,
+    force: false,
+  })
+  return { ok: true, deleted: allBlobs.length - remaining.length }
+}
+
+/**
+ * GitLab: one commits API call with a delete action per resolved file. Files
+ * are resolved by listing each directory path recursively; explicit file paths
+ * are included directly.
+ */
+async function deletePathsGitLab(payload, branch, paths, message) {
+  const { repo } = payload
+  const base = gitlabApiBase(payload)
+  const encoded = encodeURIComponent(repo)
+  const headers = buildHeaders(payload)
+
+  const fileSet = new Set()
+  for (const p of paths) {
+    // Try to list p as a directory; if it yields blobs, those are the targets.
+    let listed = []
+    try {
+      listed = await request('GET',
+        `${base}/api/v4/projects/${encoded}/repository/tree?path=${encodeURIComponent(p)}&ref=${branch}&recursive=true&per_page=100`,
+        headers)
+    } catch { listed = [] }
+    const blobs = (Array.isArray(listed) ? listed : []).filter((i) => i.type === 'blob')
+    if (blobs.length > 0) {
+      for (const b of blobs) fileSet.add(b.path)
+    } else {
+      // Not a directory (or empty) — treat as a single file path.
+      fileSet.add(p)
+    }
+  }
+  if (fileSet.size === 0) return { ok: true, deleted: 0 }
+
+  await request('POST', `${base}/api/v4/projects/${encoded}/repository/commits`, headers, {
+    branch,
+    commit_message: message,
+    actions: [...fileSet].map((file_path) => ({ action: 'delete', file_path })),
+  })
+  return { ok: true, deleted: fileSet.size }
+}
+
+/**
+ * Gitea: same single-commit Git Data API approach as GitHub.
+ */
+async function deletePathsGitea(payload, branch, paths, message) {
+  const { repo, url: baseUrl } = payload
+  const base = baseUrl || ''
+  const headers = buildHeaders(payload)
+
+  const refData = await request('GET', `${base}/api/v1/repos/${repo}/branches/${branch}`, headers)
+  const commitSha = refData.commit.id
+  const commitData = await request('GET', `${base}/api/v1/repos/${repo}/git/commits/${commitSha}`, headers)
+  const treeSha = commitData.tree?.sha || commitData.commit?.tree?.sha
+  const treeData = await request('GET', `${base}/api/v1/repos/${repo}/git/trees/${treeSha}?recursive=true`, headers)
+
+  const allBlobs = (treeData.tree || []).filter((e) => e.type === 'blob')
+  const remaining = allBlobs.filter((entry) => !matchesAnyPath(entry.path, paths))
+  if (remaining.length === allBlobs.length) return { ok: true, deleted: 0 }
+
+  const newTree = await request('POST', `${base}/api/v1/repos/${repo}/git/trees`, headers, {
+    tree: remaining.map((e) => ({ path: e.path, mode: e.mode, type: e.type, sha: e.sha })),
+  })
+  const newCommit = await request('POST', `${base}/api/v1/repos/${repo}/git/commits`, headers, {
+    message,
+    tree: newTree.sha,
+    parents: [commitSha],
+  })
+  await request('PATCH', `${base}/api/v1/repos/${repo}/git/refs/heads/${branch}`, headers, {
+    sha: newCommit.sha,
+    force: false,
+  })
+  return { ok: true, deleted: allBlobs.length - remaining.length }
+}
+
+/**
  * GitHub: delete a directory in a single commit using the Git Data API tree approach.
  * Fetches the full recursive tree, filters out all entries under dirPath,
  * creates a new tree and commit, then updates the branch ref.

@@ -1,6 +1,6 @@
 import { kubeFetch } from '../lib/api.js'
 import { refreshCache } from './refreshDeployments.js'
-import { deleteAppManifest } from '../lib/gitTargets.js'
+import { deleteAppPaths } from '../lib/gitTargets.js'
 import { useAppStore } from '../store/useAppStore.js'
 
 /** Stable key for an app's in-flight delete state. */
@@ -69,14 +69,14 @@ export async function deleteApp(target, { deleteManifest = false } = {}) {
       ),
     ])
 
-    // 5. Optionally delete git entries — run sequentially to avoid branch ref race
-    //    (parallel commits with the same parent SHA cause non-fast-forward errors)
+    // 5. Optionally delete git entries — manifest file and source directory
+    //    removed in a SINGLE commit to avoid a non-fast-forward race between
+    //    two sequential commits against the same branch.
     if (isGitOps && deleteManifest) {
       try {
-        await deleteAppManifest({ gitTargetId, branch: gitBranch, gitPath, appName: name })
-        if (isVibeDeploy && vibeSourcePath) {
-          await deleteAppManifest({ gitTargetId, branch: gitBranch, gitPath: vibeSourcePath, appName: name })
-        }
+        const paths = [gitPath]
+        if (isVibeDeploy && vibeSourcePath) paths.push(vibeSourcePath)
+        await deleteAppPaths({ gitTargetId, branch: gitBranch, paths, appName: name })
       } catch (e) {
         st().pushToast(
           `Deployment deleted but Git cleanup failed: ${e?.message || 'unknown error'} — check the token has write access to the repository`,

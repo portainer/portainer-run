@@ -8,6 +8,7 @@ import {
   fetchFile,
   deleteFile,
   deleteDirectory,
+  deletePaths,
 } from '../proxy/git.js'
 import { buildManifests, serializeManifests, buildManifestPath } from '../lib/manifestSerialize.js'
 import yaml from 'js-yaml'
@@ -1265,9 +1266,15 @@ async function handleVibeDeleteManifest(req, res) {
   if (!data) return json(res, 400, { error: 'Invalid request body' })
 
   const { gitTargetId, branch, appName } = data
+
+  // New form: an array of paths (files and/or directories) removed atomically
+  // in a single commit. Preferred by the delete flow to avoid a non-fast-forward
+  // race between separate file and directory commits.
+  const rawPaths = Array.isArray(data.paths) ? data.paths : null
   const gitPath = sanitizeGitPath(data.gitPath)
-  if (!gitTargetId || !branch || !gitPath) {
-    return json(res, 400, { error: 'gitTargetId, branch and gitPath are required' })
+
+  if (!gitTargetId || !branch || (!rawPaths && !gitPath)) {
+    return json(res, 400, { error: 'gitTargetId, branch and (paths or gitPath) are required' })
   }
 
   const conn = getConnectionById(gitTargetId)
@@ -1278,6 +1285,14 @@ async function handleVibeDeleteManifest(req, res) {
   }
 
   try {
+    if (rawPaths) {
+      const paths = rawPaths.map((p) => sanitizeGitPath(p)).filter(Boolean)
+      if (paths.length === 0) return json(res, 400, { error: 'No valid paths provided' })
+      await deletePaths(conn.payload, branch, paths, `remove: ${appName || paths.join(', ')}`)
+      return json(res, 200, { ok: true })
+    }
+
+    // Legacy single-path form (file or directory).
     // Paths without an extension are source directories; paths with an
     // extension (.yaml/.yml) are manifest files.
     const isDirectory = !gitPath.match(/\.[a-zA-Z0-9]+$/)

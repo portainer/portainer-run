@@ -105,3 +105,14 @@ export function deleteAppManifest({ gitTargetId, branch, gitPath, appName }) {
     body: JSON.stringify({ gitTargetId, branch, gitPath, appName }),
   })
 }
+
+/**
+ * Remove multiple paths (manifest file + source directory) in a single commit.
+ * Avoids the non-fast-forward race of two sequential delete commits.
+ */
+export function deleteAppPaths({ gitTargetId, branch, paths, appName }) {
+  return serverFetch('/api/vibe/delete-manifest', {
+    method: 'POST',
+    body: JSON.stringify({ gitTargetId, branch, paths, appName }),
+  })
+}
