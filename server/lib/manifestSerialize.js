@@ -1,5 +1,16 @@
 import yaml from 'js-yaml'
 
+// Pod Security Standards (issue #39). Kept in sync with the vibe deploy path in
+// routes/vibe.js. Applied to every container in the pod plus the pod itself.
+const CONTAINER_SECURITY_CONTEXT = {
+  allowPrivilegeEscalation: false,
+  capabilities: { drop: ['ALL'] },
+  seccompProfile: { type: 'RuntimeDefault' },
+}
+const POD_SECURITY_CONTEXT = {
+  seccompProfile: { type: 'RuntimeDefault' },
+}
+
 /**
  * Normalize a Kubernetes quantity string.
  * Converts common mistakes to valid suffixes and validates the result.
@@ -105,6 +116,9 @@ export function buildManifests({
         if (!r.limits.cpu && !r.limits.memory) delete spec.resources.limits
       }
     }
+    // Pod Security Standards (issue #39): harden every container, preserving
+    // any securityContext keys already present on the spec.
+    spec.securityContext = { ...CONTAINER_SECURITY_CONTEXT, ...(spec.securityContext || {}) }
     return spec
   })
   const clonedIdToSpec = new Map(containerRowIds.map((id, i) => [id, clonedSpecs[i]]))
@@ -164,6 +178,8 @@ export function buildManifests({
       template: {
         metadata: { labels: { app: appName, 'managed-by': 'portainer-run' } },
         spec: {
+          securityContext: POD_SECURITY_CONTEXT,
+          automountServiceAccountToken: false,
           containers: clonedSpecs,
           ...(podVolumes.length ? { volumes: podVolumes } : {}),
         },

@@ -188,6 +188,8 @@ export default function VibeEditTab({ d, envId, namespace, name, gitOpsInfo, onS
           gitTargetId: gitOpsInfo.gitTargetId,
           branch: gitOpsInfo.gitBranch,
           gitPath,
+          envId,
+          ns: namespace,
           envVars: envVars.filter((v) => v.key && v.key.trim()),
         }),
       })

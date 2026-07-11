@@ -22,6 +22,7 @@ export const useAppStore = create((set, get) => ({
   aiProvider: 'anthropic',
   baseDomain: '',
   configNamespace: 'kube-system',
+  version: 'dev',
   /** @type {Record<string, { reason?: string, disabledAt?: string }>} */
   disabledEnvs: {},
   cache: { ...initialCache },
@@ -40,6 +41,10 @@ export const useAppStore = create((set, get) => ({
 
   /** @type {null | { envId: string, ns: string, name: string }} */
   deleteTarget: null,
+
+  /** In-flight deletes keyed by `${envId}:${ns}:${name}` — survives the modal closing. */
+  /** @type {Record<string, true>} */
+  deletingApps: {},
 
   /** @type {null | { envId: string, ns: string, name: string }} */
   restartTarget: null,
@@ -62,6 +67,7 @@ export const useAppStore = create((set, get) => ({
   setAi: (isAiAvailable, aiProvider, baseDomain) =>
     set({ isAiAvailable, aiProvider, baseDomain: baseDomain || '' }),
   setConfigNamespace: (v) => set({ configNamespace: v || 'kube-system' }),
+  setVersion: (v) => set({ version: v || 'dev' }),
   setDisabledEnvs: (disabledEnvs) => set({ disabledEnvs }),
   setCache: (updater) =>
     set((s) => (typeof updater === 'function' ? { cache: updater(s.cache) } : { cache: updater })),
@@ -83,6 +89,13 @@ export const useAppStore = create((set, get) => ({
   patchEnvPermissions: (envId, namespace, perms) =>
     set((s) => ({ envPermissions: { ...s.envPermissions, [`${envId}:${namespace}`]: perms } })),
   setDeleteTarget: (deleteTarget) => set({ deleteTarget }),
+  markAppDeleting: (key) => set((s) => ({ deletingApps: { ...s.deletingApps, [key]: true } })),
+  clearAppDeleting: (key) =>
+    set((s) => {
+      const next = { ...s.deletingApps }
+      delete next[key]
+      return { deletingApps: next }
+    }),
   setRestartTarget: (restartTarget) => set({ restartTarget }),
   setChatOpen: (chatOpen) => {
     if (typeof document !== 'undefined') {

@@ -133,7 +133,11 @@ function parseEnvExample(text) {
   return vars
 }
 
-const SECRET_PATTERN = /SECRET|KEY|TOKEN|PASSWORD|PASS|AUTH|CREDENTIAL/i
+// Keys whose names imply a secret value. Kept in sync with the server's
+// isSensitiveEnvKey in routes/vibe.js — matching values are stored in a
+// Kubernetes Secret instead of being committed to git (issue #38).
+const SECRET_PATTERN =
+  /(^|[^A-Z])(PASSWORD|PASSWD|PASS|SECRET|TOKEN|API[_-]?KEY|APIKEY|ACCESS[_-]?KEY|PRIVATE[_-]?KEY|CREDENTIALS?|AUTH|DSN|CONNECTION[_-]?STRING|CERT|SIGNING)([^A-Z]|$)/i
 
 // ---------------------------------------------------------------------------
 // Step indicator
@@ -1124,7 +1128,7 @@ export function VibeDeploy() {
                 onClick={() => setEnvVars((prev) => [...prev, { key: '', value: '', custom: true }])}>
                 + Add variable
               </button>
-              <div className="hint">Values marked with •••• are treated as sensitive and hidden from view.</div>
+              <div className="hint">Values whose name looks sensitive (password, token, key, secret, and similar) are hidden here, stored in a Kubernetes Secret in your project space, and are never written into the git repository. Other values are committed as plain configuration.</div>
               <div className="form-actions">
                 <button type="button" className="btn btn-ghost" onClick={() => setStep(1)}>← Back</button>
                 <button type="button" className="btn btn-primary" onClick={confirmEnvVars}>
@@ -1149,11 +1153,29 @@ export function VibeDeploy() {
                   <div className="hint">Lowercase, alphanumeric and hyphens</div>
                 </div>
               </div>
+              {(() => {
+                const availableEnvs = environments.filter((e) => !isEnvDisabled({ disabledEnvs }, e.Id))
+                const singleEnv = availableEnvs.length === 1
+                const singleNs = nsList.length === 1 && !nsLoading && !manualNs
+                // When the user has exactly one environment and one project space,
+                // there is nothing to choose. Hide the infrastructure selectors
+                // entirely — non-technical users should not have to reason about
+                // environments or namespaces (per user feedback). The values are
+                // auto-selected elsewhere, so deploy still has everything it needs.
+                if (singleEnv && singleNs) {
+                  return (
+                    <div className="hint" style={{ marginBottom: 4 }}>
+                      Deploying to <strong style={{ color: 'var(--text-bright)' }}>{availableEnvs[0].Name}</strong>
+                      {' / '}
+                      <strong style={{ color: 'var(--text-bright)' }}>{nsList[0]}</strong>
+                    </div>
+                  )
+                }
+                return (
               <div className="frow">
                 <div className="field">
                   <label>Deployment target</label>
                   {(() => {
-                    const availableEnvs = environments.filter((e) => !isEnvDisabled({ disabledEnvs }, e.Id))
                     const locked = availableEnvs.length === 1
                     return locked ? (
                       <div style={{
@@ -1214,6 +1236,8 @@ export function VibeDeploy() {
                   <div className="hint">Project space must already exist in the target</div>
                 </div>
               </div>
+                )
+              })()}
               {perms && (!perms.canDeploy || !perms.canCreatePvc) && (
                 <div style={{
                   padding: '12px 14px', background: 'rgba(239,68,68,0.08)',
