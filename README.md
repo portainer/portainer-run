@@ -52,15 +52,23 @@ The runtime is detected from the file structure. A `package.json` maps to Node.j
 
 On deploy, up to three init containers run before the app starts: the first clones source files from git into a PersistentVolume, the second runs the dependency installer (`npm install`, `pip install`, and so on) in the correct runtime image, and the third writes a `.env` file from the entered environment variables. None of this requires a build step. Every application is deployed with sane resource requests and limits: a request of 0.1 CPU and 1Gi of memory, and a limit of 1 CPU and 4Gi of memory. These values live in the committed manifest, so a platform administrator can adjust them in git if a workload needs more.
 
-If uploaded files include a `.env.example`, Portainer-Run detects it and presents an editable list of keys before deploying. Keys matching common patterns (SECRET, TOKEN, KEY, PASSWORD) are masked in the form.
+Every pod is deployed hardened to the Kubernetes baseline pod security profile. All containers, the application and every init container, drop all Linux capabilities, disallow privilege escalation, and run under the RuntimeDefault seccomp profile. The pod does not mount a service account token. `runAsNonRoot` and a read-only root filesystem are intentionally not forced, because the clone, install, and env-writing steps and many AI-generated images legitimately write to the filesystem and start as root; forcing non-root here would break the common case.
+
+Environment variables whose names imply a secret (for example PASSWORD, SECRET, TOKEN, API_KEY, ACCESS_KEY, PRIVATE_KEY, CREDENTIALS, AUTH, DSN, CONNECTION_STRING, CERT, SIGNING) are detected automatically. Rather than being written into the committed manifest, their values are stored in a Kubernetes Secret in the target namespace and referenced by the container via `secretKeyRef`, so the sensitive value never reaches the git repository. Non-sensitive variables keep the plain behavior and are written to the committed `.env`. Detection is name-based and errs toward caution. Note that an app reading only from a `.env` file will not see secret values there; those arrive through the container environment instead.
+
+If uploaded files include a `.env.example`, Portainer-Run detects it and presents an editable list of keys before deploying. Keys whose names look sensitive are masked in the form, and on deploy their values are routed to a Kubernetes Secret rather than committed to git, as described above.
+
+When your Portainer account can reach only a single environment, and that environment has only a single project space (namespace), the environment and project space selectors are hidden and replaced with a one-line summary of where the app will land. This keeps the deploy flow free of infrastructure choices for users who have none to make.
 
 Deploy also supports deploying directly from an existing git repository. Instead of uploading files, select a configured git target, branch, and optional subfolder. Portainer-Run fetches the file listing, detects the runtime, and clones directly from that source repository on every pod start.
 
-Clicking any application opens a detail panel with tabs for Overview, Containers, Metrics, Logs, Revisions, and Edit. The Edit tab reads the committed manifest back and lets you change how the app is exposed, adjust or add environment variables, and upload a revised set of source files. Environment variable changes are written back to the manifest in git (both the container environment and the generated `.env` file), and Portainer reconciles on the next poll cycle.
+Clicking any application opens a detail panel with tabs for Overview, Containers, Metrics, Logs, Revisions, and Edit. The Edit tab reads the committed manifest back and lets you change how the app is exposed, adjust or add environment variables, and upload a revised set of source files. Environment variable changes are written back to the manifest in git (both the container environment and the generated `.env` file), and Portainer reconciles on the next poll cycle. Sensitive variables are handled the same way as on first deploy: they are stored in a Kubernetes Secret and referenced by the manifest rather than committed in plain text.
 
 **Cluster Readiness** (admin only) checks each environment for ingress, LoadBalancer, storage, node health, and GPU availability, and lets administrators disable environments from the deploy flow.
 
 **Assistant** is a persistent chat panel available on every page. It is context-aware and fetches live diagnostic data before answering health questions. It directs all deployment questions to the Deploy workflow and never executes irreversible operations directly.
+
+The running release is shown at the bottom of the sidebar as "Portainer-Run [version]". The value is baked into the image at build time: tagged releases show their release version, builds from the develop branch show `develop`, pull request builds show `pr-<number>`, and local or untagged builds show `dev`.
 
 ## Git targets
 
@@ -72,11 +80,13 @@ Each target stores the provider (GitHub, GitLab, Gitea, or other), the repositor
 
 The Test button on each target checks connectivity and reports read and write permissions. For GitHub, the check uses the collaborator permissions API, which works correctly with fine-grained PATs. For GitHub fine-grained PATs, the token requires Contents (read and write) permission on the target repository. Classic PATs require the `repo` scope.
 
+The target form states the minimum token scope for each provider. For GitLab this is the `api` scope: a narrower combination such as `read_api` plus `write_repository` passes GitLab's own form checks but fails when Portainer-Run writes manifests and creates the GitOps stack, so the form calls this out explicitly. This is advisory guidance rather than validation, because there is no reliable cross-provider way to introspect a token's granted scopes before use.
+
 For GitHub Enterprise Server, keep the provider set to GitHub and enter your server host in the GitHub server URL field. Portainer-Run uses the GitHub-compatible REST API at `/api/v3` on that host. Do not use the "Other" provider for GitHub Enterprise: that path targets the Gitea API.
 
 For self-hosted GitLab, keep the provider set to GitLab and enter your server host in the GitLab server URL field. Leave it blank for gitlab.com.
 
-Directory deletion on app removal uses the GitHub Git Data API tree approach: a single commit removes all files under a directory regardless of count, matching what the GitHub UI "Delete directory" button does. This is also implemented for GitLab (batch delete via the commits API) and Gitea.
+Application removal deletes the manifest file and the source directory in a single commit. For GitHub this uses the Git Data API tree approach: one commit removes the manifest and every file under the source directory regardless of count, matching what the GitHub UI "Delete directory" button does. Removing both in one commit avoids a non-fast-forward race that could otherwise occur between two sequential commits against the same branch. The same single-commit behavior is implemented for GitLab (batch delete via the commits API) and Gitea.
 
 ## Roles
 
@@ -261,6 +271,8 @@ If the container cannot resolve your Portainer hostname (error: `EAI_AGAIN`), ad
 | `SSL_CERT` | (none) | Path to TLS certificate file. Uses self-signed if not set. |
 | `SSL_KEY` | (none) | Path to TLS private key file. Uses self-signed if not set. |
 | `SSL_CERT_DIR` | `/app` | Directory for self-signed certificate storage. |
+
+`PORTAINER_RUN_VERSION` is not a runtime setting. It is a Docker build argument, set by the CI and release workflows at image build time, and surfaced read-only in the sidebar. Local builds default it to `dev`.
 
 ## Connecting
 
