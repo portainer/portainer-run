@@ -69,6 +69,8 @@ jobs:
         with:
           push: true
           platforms: linux/amd64,linux/arm64
+          build-args: |
+            PORTAINER_RUN_VERSION=${{ github.event.inputs.version }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.event.inputs.version }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
