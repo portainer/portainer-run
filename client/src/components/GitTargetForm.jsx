@@ -127,6 +127,7 @@ export function GitTargetForm({ initial, onSaved, onCancel }) {
             <div className="hint">
               Username required for private repos and fine-grained PATs. For GitHub classic PATs use <code>oauth2</code>.
             </div>
+            <TokenScopeNotice provider={payload.provider} />
             <div className="hint" style={{ marginTop: 4 }}>
               This token is stored encrypted and is also passed to Portainer when creating a GitOps stack, so Portainer can poll the repository for changes.
             </div>
@@ -228,6 +229,36 @@ export function GitTargetForm({ initial, onSaved, onCancel }) {
       </div>
     </div>
   )
+}
+
+/**
+ * Minimum PAT scope guidance per provider. Advisory only — there is no reliable
+ * cross-provider API to introspect a token's granted scopes before use, so we
+ * state the required scope rather than validating it. See issue #33.
+ */
+function TokenScopeNotice({ provider }) {
+  let body
+  if (provider === 'gitlab') {
+    body = (
+      <>Requires a token with the <code>api</code> scope. Narrower combinations such as{' '}
+      <code>read_api</code> + <code>write_repository</code> pass GitLab's own checks but fail
+      when Portainer-Run writes manifests and creates the GitOps stack.</>
+    )
+  } else if (provider === 'github') {
+    body = (
+      <>Classic tokens require the <code>repo</code> scope. Fine-grained tokens require{' '}
+      <b>Contents</b> read and write permission on the target repository.</>
+    )
+  } else if (provider === 'gitea') {
+    body = (
+      <>Requires a token with <code>write:repository</code> (repository read and write) permission.</>
+    )
+  } else {
+    body = (
+      <>Provide a token with repository read and write permission so manifests can be committed.</>
+    )
+  }
+  return <div className="hint" style={{ marginTop: 4 }}>{body}</div>
 }
 
 function Field({ label, value, onChange, placeholder, type = 'text', mono = false }) {

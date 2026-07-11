@@ -115,6 +115,7 @@ export function MainLayout() {
   const disabledEnvs = useAppStore((s) => s.disabledEnvs)
   const isAdmin = useAppStore((s) => s.isAdmin)
   const isAiAvailable = useAppStore((s) => s.isAiAvailable)
+  const version = useAppStore((s) => s.version)
   const setChatOpen = useAppStore((s) => s.setChatOpen)
   const chatOpen = useAppStore((s) => s.chatOpen)
   const isMobile = useIsMobile()
@@ -220,6 +221,7 @@ export function MainLayout() {
         {!isMobile && (
           <nav>
             <NavLinks isAdmin={isAdmin} />
+            <div className="sidebar-version" title="Portainer-Run release">Portainer-Run {version}</div>
           </nav>
         )}
         <div className="content">

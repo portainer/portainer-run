@@ -36,6 +36,9 @@ export const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || ''
 export const BASE_DOMAIN  = process.env.BASE_DOMAIN  || ''
 export const GATEWAY_URL  = (process.env.GATEWAY_URL || '').replace(/\/$/, '')
 
+/** Release version, baked in at Docker build time. 'dev' for local/non-release builds. */
+export const VERSION = process.env.PORTAINER_RUN_VERSION || 'dev'
+
 function resolveConfigNamespace() {
   // When running in Kubernetes, the pod's own namespace is mounted at this path automatically.
   try {
