@@ -1,16 +1,12 @@
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAppStore } from '../store/useAppStore.js'
-import { kubeFetch } from '../lib/api.js'
-import { refreshCache } from '../services/refreshDeployments.js'
-import { deleteAppManifest } from '../lib/gitTargets.js'
+import { deleteApp } from '../services/deleteApp.js'
 import { ROUTES } from '../lib/routes.js'
 
 export function DeleteModal() {
   const deleteTarget = useAppStore((s) => s.deleteTarget)
   const setDeleteTarget = useAppStore((s) => s.setDeleteTarget)
-  const token = useAppStore((s) => s.token)
-  const [deleting, setDeleting] = useState(false)
   const [deleteManifest, setDeleteManifest] = useState(false)
   const [confirmText, setConfirmText] = useState('')
   const navigate = useNavigate()
@@ -18,80 +14,29 @@ export function DeleteModal() {
 
   if (!deleteTarget) return null
 
-  const { envId, ns, name, gitTargetId, gitBranch, gitPath, vibeSourcePath } = deleteTarget
+  const { ns, name, gitTargetId, gitBranch, gitPath, vibeSourcePath } = deleteTarget
   const isVibeDeploy = Boolean(vibeSourcePath)
   const isGitOps = Boolean(gitTargetId && gitBranch && gitPath)
 
-  async function confirm() {
-    setDeleting(true)
-    try {
-      // 1. Read Deployment before deleting so we can find all PVC names from spec.volumes
-      let pvcNames = [name] // fallback: assume PVC shares the deployment name
-      try {
-        const depRes = await kubeFetch(token, envId, `/apis/apps/v1/namespaces/${ns}/deployments/${name}`)
-        if (depRes.ok) {
-          const dep = await depRes.json()
-          const vols = dep?.spec?.template?.spec?.volumes || []
-          const fromSpec = vols
-            .filter((v) => v.persistentVolumeClaim?.claimName)
-            .map((v) => v.persistentVolumeClaim.claimName)
-          if (fromSpec.length > 0) pvcNames = fromSpec
-        }
-      } catch { /* non-fatal — fall through to name-based fallback */ }
+  function confirm() {
+    // Capture everything the delete needs, then close the modal immediately.
+    // The delete runs detached (services/deleteApp) so opening a second delete
+    // right after cannot inherit this one's in-progress state (issue #44).
+    const target = deleteTarget
+    const alsoManifest = deleteManifest
+    const wasOnDetail =
+      loc.pathname.startsWith(`${ROUTES.services}/`) && loc.pathname !== ROUTES.services
 
-      // 2. Delete the git credentials Secret if this is a Vibe Deploy app (best-effort)
-      if (isVibeDeploy) {
-        await kubeFetch(token, envId, `/api/v1/namespaces/${ns}/secrets/${name}-git-credentials`, { method: 'DELETE' }).catch(() => {})
-      }
+    setDeleteTarget(null)
+    setDeleteManifest(false)
+    setConfirmText('')
 
-      // 3. Delete the Kubernetes Deployment
-      const r = await kubeFetch(token, envId, `/apis/apps/v1/namespaces/${ns}/deployments/${name}`, {
-        method: 'DELETE',
-      })
-      if (!r.ok && r.status !== 404) throw new Error('HTTP ' + r.status)
-
-      // 4. Delete associated resources — best-effort, 404s silently ignored
-      await Promise.allSettled([
-        kubeFetch(token, envId, `/api/v1/namespaces/${ns}/services/${name}`, { method: 'DELETE' }),
-        kubeFetch(token, envId, `/apis/networking.k8s.io/v1/namespaces/${ns}/ingresses/${name}`, { method: 'DELETE' }),
-        ...pvcNames.map((pvcName) =>
-          kubeFetch(token, envId, `/api/v1/namespaces/${ns}/persistentvolumeclaims/${pvcName}`, { method: 'DELETE' })
-        ),
-      ])
-
-      // 5. Optionally delete git entries — run sequentially to avoid branch ref race condition
-      //    (parallel commits with the same parent SHA cause non-fast-forward errors)
-      if (isGitOps && deleteManifest) {
-        try {
-          await deleteAppManifest({ gitTargetId, branch: gitBranch, gitPath, appName: name })
-          if (isVibeDeploy && vibeSourcePath) {
-            await deleteAppManifest({ gitTargetId, branch: gitBranch, gitPath: vibeSourcePath, appName: name })
-          }
-        } catch (e) {
-          useAppStore.getState().pushToast(
-            `Deployment deleted but Git cleanup failed: ${e?.message || 'unknown error'} — check the token has write access to the repository`,
-            'warn',
-          )
-        }
-      }
-
-      useAppStore.getState().pushToast(`Deployment "${name}" deleted`, 'ok')
-      setDeleteTarget(null)
-      setDeleteManifest(false)
-      setConfirmText('')
-
-      if (
-        loc.pathname.startsWith(`${ROUTES.services}/`) &&
-        loc.pathname !== ROUTES.services
-      ) {
-        navigate(ROUTES.services, { replace: true })
-      }
-      await refreshCache(false)
-    } catch (e) {
-      useAppStore.getState().pushToast('Delete failed: ' + (e?.message || e), 'err')
-    } finally {
-      setDeleting(false)
-    }
+    void deleteApp(target, {
+      deleteManifest: alsoManifest,
+      onDeleted: () => {
+        if (wasOnDetail) navigate(ROUTES.services, { replace: true })
+      },
+    })
   }
 
   function handleCancel() {
@@ -164,17 +109,16 @@ export function DeleteModal() {
             type="button"
             className="btn btn-ghost btn-sm"
             onClick={handleCancel}
-            disabled={deleting}
           >
             Cancel
           </button>
           <button
             type="button"
             className="btn btn-danger btn-sm"
-            onClick={() => void confirm()}
-            disabled={deleting || confirmText.toLowerCase() !== 'delete'}
+            onClick={confirm}
+            disabled={confirmText.toLowerCase() !== 'delete'}
           >
-            {deleting ? 'Deleting…' : 'Delete'}
+            Delete
           </button>
         </div>
       </div>

@@ -100,7 +100,8 @@ a.app-breadcrumbs-home:hover{
 body.chat-open .main{margin-right:360px;}
 .main{display:grid;grid-template-columns:220px 1fr;height:calc(100vh - var(--app-header-h));min-height:0;transition:margin-right .2s ease;}
 /* Sidebar only — do not use bare `nav` (breadcrumbs also use <nav>) */
-.main > nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25,.6);}
+.main > nav{border-right:1px solid var(--border);padding:20px 0;background:rgba(17,20,25,.6);display:flex;flex-direction:column;}
+.sidebar-version{margin-top:auto;padding:12px 12px 2px;font-family:var(--mono);font-size:11px;color:var(--text-dim);letter-spacing:.02em;}
 .nav-label{font-family:var(--mono);font-size:10px;font-weight:500;color:#b8c8d8;letter-spacing:.12em;text-transform:uppercase;padding:10px 12px 6px;}
 .nav-section{padding:0 12px;margin-bottom:4px;}
 .nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:6px;cursor:pointer;color:var(--text);font-size:13px;transition:background .12s,color .12s,border-color .12s;user-select:none;text-decoration:none;border:1px solid transparent;}

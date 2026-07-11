@@ -37,4 +37,9 @@ EXPOSE 80
 
 ENV NODE_ENV=production
 
+# Release version, supplied by the release workflow (--build-arg PORTAINER_RUN_VERSION=...).
+# Defaults to 'dev' for local and PR builds.
+ARG PORTAINER_RUN_VERSION=dev
+ENV PORTAINER_RUN_VERSION=$PORTAINER_RUN_VERSION
+
 CMD ["bun", "run", "server/server.js"]

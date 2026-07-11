@@ -185,6 +185,74 @@ const INIT_INSTALL_RESOURCES = {
   limits: { cpu: '1', memory: '2Gi' },
 }
 
+// --- Pod Security Standards (issue #39) ---------------------------------------
+// Applied to the app container and every init container. We harden with the
+// flags that are safe across the images used here (alpine/git, busybox, and
+// arbitrary user runtime images that typically start as root and write into the
+// mounted PV): drop all capabilities, block privilege escalation, and pin the
+// default seccomp profile. We deliberately do NOT force runAsNonRoot or
+// readOnlyRootFilesystem, because the sync/install/env init steps and many
+// vibe-built images legitimately need to write to the filesystem and run as
+// their image's default user. This matches the Kubernetes "baseline"/restricted
+// intent without breaking the deploy flow.
+const CONTAINER_SECURITY_CONTEXT = {
+  allowPrivilegeEscalation: false,
+  capabilities: { drop: ['ALL'] },
+  seccompProfile: { type: 'RuntimeDefault' },
+}
+
+// Pod-level context: never mount the service account token (the workloads
+// deployed here never call the Kubernetes API) and pin the default seccomp
+// profile at the pod level so it is inherited by anything without its own.
+const POD_SECURITY_CONTEXT = {
+  seccompProfile: { type: 'RuntimeDefault' },
+}
+
+/** Attach the hardened container securityContext, preserving any existing keys. */
+function harden(container) {
+  if (!container || typeof container !== 'object') return container
+  container.securityContext = {
+    ...CONTAINER_SECURITY_CONTEXT,
+    ...(container.securityContext || {}),
+  }
+  return container
+}
+
+// --- Sensitive ENV detection (issue #38) --------------------------------------
+// Env keys whose names imply a secret must not be written into the committed
+// manifest (the vibe-env init container embeds .env values in plaintext inside
+// the Deployment YAML). Matching keys are instead stored in a Kubernetes Secret
+// and referenced with secretKeyRef, so the value never touches git.
+//
+// Word-boundary matching on common secret-bearing tokens. Case-insensitive.
+const SENSITIVE_ENV_PATTERN =
+  /(^|[^A-Z])(PASSWORD|PASSWD|PASS|SECRET|TOKEN|API[_-]?KEY|APIKEY|ACCESS[_-]?KEY|PRIVATE[_-]?KEY|CREDENTIALS?|AUTH|DSN|CONNECTION[_-]?STRING|CERT|SIGNING)([^A-Z]|$)/i
+
+/** True when an env key name implies its value is sensitive. */
+export function isSensitiveEnvKey(key) {
+  return SENSITIVE_ENV_PATTERN.test(String(key || ''))
+}
+
+/** The Kubernetes Secret name that holds an app's sensitive env values. */
+function appSecretName(safeApp) {
+  return `${safeApp}-app-secrets`
+}
+
+/**
+ * Split env vars into plaintext (safe to commit) and sensitive (stored in a
+ * Secret). Returns { plain: [{key,value}], sensitive: [{key,value}] }.
+ */
+function splitSensitiveEnv(envVars) {
+  const plain = []
+  const sensitive = []
+  for (const v of envVars || []) {
+    if (!v || !v.key) continue
+    if (isSensitiveEnvKey(v.key)) sensitive.push(v)
+    else plain.push(v)
+  }
+  return { plain, sensitive }
+}
+
 function buildVibeManifests({
   appName,
   ns,
@@ -231,10 +299,23 @@ function buildVibeManifests({
     },
   }
 
-  // Build env array for the main container
-  const containerEnv = (envVars || [])
-    .filter((v) => v.key)
-    .map((v) => ({ name: v.key, value: v.value }))
+  // Split env into plaintext (safe to commit) and sensitive (stored in a Secret).
+  // Sensitive values are referenced via secretKeyRef so they never appear in the
+  // committed manifest. See issue #38.
+  const { plain: plainEnv, sensitive: sensitiveEnv } = splitSensitiveEnv(envVars)
+  const hasSecrets = sensitiveEnv.length > 0
+  const secretForApp = appSecretName(safeApp)
+
+  // Build env array for the main container:
+  //  - plaintext vars inline
+  //  - sensitive vars sourced from the app-secrets Secret
+  const containerEnv = [
+    ...plainEnv.map((v) => ({ name: v.key, value: v.value })),
+    ...sensitiveEnv.map((v) => ({
+      name: v.key,
+      valueFrom: { secretKeyRef: { name: secretForApp, key: v.key } },
+    })),
+  ]
 
   // Init container: clones/syncs source from git into the PV
   // Two init containers: first clones and copies source; second writes .env if needed.
@@ -289,11 +370,12 @@ function buildVibeManifests({
     })
   }
 
-  // Init 3: write .env if envVars present
-  if (containerEnv.length > 0) {
-    const envFileContent = (envVars || [])
-      .filter((v) => v.key)
-      .map((v) => `${v.key}=${v.value.replace(/\n/g, '\\n')}`)
+  // Init 3: write .env with the NON-sensitive vars only.
+  // Sensitive values are delivered to the container via secretKeyRef (process.env)
+  // and are deliberately never written into this committed init command. See #38.
+  if (plainEnv.length > 0) {
+    const envFileContent = plainEnv
+      .map((v) => `${v.key}=${String(v.value ?? '').replace(/\n/g, '\\n')}`)
       .join('\n')
     // Write .env using a busybox printf — escape single quotes in values
     const escapedContent = envFileContent.replace(/'/g, "'\\''")
@@ -325,6 +407,11 @@ function buildVibeManifests({
   // Remove undefined command
   if (!mainContainer.command) delete mainContainer.command
 
+  // Pod Security Standards (issue #39): harden the app container and every
+  // init container, and lock down the pod (no service account token).
+  harden(mainContainer)
+  for (const ic of initContainers) harden(ic)
+
   // Deployment
   const deployment = {
     apiVersion: 'apps/v1',
@@ -336,6 +423,8 @@ function buildVibeManifests({
       template: {
         metadata: { labels: { app: safeApp, 'managed-by': 'portainer-run' } },
         spec: {
+          securityContext: POD_SECURITY_CONTEXT,
+          automountServiceAccountToken: false,
           initContainers,
           containers: [mainContainer],
           volumes: [{ name: 'app-data', persistentVolumeClaim: { claimName: `${safeApp}-data` } }],
@@ -566,6 +655,19 @@ async function handleVibeDeploy(req, res) {
           username: initCredUsername || 'oauth2',
           token: initCredToken,
         },
+      })
+    }
+
+    // 5b. Create the app-secrets Secret for any sensitive env vars (issue #38).
+    //     These values are referenced by the Deployment via secretKeyRef and are
+    //     never written into the committed manifest.
+    const { sensitive: sensitiveEnv } = splitSensitiveEnv(vibeParams.envVars || [])
+    if (sensitiveEnv.length > 0) {
+      await createKubernetesSecret(req, {
+        envId,
+        ns,
+        name: `${safeApp}-app-secrets`,
+        data: Object.fromEntries(sensitiveEnv.map((v) => [v.key, String(v.value ?? '')])),
       })
     }
 
@@ -1044,7 +1146,7 @@ async function handleVibeUpdateEnv(req, res) {
   const data = parseJson(body)
   if (!data) return json(res, 400, { error: 'Invalid request body' })
 
-  const { gitTargetId, branch, gitPath, envVars } = data
+  const { gitTargetId, branch, gitPath, envVars, envId, ns } = data
   if (!gitTargetId || !branch || !gitPath) {
     return json(res, 400, { error: 'gitTargetId, branch and gitPath are required' })
   }
@@ -1074,40 +1176,71 @@ async function handleVibeUpdateEnv(req, res) {
       .filter((v) => v && typeof v.key === 'string' && v.key.trim())
       .map((v) => ({ key: v.key.trim(), value: String(v.value ?? '') }))
 
-    // 1. Container env array.
-    if (cleaned.length > 0) {
-      container.env = cleaned.map((v) => ({ name: v.key, value: v.value }))
+    // Split into plaintext (committed) and sensitive (Secret-backed). See #38.
+    const { plain: plainEnv, sensitive: sensitiveEnv } = splitSensitiveEnv(cleaned)
+    const safeApp = sanitizeStackName(deployment.metadata?.name || 'app')
+    const secretForApp = `${safeApp}-app-secrets`
+
+    // 1. Container env array: plaintext inline, sensitive via secretKeyRef.
+    const nextEnv = [
+      ...plainEnv.map((v) => ({ name: v.key, value: v.value })),
+      ...sensitiveEnv.map((v) => ({
+        name: v.key,
+        valueFrom: { secretKeyRef: { name: secretForApp, key: v.key } },
+      })),
+    ]
+    if (nextEnv.length > 0) {
+      container.env = nextEnv
     } else {
       delete container.env
     }
 
-    // 2. vibe-env init container — writes the .env file into the volume.
-    //    Regenerated wholesale to mirror the deploy path exactly.
+    // 2. vibe-env init container — writes ONLY the plaintext vars into .env.
+    //    Sensitive values arrive via secretKeyRef and never touch the manifest.
     const workDir = container.workingDir || '/app'
     podSpec.initContainers = (podSpec.initContainers || []).filter((c) => c.name !== 'vibe-env')
-    if (cleaned.length > 0) {
-      const envFileContent = cleaned
+    if (plainEnv.length > 0) {
+      const envFileContent = plainEnv
         .map((v) => `${v.key}=${v.value.replace(/\n/g, '\\n')}`)
         .join('\n')
       const escaped = envFileContent.replace(/'/g, "'\\''")
-      podSpec.initContainers.push({
+      podSpec.initContainers.push(harden({
         name: 'vibe-env',
         image: 'busybox:1.36',
         command: ['sh', '-c', `printf '%s' '${escaped}' > ${workDir}/.env`],
         resources: INIT_ENV_RESOURCES,
         volumeMounts: [{ name: 'app-data', mountPath: workDir }],
-      })
+      }))
     }
     if (podSpec.initContainers.length === 0) delete podSpec.initContainers
 
+    // 3. Create/replace the app-secrets Secret when we have a live target.
+    //    Without envId/ns we can only commit the manifest; the secretKeyRef will
+    //    resolve once the Secret exists, so we surface a clear warning.
+    let secretWarning = null
+    if (sensitiveEnv.length > 0) {
+      if (envId && ns) {
+        await createKubernetesSecret(req, {
+          envId,
+          ns,
+          name: secretForApp,
+          data: Object.fromEntries(sensitiveEnv.map((v) => [v.key, String(v.value ?? '')])),
+        })
+      } else {
+        secretWarning =
+          'Sensitive variables were referenced as secrets in the manifest but the Secret ' +
+          'could not be created (no environment/namespace context). Create it manually or ' +
+          're-save from the app detail view.'
+      }
+    }
+
     const updatedYaml = serializeManifests(docs)
 
-    const safeApp = sanitizeStackName(deployment.metadata?.name || 'app')
     await commitFiles(conn.payload, branch, `vibe: update environment variables for ${safeApp}`, [
       { path: gitPath, content: updatedYaml },
     ])
 
-    return json(res, 200, { ok: true })
+    return json(res, 200, { ok: true, ...(secretWarning ? { warning: secretWarning } : {}) })
   } catch (err) {
     console.error('[vibe update-env error]', err.message || err)
     return json(res, 500, { error: err.message || 'Update failed' })

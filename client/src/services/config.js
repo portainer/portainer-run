@@ -19,6 +19,7 @@ export async function loadServerConfig() {
     )
     st().setAi(!!d.aiAvailable, d.aiProvider || 'anthropic', d.baseDomain || '')
     if (d.configNamespace) st().setConfigNamespace(d.configNamespace)
+    st().setVersion(d.version || 'dev')
   } catch (e) {
     st().setPortainerFromServer(false)
     st().setServerLabel('API proxy not reachable — is the portainer-run server running?')
