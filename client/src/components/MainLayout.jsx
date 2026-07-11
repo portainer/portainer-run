@@ -221,7 +221,7 @@ export function MainLayout() {
         {!isMobile && (
           <nav>
             <NavLinks isAdmin={isAdmin} />
-            <div className="sidebar-version" title="Portainer-Run release">{version}</div>
+            <div className="sidebar-version" title="Portainer-Run release">Portainer-Run {version}</div>
           </nav>
         )}
         <div className="content">
