@@ -9,17 +9,17 @@ export function appDeleteKey(envId, ns, name) {
 }
 
 /**
- * Delete a deployment and its associated resources. Runs detached from the
- * confirm modal so a second delete can be started without the first's progress
- * state bleeding into it (issue #44). Progress is tracked in the store under
- * deletingApps keyed by app, and all user feedback is via toasts.
+ * Delete a deployment and its associated resources. Awaited by the confirm
+ * modal, which stays open with a progress indicator until this resolves
+ * (issue #44). Progress is also tracked in the store under deletingApps keyed
+ * by app, as a guard against a duplicate delete of the same app.
  *
  * @param {object} target  { envId, ns, name, gitTargetId?, gitBranch?, gitPath?, vibeSourcePath? }
  * @param {object} [opts]
  * @param {boolean} [opts.deleteManifest]  also remove GitOps manifest/source from git
- * @param {() => void} [opts.onDeleted]    called once after a successful delete
+ * @returns {Promise<boolean>}  true if the deployment was deleted, false on failure
  */
-export async function deleteApp(target, { deleteManifest = false, onDeleted } = {}) {
+export async function deleteApp(target, { deleteManifest = false } = {}) {
   const { envId, ns, name, gitTargetId, gitBranch, gitPath, vibeSourcePath } = target
   const isVibeDeploy = Boolean(vibeSourcePath)
   const isGitOps = Boolean(gitTargetId && gitBranch && gitPath)
@@ -29,7 +29,7 @@ export async function deleteApp(target, { deleteManifest = false, onDeleted } = 
   const key = appDeleteKey(envId, ns, name)
 
   // Guard against re-triggering a delete already in flight for the same app.
-  if (st().deletingApps[key]) return
+  if (st().deletingApps[key]) return false
   st().markAppDeleting(key)
 
   try {
@@ -86,10 +86,11 @@ export async function deleteApp(target, { deleteManifest = false, onDeleted } = 
     }
 
     st().pushToast(`Deployment "${name}" deleted`, 'ok')
-    if (typeof onDeleted === 'function') onDeleted()
     await refreshCache(false)
+    return true
   } catch (e) {
     st().pushToast(`Delete failed for "${name}": ` + (e?.message || e), 'err')
+    return false
   } finally {
     st().clearAppDeleting(key)
   }
