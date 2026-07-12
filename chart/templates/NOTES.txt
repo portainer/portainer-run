@@ -1,0 +1,23 @@
+Portainer-Run has been deployed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+In-cluster Service (ClusterIP):
+    {{ include "portainer-run.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+    ports: 443 (https), 80 (http)
+
+{{- if not .Values.secret.ENCRYPTION_KEY }}
+
+⚠️  WARNING: secret.ENCRYPTION_KEY is empty. The container exits on startup
+    without it (minimum 32 chars). Set it and upgrade:
+
+    helm upgrade {{ .Release.Name }} <chart> \
+      --set secret.ENCRYPTION_KEY="$(openssl rand -hex 32)"
+{{- end }}
+
+{{- if and (not .Values.secret.ANTHROPIC_API_KEY) (not .Values.secret.OPENAI_API_KEY) }}
+
+ℹ️  No AI provider key set — AI triage is unavailable until you set
+    secret.ANTHROPIC_API_KEY or secret.OPENAI_API_KEY.
+{{- end }}
+
+Check status:
+    kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "portainer-run.fullname" . }}

@@ -1,0 +1,77 @@
+# Default values for portainer-run.
+# Everything not listed here (ClusterIP service, single replica, resources,
+# security context, probes, cache PVC) is a fixed default baked into the templates.
+
+# Container image. The default points at the portainer DockerHub repo's
+# `latest` tag; override repository/tag
+# (and imagePullSecrets) for a private or mirrored (e.g. airgapped) registry,
+# or once a release process publishes versioned tags.
+image:
+  repository: portainer/portainer-run
+  # tag defaults to the chart appVersion when empty.
+  tag: latest
+
+# Only needed when pulling from a private/mirrored registry.
+imagePullSecrets: []
+
+# StorageClass for the persistent session-cache PVC. Empty ("") uses the
+# cluster's default StorageClass; set this if your cluster has no default
+# or you need a specific class.
+storageClass: ""
+
+# ── ConfigMap (non-sensitive configuration) ──────────────────────────────────
+# Rendered verbatim into the `portainer-run-config` ConfigMap and loaded into
+# the container via envFrom. The MCP config flow reads this ConfigMap by that
+# fixed name through the Portainer API, so keep uncommented keys as env keys.
+configMap:
+  # Portainer API base URL. Use the in-cluster Service DNS name when
+  # Portainer-Run runs in the same cluster as Portainer
+  # If you run Portainer-Run outside the cluster, set this to the external URL of
+  # your Portainer instance (e.g. https://portainer.example.com:9443)
+  PORTAINER_URL: "https://portainer.portainer.svc.cluster.local:9443"
+
+  # ── Ingress base domain ─────────────────────────────────────────────────────
+  # If set, Ingress templates default to appname.BASE_DOMAIN as the host.
+  # BASE_DOMAIN: "apps.example.com"
+
+  # ── File relay gateway ───────────────────────────────────────────────────────
+  # Required for staged file uploads via the run-gateway proxy.
+  # When set, large vibe deploy uploads use the gateway instead of inline MCP transfer.
+  GATEWAY_URL: "https://run-gateway.portainer.ai"
+
+  # ── AI model override ────────────────────────────────────────────────────────
+  # OpenAI model to use. No effect when using Anthropic.
+  OPENAI_MODEL: "gpt-4o"
+
+  # ── Ports ────────────────────────────────────────────────────────────────────
+  # PORT is the port the server listens on. HTTP_PORT (default 80) serves an
+  # HTTP→HTTPS redirect; set HTTP_PORT: "0" to disable it.
+  PORT: "443"
+  # HTTP_PORT: "80"
+
+  # ── Addon-gateway mode (optional) ─────────────────────────────────────────────
+  # Defaults to "0" — force HTTPS. Set to "1" only when served behind the
+  # Portainer addon gateway, which terminates TLS and proxies plain HTTP to us:
+  # then we serve HTTP directly (set PORT: "80" and HTTP_PORT: "0" to avoid a
+  # port clash). Without it we run HTTPS + an HTTP→HTTPS redirect; the gateway
+  # would hit that redirect and bounce the browser to the cluster DNS name, out
+  # of the Portainer base URL. The probe scheme follows this value automatically.
+  SERVE_HTTP: "0"
+
+  # ── Cache directory ──────────────────────────────────────────────────────────
+  # Override the directory used for persistent cache (default: /app/data).
+  # Must match the mountPath of the cache volume in the Deployment if changed.
+  # CACHE_DIR: "/app/data"
+
+# ── Secret (sensitive values) ────────────────────────────────────────────────
+# Rendered into an Opaque Secret (as stringData, so use plain text — no base64).
+secret:
+  # Required. Encrypts stored Git target credentials at rest. Min 32 chars.
+  # Generate one with: openssl rand -hex 32
+  ENCRYPTION_KEY: ""
+
+  # Anthropic (Claude). Set this or OPENAI_API_KEY to enable AI triage.
+  ANTHROPIC_API_KEY: ""
+
+  # OpenAI (GPT-4o) — set instead of ANTHROPIC_API_KEY to use OpenAI.
+  OPENAI_API_KEY: ""

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "portainer-run.fullname" . }}-cache
+  labels:
+    {{- include "portainer-run.labels" . | nindent 4 }}
+spec:
+  {{- with .Values.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

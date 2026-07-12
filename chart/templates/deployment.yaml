@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "portainer-run.fullname" . }}
+  labels:
+    {{- include "portainer-run.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "portainer-run.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        # Roll the pod when config/secret change so new values take effect.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+      labels:
+        {{- include "portainer-run.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: portainer-run
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: Always
+          ports:
+            - name: https
+              containerPort: 443
+              protocol: TCP
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: portainer-run-config
+          env:
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "portainer-run.fullname" . }}-secret
+                  key: ENCRYPTION_KEY
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "portainer-run.fullname" . }}-secret
+                  key: ANTHROPIC_API_KEY
+                  optional: true
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "portainer-run.fullname" . }}-secret
+                  key: OPENAI_API_KEY
+                  optional: true
+          volumeMounts:
+            - name: cache
+              mountPath: /app/data
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          {{- /* Probes follow configMap.PORT (app default 443) and the serve mode: */}}
+          {{- /* SERVE_HTTP=1 → plain HTTP, otherwise HTTPS. */}}
+          {{- $probePort := .Values.configMap.PORT | default "443" }}
+          {{- $probeScheme := ternary "HTTP" "HTTPS" (eq (toString (.Values.configMap.SERVE_HTTP | default "")) "1") }}
+          livenessProbe:
+            httpGet:
+              path: /config
+              port: {{ $probePort }}
+              scheme: {{ $probeScheme }}
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /config
+              port: {{ $probePort }}
+              scheme: {{ $probeScheme }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: cache
+          persistentVolumeClaim:
+            claimName: {{ include "portainer-run.fullname" . }}-cache

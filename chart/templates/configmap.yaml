@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  # Fixed name: the MCP config flow reads this ConfigMap by name through the
+  # Portainer API (server/routes/mcp.js). Do not template it.
+  name: portainer-run-config
+  labels:
+    {{- include "portainer-run.labels" . | nindent 4 }}
+data:
+  {{- range $key, $value := .Values.configMap }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
