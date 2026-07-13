@@ -63,10 +63,10 @@ spec:
               memory: 64Mi
             limits:
               memory: 256Mi
-          {{- /* Probes follow configMap.PORT (app default 443) and the serve mode: */}}
+          {{- /* Probes follow the baked-in PORT and serve mode (see _helpers.tpl): */}}
           {{- /* SERVE_HTTP=1 → plain HTTP, otherwise HTTPS. */}}
-          {{- $probePort := .Values.configMap.PORT | default "443" }}
-          {{- $probeScheme := ternary "HTTP" "HTTPS" (eq (toString (.Values.configMap.SERVE_HTTP | default "")) "1") }}
+          {{- $probePort := include "portainer-run.port" . }}
+          {{- $probeScheme := ternary "HTTP" "HTTPS" (eq (include "portainer-run.serveHttp" .) "1") }}
           livenessProbe:
             httpGet:
               path: /config

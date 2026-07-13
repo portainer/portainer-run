@@ -7,6 +7,13 @@ metadata:
   labels:
     {{- include "portainer-run.labels" . | nindent 4 }}
 data:
+  # Baked-in defaults (kept out of values.yaml; see _helpers.tpl).
+  PORTAINER_URL: {{ include "portainer-run.portainerUrl" . | quote }}
+  PORT: {{ include "portainer-run.port" . | quote }}
+  HTTP_PORT: {{ include "portainer-run.httpPort" . | quote }}
+  SERVE_HTTP: {{ include "portainer-run.serveHttp" . | quote }}
   {{- range $key, $value := .Values.configMap }}
+  {{- if not (has $key (list "PORTAINER_URL" "PORT" "HTTP_PORT" "SERVE_HTTP")) }}
   {{ $key }}: {{ $value | quote }}
+  {{- end }}
   {{- end }}
