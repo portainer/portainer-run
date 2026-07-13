@@ -202,6 +202,16 @@ const CONTAINER_SECURITY_CONTEXT = {
   seccompProfile: { type: 'RuntimeDefault' },
 }
 
+// Some runtime images de-privilege at startup: they start as root, chown their
+// working/cache dirs to a worker user, and bind a privileged port (80). With ALL
+// capabilities dropped they fail at boot ("Operation not permitted" on chown).
+// nginx is handled by switching to the unprivileged image; php-apache has no
+// clean unprivileged official image, so the php runtime is granted back the
+// minimum capabilities it needs. This is a deliberate, scoped exception to the
+// baseline for the php runtime only (see #39).
+const WEBSERVER_RUNTIME_CAPS = ['CHOWN', 'SETUID', 'SETGID', 'NET_BIND_SERVICE']
+const RUNTIMES_NEEDING_CAPS = new Set(['php'])
+
 // Pod-level context: never mount the service account token (the workloads
 // deployed here never call the Kubernetes API) and pin the default seccomp
 // profile at the pod level so it is inherited by anything without its own.
@@ -209,11 +219,19 @@ const POD_SECURITY_CONTEXT = {
   seccompProfile: { type: 'RuntimeDefault' },
 }
 
-/** Attach the hardened container securityContext, preserving any existing keys. */
-function harden(container) {
+/**
+ * Attach the hardened container securityContext, preserving any existing keys.
+ * Pass a runtime id to grant the scoped capability exception for runtimes whose
+ * image de-privileges at startup (currently php).
+ */
+function harden(container, runtime) {
   if (!container || typeof container !== 'object') return container
+  const base = { ...CONTAINER_SECURITY_CONTEXT }
+  if (runtime && RUNTIMES_NEEDING_CAPS.has(runtime)) {
+    base.capabilities = { drop: ['ALL'], add: [...WEBSERVER_RUNTIME_CAPS] }
+  }
   container.securityContext = {
-    ...CONTAINER_SECURITY_CONTEXT,
+    ...base,
     ...(container.securityContext || {}),
   }
   return container
@@ -410,7 +428,7 @@ function buildVibeManifests({
 
   // Pod Security Standards (issue #39): harden the app container and every
   // init container, and lock down the pod (no service account token).
-  harden(mainContainer)
+  harden(mainContainer, runtime)
   for (const ic of initContainers) harden(ic)
 
   // Deployment

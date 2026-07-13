@@ -31,9 +31,13 @@ function isStaticFile(name) {
 const NGINX_RUNTIME = {
   id: 'nginx',
   label: 'nginx (static)',
-  image: 'nginx:alpine',
+  // Unprivileged NGINX: runs as UID 101, listens on 8080, and moves its PID and
+  // temp paths to /tmp, so it needs no Linux capabilities at startup. Required
+  // because all pods drop ALL capabilities under our pod security baseline (#39).
+  // Note: a custom nginx.conf must include `pid /tmp/nginx.pid`.
+  image: 'nginxinc/nginx-unprivileged:alpine',
   defaultCmd: () => "nginx -g 'daemon off;'",
-  port: 80,
+  port: 8080,
   workDir: '/usr/share/nginx/html',
 }
 
