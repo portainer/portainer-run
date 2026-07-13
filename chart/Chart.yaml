@@ -1,0 +1,13 @@
+apiVersion: v2
+name: portainer-run
+description: Portainer-Run — AI-assisted deployment companion for Portainer, served as a Portainer addon.
+type: application
+
+# Chart version — SemVer 2 (three segments). Bump on any change to the chart
+# or its templates, independently of the app version below.
+version: 1.2.7
+
+# Application version — the Portainer-Run release this chart ships. Free-form,
+# so it carries the full release string. Used as the image tag when
+# image.tag is left empty.
+appVersion: "1.2.7"
