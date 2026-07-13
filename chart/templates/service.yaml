@@ -5,7 +5,7 @@ metadata:
   labels:
     {{- include "portainer-run.labels" . | nindent 4 }}
 spec:
-  type: ClusterIP
+  type: {{ .Values.service.type }}
   selector:
     {{- include "portainer-run.selectorLabels" . | nindent 4 }}
   ports:

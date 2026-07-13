@@ -14,6 +14,13 @@ image:
 # Only needed when pulling from a private/mirrored registry.
 imagePullSecrets: []
 
+# Service that exposes Portainer-Run. Supported types:
+#   NodePort     — reachable on each node's IP at an auto-assigned port (default).
+#   ClusterIP    — internal-only; use behind an Ingress or the addon gateway.
+#   LoadBalancer — external IP provisioned by your cloud provider.
+service:
+  type: NodePort
+
 # StorageClass for the persistent session-cache PVC. Empty ("") uses the
 # cluster's default StorageClass; set this if your cluster has no default
 # or you need a specific class.
@@ -37,17 +44,16 @@ configMap:
   # ── File relay gateway ───────────────────────────────────────────────────────
   # Required for staged file uploads via the run-gateway proxy.
   # When set, large vibe deploy uploads use the gateway instead of inline MCP transfer.
-  GATEWAY_URL: "https://run-gateway.portainer.ai"
+  # GATEWAY_URL: "https://run-gateway.portainer.ai"
 
   # ── AI model override ────────────────────────────────────────────────────────
   # OpenAI model to use. No effect when using Anthropic.
-  OPENAI_MODEL: "gpt-4o"
+  # OPENAI_MODEL: "gpt-4o"
 
   # ── Ports ────────────────────────────────────────────────────────────────────
-  # PORT is the port the server listens on. HTTP_PORT (default 80) serves an
-  # HTTP→HTTPS redirect; set HTTP_PORT: "0" to disable it.
+  # PORT is the port the server listens on (default 443)
   PORT: "443"
-  # HTTP_PORT: "80"
+  # PORT: "80"  # Uncomment to run plain HTTP (e.g. behind a TLS-terminating proxy)
 
   # ── Addon-gateway mode (optional) ─────────────────────────────────────────────
   # Defaults to "0" — force HTTPS. Set to "1" only when served behind the
@@ -56,12 +62,8 @@ configMap:
   # port clash). Without it we run HTTPS + an HTTP→HTTPS redirect; the gateway
   # would hit that redirect and bounce the browser to the cluster DNS name, out
   # of the Portainer base URL. The probe scheme follows this value automatically.
-  SERVE_HTTP: "0"
-
-  # ── Cache directory ──────────────────────────────────────────────────────────
-  # Override the directory used for persistent cache (default: /app/data).
-  # Must match the mountPath of the cache volume in the Deployment if changed.
-  # CACHE_DIR: "/app/data"
+  # SERVE_HTTP: "0"
+  # HTTP_PORT: "80"
 
 # ── Secret (sensitive values) ────────────────────────────────────────────────
 # Rendered into an Opaque Secret (as stringData, so use plain text — no base64).
@@ -71,7 +73,7 @@ secret:
   ENCRYPTION_KEY: ""
 
   # Anthropic (Claude). Set this or OPENAI_API_KEY to enable AI triage.
-  ANTHROPIC_API_KEY: ""
+  # ANTHROPIC_API_KEY: ""
 
   # OpenAI (GPT-4o) — set instead of ANTHROPIC_API_KEY to use OpenAI.
-  OPENAI_API_KEY: ""
+  # OPENAI_API_KEY: ""
