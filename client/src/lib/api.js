@@ -37,8 +37,3 @@ export function apiFetch(_token, path, opts = {}) {
 export function kubeFetch(token, envId, path, opts = {}) {
   return apiFetch(token, `/endpoints/${envId}/kubernetes${path}`, opts)
 }
-
-/** @deprecated Portainer target is fixed server-side; no per-request URL header. */
-export function portainerUrlHeaders() {
-  return {}
-}

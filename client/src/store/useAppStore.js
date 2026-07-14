@@ -9,7 +9,7 @@ const initialCache = {
 
 export const useAppStore = create((set, get) => ({
   token: '',
-  /** Shown in connect; sent as X-Portainer-URL when set (or override server .env) */
+  /** @deprecated Portainer target is fixed server-side; retained only for legacy store reads. */
   portainerBaseUrl: '',
   /** True when the API server was started with PORTAINER_URL in the environment. */
   portainerFromServer: false,

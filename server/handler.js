@@ -1,6 +1,7 @@
 import url from 'node:url'
 import { readBody } from './lib/http.js'
 import { CORS } from './lib/cors.js'
+import { isCrossSiteRequest } from './lib/csrf.js'
 import {
   ANTHROPIC_KEY,
   AI_PROVIDER,
@@ -30,6 +31,13 @@ export async function handleRequest(req, res) {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, CORS)
     res.end()
+    return
+  }
+
+  // CSRF: block browser-issued cross-site requests to state-changing routes.
+  if (req.method !== 'GET' && req.method !== 'HEAD' && isCrossSiteRequest(req)) {
+    res.writeHead(403, { 'Content-Type': 'application/json', ...CORS })
+    res.end(JSON.stringify({ error: 'Cross-site request blocked' }))
     return
   }
 

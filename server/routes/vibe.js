@@ -728,7 +728,7 @@ async function handleVibeDeploy(req, res) {
  * The Secret never touches git.
  */
 async function createKubernetesSecret(req, { envId, ns, name, data }) {
-  const target = resolvePortainerTarget(req)
+  const target = resolvePortainerTarget()
   if (!target) throw new Error('Cannot resolve Portainer target')
   const userToken = extractToken(req)
 
@@ -777,7 +777,7 @@ async function createPortainerGitOpsStack(req, {
   envId, appName, ns, repoUrl, branch, filePath,
   username, token, authType, pollInterval,
 }) {
-  const target = resolvePortainerTarget(req)
+  const target = resolvePortainerTarget()
   if (!target) throw new Error('Cannot resolve Portainer target')
 
   const userToken = extractToken(req)
