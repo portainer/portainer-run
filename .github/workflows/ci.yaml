@@ -54,6 +54,8 @@ jobs:
           push: false
           load: false
           platforms: linux/amd64,linux/arm64
+          build-args: |
+            PORTAINER_RUN_VERSION=${{ needs.tag.outputs.value }}
           tags: ${{ env.IMAGE_NAME }}:${{ needs.tag.outputs.value }}
           outputs: type=oci,dest=/tmp/image.tar
 
@@ -91,6 +93,8 @@ jobs:
         with:
           push: true
           platforms: linux/amd64,linux/arm64
+          build-args: |
+            PORTAINER_RUN_VERSION=${{ needs.tag.outputs.value }}
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.tag.outputs.value }}
           sbom: true
           provenance: mode=max

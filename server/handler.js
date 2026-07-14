@@ -8,6 +8,7 @@ import {
   OPENAI_KEY,
   PORTAINER_URL,
   CONFIG_NAMESPACE,
+  VERSION,
 } from './config.js'
 import { handleCache } from './cache.js'
 import { handleEnvStatus } from './env-status.js'
@@ -42,6 +43,7 @@ export async function handleRequest(req, res) {
         aiProvider: AI_PROVIDER,
         baseDomain: BASE_DOMAIN,
         configNamespace: CONFIG_NAMESPACE,
+        version: VERSION,
       }),
     )
     return
