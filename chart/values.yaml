@@ -29,24 +29,11 @@ storageClass: ""
 # of this list. Override any of them — or set any other env key — with
 # `--set configMap.<KEY>=...` (or an overrides file) without a template change.
 configMap:
-  # ── Ingress base domain ─────────────────────────────────────────────────────
-  # If set, Ingress templates default to appname.BASE_DOMAIN as the host.
-  # BASE_DOMAIN: "apps.example.com"
-
-  # ── File relay gateway ───────────────────────────────────────────────────────
-  # Required for staged file uploads via the run-gateway proxy.
-  # When set, large vibe deploy uploads use the gateway instead of inline MCP transfer.
-  # GATEWAY_URL: "https://run-gateway.portainer.ai"
+  OPENAI_MODEL: "gpt-4o" # OpenAI model to use (default: gpt-4o). No effect when using Anthropic.
 
 # ── Secret (sensitive values) ────────────────────────────────────────────────
 # Rendered into an Opaque Secret (as stringData, so use plain text — no base64).
 secret:
-  # Required. Encrypts stored Git target credentials at rest. Min 32 chars.
-  # Generate one with: openssl rand -hex 32
-  ENCRYPTION_KEY: ""
-
-  # Anthropic (Claude). Set this or OPENAI_API_KEY to enable AI triage.
-  # ANTHROPIC_API_KEY: ""
-
-  # OpenAI (GPT-4o) — set instead of ANTHROPIC_API_KEY to use OpenAI.
-  # OPENAI_API_KEY: ""
+  ENCRYPTION_KEY: "" # Required. Encrypts stored Git target credentials at rest. Min 32 chars. Generate one with: openssl rand -hex 32
+  ANTHROPIC_API_KEY: "" # Anthropic (Claude). Set this or OPENAI_API_KEY to enable AI triage.
+  OPENAI_API_KEY: "" # OpenAI (GPT-4o) — set instead of ANTHROPIC_API_KEY to use OpenAI.
