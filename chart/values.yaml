@@ -2,14 +2,14 @@
 # Everything not listed here (ClusterIP service, single replica, resources,
 # security context, probes, cache PVC) is a fixed default baked into the templates.
 
-# Container image. The default points at the portainer DockerHub repo's
-# `latest` tag; override repository/tag
+# Container image. The default points at the released portainer DockerHub
+# repo, tagged to match the chart's appVersion; override repository/tag
 # (and imagePullSecrets) for a private or mirrored (e.g. airgapped) registry,
-# or once a release process publishes versioned tags.
+# or to pin the floating `latest` tag instead.
 image:
   repository: portainer/portainer-run
   # tag defaults to the chart appVersion when empty.
-  tag: latest
+  tag: ''
 
 # Only needed when pulling from a private/mirrored registry.
 imagePullSecrets: []
