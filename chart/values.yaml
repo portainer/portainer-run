@@ -2,22 +2,12 @@
 # Everything not listed here (ClusterIP service, single replica, resources,
 # security context, probes, cache PVC) is a fixed default baked into the templates.
 
-# Container image. The default points at the released portainer DockerHub
-# repo, tagged to match the chart's appVersion; override repository/tag
-# (and imagePullSecrets) for a private or mirrored (e.g. airgapped) registry,
-# or to pin the floating `latest` tag instead.
 image:
-  repository: portainer/portainer-run
-  # tag defaults to the chart appVersion when empty.
-  tag: ''
+  repository: portainer/portainer-run # Optional. Defaults to the official Portainer DockerHub repo.
+  tag: '' # Optional. tag defaults to the chart appVersion when empty.
 
-# Only needed when pulling from a private/mirrored registry.
-imagePullSecrets: []
-
-# StorageClass for the persistent session-cache PVC. Empty ("") uses the
-# cluster's default StorageClass; set this if your cluster has no default
-# or you need a specific class.
-storageClass: ""
+imagePullSecrets: [] # Optional. Only needed when pulling from a private/mirrored registry..
+storageClass: "" # Optional. StorageClass for the session-cache PVC. Empty uses the cluster default.
 
 # ── ConfigMap (non-sensitive configuration) ──────────────────────────────────
 # Rendered into the `portainer-run-config` ConfigMap and loaded into the
@@ -29,24 +19,11 @@ storageClass: ""
 # of this list. Override any of them — or set any other env key — with
 # `--set configMap.<KEY>=...` (or an overrides file) without a template change.
 configMap:
-  # ── Ingress base domain ─────────────────────────────────────────────────────
-  # If set, Ingress templates default to appname.BASE_DOMAIN as the host.
-  # BASE_DOMAIN: "apps.example.com"
-
-  # ── File relay gateway ───────────────────────────────────────────────────────
-  # Required for staged file uploads via the run-gateway proxy.
-  # When set, large vibe deploy uploads use the gateway instead of inline MCP transfer.
-  # GATEWAY_URL: "https://run-gateway.portainer.ai"
+  OPENAI_MODEL: "" # Optional. OpenAI model to use (default: gpt-4o). No effect when using Anthropic.
 
 # ── Secret (sensitive values) ────────────────────────────────────────────────
 # Rendered into an Opaque Secret (as stringData, so use plain text — no base64).
 secret:
-  # Required. Encrypts stored Git target credentials at rest. Min 32 chars.
-  # Generate one with: openssl rand -hex 32
-  ENCRYPTION_KEY: ""
-
-  # Anthropic (Claude). Set this or OPENAI_API_KEY to enable AI triage.
-  # ANTHROPIC_API_KEY: ""
-
-  # OpenAI (GPT-4o) — set instead of ANTHROPIC_API_KEY to use OpenAI.
-  # OPENAI_API_KEY: ""
+  ENCRYPTION_KEY: "" # Required. Encrypts stored Git target credentials at rest. Min 32 chars. Generate one with: openssl rand -hex 32
+  ANTHROPIC_API_KEY: "" # Optional. Anthropic (Claude). Set this or OPENAI_API_KEY to enable AI triage.
+  OPENAI_API_KEY: "" # Optional. OpenAI (GPT-4o) — set instead of ANTHROPIC_API_KEY to use OpenAI.
