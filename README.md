@@ -40,7 +40,7 @@ Portainer-Run sits in that gap. The source folder an AI coding tool produces is 
 
 ## What it does
 
-Portainer-Run connects to your Portainer instance using a personal access token. Access is governed entirely by your Portainer RBAC role. Once connected it provides a unified view across all Kubernetes environments your account can reach.
+Portainer-Run authenticates against your Portainer instance using your Portainer session (or, for non-browser clients like MCP, an API access token). Access is governed entirely by your Portainer RBAC role. Once connected it provides a unified view across all Kubernetes environments your account can reach.
 
 **Applications** is the primary operational view and the landing page after login. It lists all deployments tagged `managed-by=portainer-run` with a traffic light status per row, sortable by name, environment, health, or creation date. Status reasons are read from pod state and shown in plain English: "App keeps crashing (4 restarts)", "Can't download the image", "No node has enough resources", and so on. The access column shows a clickable address, and a Deployed by column shows who created each application, which is useful where a project space is shared across a team. Each row has Logs, Restart, and Delete actions. A **+ Deploy** button in the page header opens the Deploy page.
 
@@ -132,11 +132,16 @@ To connect Claude Desktop, add the following to `claude_desktop_config.json` (re
         "https://<portainer-host>/addons/portainer-run/mcp",
         "--header",
         "X-API-Key: YOUR_PORTAINER_API_TOKEN"
-      ]
+      ],
+      "env": {
+        "NODE_TLS_REJECT_UNAUTHORIZED": "0"
+      }
     }
   }
 }
 ```
+
+The `NODE_TLS_REJECT_UNAUTHORIZED: "0"` line is only needed when Portainer serves a self-signed or internal-CA certificate — it lets `mcp-remote` complete the TLS handshake. It disables certificate verification for the `mcp-remote` process, so use it only against trusted internal hosts and drop it once a publicly-trusted certificate is in place.
 
 Config file location: `%APPDATA%\Claude\claude_desktop_config.json` on Windows, `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS.
 
@@ -276,11 +281,11 @@ If the container cannot resolve your Portainer hostname (error: `EAI_AGAIN`), ad
 
 ## Connecting
 
-Navigate to `https://<your-host>` and enter a Portainer personal access token. Generate one in Portainer under Account, then Access Tokens. The token scope determines what Portainer-Run can see and do: namespace-scoped tokens require manual namespace entry on deploy; cluster-scoped tokens enumerate namespaces automatically.
+Portainer-Run runs as a Portainer addon. Reach it at `https://<portainer-host>/addons/portainer-run/` after logging in to Portainer; the addon gateway authenticates the request against your Portainer session, so there is no separate token entry. Unauthenticated requests are handed off to the Portainer login page. Your Portainer RBAC role determines what Portainer-Run can see and do: namespace-scoped access requires manual namespace entry on deploy; cluster-scoped access enumerates namespaces automatically.
 
 Portainer's RBAC applies in full. Users with admin role in Portainer see the Admin section including Cluster Readiness and shared git target management. Non-admin users see only their own targets plus any shared targets an admin has created.
 
-Sessions persist across page refreshes and are cleared on disconnect.
+The browser session lasts as long as the Portainer session cookie; logging out clears it. Non-browser clients such as the MCP endpoint authenticate with a Portainer API access token instead (see [MCP endpoint](#mcp-endpoint)).
 
 ## Notes on scope
 
