@@ -8,7 +8,7 @@ import {
   updateConnection,
   deleteConnection,
 } from '../models/connection.js'
-import { testGitConnection, getBranches, listFiles } from '../proxy/git.js'
+import { testGitConnection, getBranches, listFiles, githubApiBase } from '../proxy/git.js'
 import { resolveCallerIdentity, portainerGet, extractToken } from '../lib/identity.js'
 import https from 'node:https'
 import http from 'node:http'
@@ -27,6 +27,16 @@ export async function handleConnections(req, res, pathname) {
   const caller = await resolveCallerIdentity(req)
   const userId = caller?.userId || '_unknown'
   const isAdmin = caller?.isAdmin || false
+
+  // `tlsSkipVerify` is only meaningful for a self-hosted server with a custom URL — the
+  // client hides the toggle otherwise, but that's a UI nicety, not enforcement. Normalize
+  // here so a crafted request can't disable TLS verification against a public host.
+  function normalizeGitPayload(payload) {
+    if (payload.tlsSkipVerify && !payload.url) {
+      return { ...payload, tlsSkipVerify: false }
+    }
+    return payload
+  }
 
   function sanitize(conn) {
     if (!conn) return null
@@ -51,8 +61,9 @@ export async function handleConnections(req, res, pathname) {
     if (!data?.name || !data?.payload) {
       return json(res, 400, { error: 'name and payload required' })
     }
+    const payload = normalizeGitPayload(data.payload)
     try {
-      const branches = await getBranches(data.payload)
+      const branches = await getBranches(payload)
       if (branches.length === 0) {
         return json(res, 422, {
           error: 'Repository has no commits. Initialize the repository with at least one file using your Git provider before adding it as a target. See your provider\'s documentation for instructions.',
@@ -64,7 +75,7 @@ export async function handleConnections(req, res, pathname) {
     }
     // Only admins can create shared targets
     const shared = isAdmin ? Boolean(data.shared) : false
-    const conn = createConnection(data.name, data.payload, userId, shared)
+    const conn = createConnection(data.name, payload, userId, shared)
     return json(res, 201, { connection: sanitize(conn) })
   }
 
@@ -74,7 +85,7 @@ export async function handleConnections(req, res, pathname) {
     const data = parseJson(body)
     if (!data?.payload) return json(res, 400, { error: 'payload required' })
     try {
-      const result = await testGitConnection(data.payload)
+      const result = await testGitConnection(normalizeGitPayload(data.payload))
       return json(res, 200, result)
     } catch (err) {
       return json(res, 400, { ok: false, error: err.message })
@@ -103,8 +114,9 @@ export async function handleConnections(req, res, pathname) {
       if (!data?.name || !data?.payload) {
         return json(res, 400, { error: 'name and payload required' })
       }
+      const payload = normalizeGitPayload(data.payload)
       try {
-        const branches = await getBranches(data.payload)
+        const branches = await getBranches(payload)
         if (branches.length === 0) {
           return json(res, 422, {
             error: 'Repository has no commits. Initialize the repository with at least one file using your Git provider before saving this target. See your provider\'s documentation for instructions.',
@@ -113,7 +125,7 @@ export async function handleConnections(req, res, pathname) {
       } catch {
         // Can't reach repo or auth failed — not a blocking error here.
       }
-      const result = updateConnection(id, data.name, data.payload, data.shared, userId, isAdmin)
+      const result = updateConnection(id, data.name, payload, data.shared, userId, isAdmin)
       if (result === 'forbidden') return json(res, 403, { error: 'Forbidden' })
       if (!result) return json(res, 404, { error: 'Not found' })
       return json(res, 200, { connection: sanitize(result) })
@@ -139,21 +151,22 @@ export async function handleConnections(req, res, pathname) {
       const { provider, repo } = conn.payload
       const headers = buildGitHeaders(conn.payload)
       if (provider === 'github') {
-        const base = 'https://api.github.com'
-        const repoData = await gitRequest('GET', `${base}/repos/${repo}`, headers)
+        const base = githubApiBase(conn.payload)
+        const skipVerify = Boolean(conn.payload.tlsSkipVerify)
+        const repoData = await gitRequest('GET', `${base}/repos/${repo}`, headers, undefined, skipVerify)
         const defaultBranch = repoData.default_branch
         const tree = await gitRequest('POST', `${base}/repos/${repo}/git/trees`, headers, {
           tree: [{ path: 'README.md', mode: '100644', type: 'blob', content: `# ${repo.split('/').pop()}\n` }],
-        })
+        }, skipVerify)
         const commit = await gitRequest('POST', `${base}/repos/${repo}/git/commits`, headers, {
           message: 'chore: initialise repository',
           tree: tree.sha,
           parents: [],
-        })
+        }, skipVerify)
         await gitRequest('POST', `${base}/repos/${repo}/git/refs`, headers, {
           ref: `refs/heads/${defaultBranch}`,
           sha: commit.sha,
-        })
+        }, skipVerify)
         return json(res, 200, { ok: true, branch: defaultBranch })
       }
       return json(res, 400, { error: 'Initialize not supported for this provider yet' })
@@ -237,7 +250,7 @@ function buildGitHeaders(payload) {
   return h
 }
 
-function gitRequest(method, urlStr, headers, body) {
+function gitRequest(method, urlStr, headers, body, skipVerify) {
   return new Promise((resolve, reject) => {
     const u = new URL(urlStr)
     const bodyStr = body ? JSON.stringify(body) : undefined
@@ -245,7 +258,7 @@ function gitRequest(method, urlStr, headers, body) {
       hostname: u.hostname, port: u.port || (u.protocol === 'https:' ? 443 : 80),
       path: u.pathname + u.search, method,
       headers: { ...headers, ...(bodyStr ? { 'Content-Length': Buffer.byteLength(bodyStr) } : {}) },
-      rejectUnauthorized: false,
+      rejectUnauthorized: !skipVerify,
     }
     const mod = u.protocol === 'https:' ? https : http
     const req = mod.request(opts, (res) => {

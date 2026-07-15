@@ -82,6 +82,8 @@ The Test button on each target checks connectivity and reports read and write pe
 
 The target form states the minimum token scope for each provider. For GitLab this is the `api` scope: a narrower combination such as `read_api` plus `write_repository` passes GitLab's own form checks but fails when Portainer-Run writes manifests and creates the GitOps stack, so the form calls this out explicitly. This is advisory guidance rather than validation, because there is no reliable cross-provider way to introspect a token's granted scopes before use.
 
+TLS is verified by default on requests to the git provider, since the target's token travels over that connection. When pointing a target at a self-hosted server with a self-signed certificate (custom URL for GitHub Enterprise, self-hosted GitLab, or Gitea), the target form exposes a "Skip TLS verification" toggle as an explicit per-target opt-out. This is not something Portainer-Run can fix on your behalf — prefer replacing the self-signed certificate on the git server itself with one from a trusted CA (e.g. Let's Encrypt), or, for an internal CA, redeploy Portainer-Run with `NODE_EXTRA_CA_CERTS` pointed at your CA bundle, over enabling this toggle.
+
 For GitHub Enterprise Server, keep the provider set to GitHub and enter your server host in the GitHub server URL field. Portainer-Run uses the GitHub-compatible REST API at `/api/v3` on that host. Do not use the "Other" provider for GitHub Enterprise: that path targets the Gitea API.
 
 For self-hosted GitLab, keep the provider set to GitLab and enter your server host in the GitLab server URL field. Leave it blank for gitlab.com.

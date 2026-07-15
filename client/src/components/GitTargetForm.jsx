@@ -5,7 +5,7 @@ import { useAppStore } from '../store/useAppStore.js'
 const PROVIDERS = ['github', 'gitlab', 'gitea', 'other']
 
 function defaultPayload() {
-  return { provider: 'github', authType: 'pat', repo: '', token: '', url: '', username: '', pathPrefix: '', defaultBranch: 'main' }
+  return { provider: 'github', authType: 'pat', repo: '', token: '', url: '', username: '', pathPrefix: '', defaultBranch: 'main', tlsSkipVerify: false }
 }
 
 /**
@@ -26,7 +26,10 @@ export function GitTargetForm({ initial, onSaved, onCancel }) {
   const [error, setError] = useState('')
 
   function set(key, value) {
-    setPayload((p) => ({ ...p, [key]: value }))
+    // Clearing the custom server URL falls back to the public host — a stale
+    // skip-verify flag would otherwise silently disable TLS verification there too.
+    const extra = key === 'url' && !value ? { tlsSkipVerify: false } : {}
+    setPayload((p) => ({ ...p, [key]: value, ...extra }))
     setTestResult(null)
   }
 
@@ -113,6 +116,24 @@ export function GitTargetForm({ initial, onSaved, onCancel }) {
               GitLab API at <code>/api/v4</code> is used automatically.
             </div>
           </>
+        )}
+
+        {payload.url && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13 }}>
+            <input
+              type="checkbox"
+              checked={Boolean(payload.tlsSkipVerify)}
+              onChange={(e) => set('tlsSkipVerify', e.target.checked)}
+            />
+            <div>
+              <span style={{ color: 'var(--text-bright)', fontWeight: 500 }}>Skip TLS verification</span>
+              <span style={{ color: 'var(--text-dim)', marginLeft: 8 }}>
+                Only enable this if the git server uses a self-signed certificate. Your token
+                crosses this connection, so an attacker on the network path could intercept it
+                while this is on.
+              </span>
+            </div>
+          </label>
         )}
 
         <Field label="Repository (owner/repo)" value={payload.repo} onChange={(v) => set('repo', v)}
