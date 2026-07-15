@@ -275,12 +275,15 @@ async function toolListNamespaces(req, args) {
   const target = resolvePortainerTarget(req)
   if (!target) throw new Error('Cannot resolve Portainer target')
 
-  const data = await portainerGet(target, token, `/api/endpoints/${envId}/kubernetes/api/v1/namespaces`)
-  const items = data?.items || []
-  const SYSTEM = new Set(['kube-system', 'kube-public', 'kube-node-lease'])
-  return items
-    .map((n) => n.metadata?.name)
-    .filter((n) => n && !SYSTEM.has(n))
+  // Portainer-native, access-policy-aware endpoint: returns only the namespaces
+  // the caller can access. The raw /kubernetes/api/v1/namespaces proxy is NOT
+  // filtered by Portainer's access policies and leaks every namespace.
+  const data = await portainerGet(target, token, `/api/kubernetes/${envId}/namespaces`)
+  const list = Array.isArray(data) ? data : []
+  return list
+    .filter((n) => !n.IsSystem) // Portainer flags kube-* and portainer as system
+    .map((n) => n.Name) // Portainer struct uses capital .Name
+    .filter(Boolean)
 }
 
 async function toolListGitTargets(req, caller) {
