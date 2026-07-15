@@ -29,8 +29,9 @@ metadata:
   namespace: portainer-run
 data:
   PORTAINER_URL: "https://portainer.portainer.svc.cluster.local:9443"
-  # For deployments where Portainer-Run is in the same cluster as Portainer.
-  # PORTAINER_URL: "https://portainer.portainer.svc.cluster.local:9443"
+  # Cluster-internal DNS is the default (addon runs alongside Portainer).
+  # For an external Portainer, use its public URL instead:
+  # PORTAINER_URL: "https://portainer.example.com:9443"
 
   # ── Ingress base domain ─────────────────────────────────────────────────────
   # If set, Ingress templates default to appname.BASE_DOMAIN as the host.
@@ -127,7 +128,7 @@ spec:
     spec:
       containers:
         - name: portainer-run
-          image: portainerci/portainer-run:pr-31
+          image: portainer/portainer-run:latest
           imagePullPolicy: Always
           ports:
             - name: https

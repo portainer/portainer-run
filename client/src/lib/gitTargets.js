@@ -7,8 +7,8 @@ import { serverFetch as rawFetch } from './api.js'
 
 async function serverFetch(path, opts = {}) {
   const res = await rawFetch(path, {
-    headers: { 'Content-Type': 'application/json' },
     ...opts,
+    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
