@@ -17,14 +17,13 @@ if (!fs.existsSync(CACHE_DIR)) {
  * @returns {string | null} cache key, or null if a 400 was sent
  */
 function getCacheFileKeyOrReject(token, req, res) {
-  const target = resolvePortainerTarget(req)
+  const target = resolvePortainerTarget()
   if (!target) {
     if (!res.headersSent) {
       res.writeHead(400, { 'Content-Type': 'application/json', ...CORS })
       res.end(
         JSON.stringify({
-          error:
-            'Set PORTAINER_URL on the server, or send the X-Portainer-URL header (your Portainer base URL).',
+          error: 'Server is misconfigured: PORTAINER_URL is not set.',
         })
       )
     }

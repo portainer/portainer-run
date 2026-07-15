@@ -3,7 +3,7 @@ import { kubeFetch, serverFetch } from '../../lib/api.js'
 import { inflightDedupe } from '../../lib/inflightDedupe.js'
 import { useAppStore } from '../../store/useAppStore.js'
 import { getAssistantModel } from '../../lib/assistant/aiModel.js'
-import { mdToHtml } from '../../lib/assistant/markdown.js'
+import { AssistantMarkdown } from '../AssistantMarkdown.jsx'
 import { readTriageSseStream } from '../../lib/assistant/parseStream.js'
 import { gatherServiceDiagnostics } from '../../lib/assistant/diagnostics.js'
 
@@ -53,7 +53,9 @@ export default function ServiceDetailLogsTab({ envId, namespace, name }) {
 
   const [aiPanelOpen, setAiPanelOpen] = useState(false)
   const [aiBusy, setAiBusy] = useState(false)
-  const [aiHtml, setAiHtml] = useState('')
+  const [aiOutput, setAiOutput] = useState(
+    /** @type {null | { kind: 'status' | 'markdown' | 'error', text: string, streaming?: boolean }} */ (null),
+  )
 
   const stopStream = useCallback(() => {
     if (streamCtrl.current) {
@@ -150,7 +152,7 @@ export default function ServiceDetailLogsTab({ envId, namespace, name }) {
 
   useEffect(() => {
     setAiPanelOpen(false)
-    setAiHtml('')
+    setAiOutput(null)
     setAiBusy(false)
     aiTriageInFlight.current = false
   }, [envId, namespace, name])
@@ -162,7 +164,7 @@ export default function ServiceDetailLogsTab({ envId, namespace, name }) {
     const dep = { _envId: envId, metadata: { name, namespace } }
     setAiBusy(true)
     setAiPanelOpen(true)
-    setAiHtml('<span style="color:var(--text-dim)">Gathering diagnostics from all instances…</span>')
+    setAiOutput({ kind: 'status', text: 'Gathering diagnostics from all instances…' })
     try {
       const diag = await gatherServiceDiagnostics(token, dep, { logTailLines: 300 })
       const podCount = pods.length
@@ -180,7 +182,7 @@ ${truncated}
 
 Analyse this data and follow the instructions in your system prompt.`
 
-      setAiHtml('<span style="color:var(--text-dim)">Running analysis…</span>')
+      setAiOutput({ kind: 'status', text: 'Running analysis…' })
       const response = await serverFetch('/ai/triage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -204,15 +206,14 @@ Analyse this data and follow the instructions in your system prompt.`
         throw new Error(emsg)
       }
       const full = await readTriageSseStream(response.body, (acc) => {
-        setAiHtml(mdToHtml(acc) + '<span class="ai-cursor"></span>')
+        setAiOutput({ kind: 'markdown', text: acc, streaming: true })
         const el = aiBodyRef.current
         if (el) el.scrollTop = el.scrollHeight
       })
-      setAiHtml(mdToHtml(full))
+      setAiOutput({ kind: 'markdown', text: full })
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      const safe = msg.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      setAiHtml(`<p style="color:var(--red)"><strong>Analysis failed:</strong> ${safe}</p>`)
+      setAiOutput({ kind: 'error', text: msg })
     } finally {
       aiTriageInFlight.current = false
       setAiBusy(false)
@@ -346,7 +347,7 @@ Analyse this data and follow the instructions in your system prompt.`
               className="btn btn-ghost btn-xs"
               onClick={() => {
                 setAiPanelOpen(false)
-                setAiHtml('')
+                setAiOutput(null)
               }}
             >
               ✕
@@ -356,10 +357,22 @@ Analyse this data and follow the instructions in your system prompt.`
             ref={aiBodyRef}
             className="ai-body"
             style={{ maxHeight: 360, overflowY: 'auto' }}
-            dangerouslySetInnerHTML={{
-              __html: aiHtml || '<span style="color:var(--text-dim)">…</span>',
-            }}
-          />
+          >
+            {!aiOutput ? (
+              <span style={{ color: 'var(--text-dim)' }}>…</span>
+            ) : aiOutput.kind === 'status' ? (
+              <span style={{ color: 'var(--text-dim)' }}>{aiOutput.text}</span>
+            ) : aiOutput.kind === 'error' ? (
+              <p style={{ color: 'var(--red)' }}>
+                <strong>Analysis failed:</strong> {aiOutput.text}
+              </p>
+            ) : (
+              <>
+                <AssistantMarkdown>{aiOutput.text}</AssistantMarkdown>
+                {aiOutput.streaming ? <span className="ai-cursor" /> : null}
+              </>
+            )}
+          </div>
         </div>
       ) : null}
 

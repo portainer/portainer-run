@@ -126,10 +126,21 @@ spec:
       labels:
         app: portainer-run
     spec:
+      # The ServiceAccount token stays mounted: the server auto-detects
+      # CONFIG_NAMESPACE from it. If it is ever disabled, pin CONFIG_NAMESPACE
+      # in the ConfigMap at the same time or state silently moves to kube-system.
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: portainer-run
           image: portainer/portainer-run:latest
           imagePullPolicy: Always
+          # Note: no runAsNonRoot / drop-ALL-caps / readOnlyRootFilesystem — the
+          # server binds a privileged port (80/443, needs CAP_NET_BIND_SERVICE)
+          # and writes a self-signed cert to /app in TLS mode.
+          securityContext:
+            allowPrivilegeEscalation: false
           ports:
             - name: https
               containerPort: 443

@@ -305,13 +305,12 @@ export async function handleEnvStatus(req, res, envId) {
     res.end(JSON.stringify({ error: 'Unauthorized' }))
     return
   }
-  const target = resolvePortainerTarget(req)
+  const target = resolvePortainerTarget()
   if (!target) {
     res.writeHead(400, { 'Content-Type': 'application/json', ...CORS })
     res.end(
       JSON.stringify({
-        error:
-          'Set PORTAINER_URL on the server, or send the X-Portainer-URL header (your Portainer base URL).',
+        error: 'Server is misconfigured: PORTAINER_URL is not set.',
       })
     )
     return

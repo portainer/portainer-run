@@ -72,8 +72,8 @@ if (PORTAINER_URL) {
     process.exit(1)
   }
 } else {
-  console.log(
-    '\nℹ️  No PORTAINER_URL in environment — the browser will send the instance URL (X-Portainer-URL) on each request.\n',
+  console.warn(
+    '\n⚠️   No PORTAINER_URL in environment — the server cannot reach Portainer and all API requests will fail. Set PORTAINER_URL.\n',
   )
 }
 

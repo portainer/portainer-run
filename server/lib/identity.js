@@ -62,7 +62,7 @@ export async function resolveCallerIdentity(req) {
   const cached = getCachedUser(token)
   if (cached) return { ...cached, token }
 
-  const target = resolvePortainerTarget(req)
+  const target = resolvePortainerTarget()
   if (!target) return null
 
   try {

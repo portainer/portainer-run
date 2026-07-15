@@ -1,6 +1,7 @@
 import url from 'node:url'
 import { readBody } from './lib/http.js'
 import { CORS } from './lib/cors.js'
+import { isCrossSiteRequest } from './lib/csrf.js'
 import {
   ANTHROPIC_KEY,
   AI_PROVIDER,
@@ -18,6 +19,7 @@ import { proxyToOpenAI } from './proxy/openai.js'
 import { handleConnections } from './routes/connections.js'
 import { handleVibe } from './routes/vibe.js'
 import { handleMcp } from './routes/mcp.js'
+import { resolveCallerIdentity } from './lib/identity.js'
 
 /**
  * @param {import('http').IncomingMessage} req
@@ -27,9 +29,23 @@ export async function handleRequest(req, res) {
   const parsed = url.parse(req.url)
   const pathname = parsed.pathname || '/'
 
+  // Baseline security headers on every response (merged into later writeHead
+  // calls by Node). Frame-blocking matters now that actions ride on an ambient
+  // session cookie — it stops the addon being iframed for clickjacking.
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN')
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+
   if (req.method === 'OPTIONS') {
     res.writeHead(204, CORS)
     res.end()
+    return
+  }
+
+  // CSRF: block browser-issued cross-site requests to state-changing routes.
+  if (req.method !== 'GET' && req.method !== 'HEAD' && isCrossSiteRequest(req)) {
+    res.writeHead(403, { 'Content-Type': 'application/json', ...CORS })
+    res.end(JSON.stringify({ error: 'Cross-site request blocked' }))
     return
   }
 
@@ -66,6 +82,14 @@ export async function handleRequest(req, res) {
   }
 
   if (pathname === '/ai/triage') {
+    // Require a valid Portainer identity — this endpoint proxies to a paid LLM
+    // API using the server's key, so it must not be an open proxy.
+    const caller = await resolveCallerIdentity(req)
+    if (!caller) {
+      res.writeHead(401, { 'Content-Type': 'application/json', ...CORS })
+      res.end(JSON.stringify({ error: 'Unauthorized' }))
+      return
+    }
     const body = await readBody(req)
     if (!body || !body.length) {
       res.writeHead(400, { 'Content-Type': 'application/json', ...CORS })
