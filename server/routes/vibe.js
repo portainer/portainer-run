@@ -112,6 +112,37 @@ function parseJson(buf) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Returns the runtime environment variables the main container needs so the
+ * interpreter finds dependencies installed into the shared PV by the install
+ * init container. Kept in sync with getInstallCommand: only python and ruby
+ * install outside the working directory and therefore need path hints. Node
+ * (node_modules) and php (vendor) install into the working directory already.
+ *
+ * @param {string} runtime
+ * @param {string} workDir
+ * @returns {{name: string, value: string}[]}
+ */
+function getRuntimeEnv(runtime, workDir) {
+  switch (runtime) {
+    case 'python':
+      return [
+        { name: 'PYTHONPATH', value: `${workDir}/.pydeps` },
+        { name: 'PATH', value: `${workDir}/.pydeps/bin:/usr/local/bin:/usr/bin:/bin` },
+      ]
+    case 'ruby':
+      return [
+        { name: 'BUNDLE_PATH', value: `${workDir}/.bundle` },
+        { name: 'BUNDLE_GEMFILE', value: `${workDir}/Gemfile` },
+        { name: 'GEM_HOME', value: `${workDir}/.bundle` },
+        { name: 'GEM_PATH', value: `${workDir}/.bundle` },
+        { name: 'PATH', value: `${workDir}/.bundle/bin:/usr/local/bundle/bin:/usr/local/bin:/usr/bin:/bin` },
+      ]
+    default:
+      return []
+  }
+}
+
+/**
  * Returns the shell command to install dependencies for a given runtime,
  * or null if no install step is needed (e.g. nginx static sites).
  *
@@ -124,12 +155,21 @@ function parseJson(buf) {
 function getInstallCommand(runtime, workDir) {
   switch (runtime) {
     case 'node':
+      // npm installs node_modules into the working directory, which is on the PV.
       return `cd ${workDir} && if [ -f package.json ]; then npm install --production 2>&1; fi`
     case 'python':
-      return `cd ${workDir} && if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; fi`
+      // pip's default target is the image's system site-packages, which live
+      // OUTSIDE the shared PV and so are lost when this init container exits.
+      // Install into a PV-local directory instead (libraries + console scripts
+      // under ${workDir}/.pydeps and ${workDir}/.pydeps/bin) so the main
+      // container can see them via PYTHONPATH/PATH.
+      return `cd ${workDir} && if [ -f requirements.txt ]; then pip install --no-cache-dir --target=${workDir}/.pydeps -r requirements.txt; fi`
     case 'ruby':
-      return `cd ${workDir} && if [ -f Gemfile ]; then bundle install --without development test; fi`
+      // Same problem as pip: default gem install location is outside the PV.
+      // Vendor gems into a PV-local path so they persist into the main container.
+      return `cd ${workDir} && if [ -f Gemfile ]; then bundle config set --local path '${workDir}/.bundle' && bundle install; fi`
     case 'php':
+      // composer installs vendor/ into the working directory, which is on the PV.
       return `cd ${workDir} && if [ -f composer.json ] && command -v composer > /dev/null 2>&1; then composer install --no-dev --optimize-autoloader --no-interaction; fi`
     case 'nginx':
     default:
@@ -328,13 +368,23 @@ function buildVibeManifests({
   // Build env array for the main container:
   //  - plaintext vars inline
   //  - sensitive vars sourced from the app-secrets Secret
-  const containerEnv = [
+  const userEnv = [
     ...plainEnv.map((v) => ({ name: v.key, value: v.value })),
     ...sensitiveEnv.map((v) => ({
       name: v.key,
       valueFrom: { secretKeyRef: { name: secretForApp, key: v.key } },
     })),
   ]
+
+  // Runtime env so the interpreter finds deps installed into the PV by the
+  // install init container. These take precedence over user-supplied vars on
+  // collision (e.g. PYTHONPATH, PATH), so the app can actually locate its
+  // dependencies. Merge by key to avoid emitting duplicate env entries.
+  const runtimeEnv = getRuntimeEnv(runtime, workDirSafe)
+  const envByName = new Map()
+  for (const e of userEnv) envByName.set(e.name, e)
+  for (const e of runtimeEnv) envByName.set(e.name, e) // runtime wins on collision
+  const containerEnv = [...envByName.values()]
 
   // Init container: clones/syncs source from git into the PV
   // Two init containers: first clones and copies source; second writes .env if needed.
@@ -1201,13 +1251,27 @@ async function handleVibeUpdateEnv(req, res) {
     const secretForApp = `${safeApp}-app-secrets`
 
     // 1. Container env array: plaintext inline, sensitive via secretKeyRef.
-    const nextEnv = [
+    //    Preserve runtime-managed dep-path vars (PYTHONPATH/PATH/GEM_*/BUNDLE_*)
+    //    already present on the container, so an env edit does not strip the
+    //    interpreter's ability to find PV-installed dependencies.
+    const RUNTIME_ENV_NAMES = new Set([
+      'PYTHONPATH', 'PATH', 'BUNDLE_PATH', 'BUNDLE_GEMFILE', 'GEM_HOME', 'GEM_PATH',
+    ])
+    const preservedRuntimeEnv = (Array.isArray(container.env) ? container.env : [])
+      .filter((e) => e && RUNTIME_ENV_NAMES.has(e.name) && e.value !== undefined)
+
+    const userNextEnv = [
       ...plainEnv.map((v) => ({ name: v.key, value: v.value })),
       ...sensitiveEnv.map((v) => ({
         name: v.key,
         valueFrom: { secretKeyRef: { name: secretForApp, key: v.key } },
       })),
     ]
+    // Merge by name, runtime-managed vars winning on collision, no duplicates.
+    const nextByName = new Map()
+    for (const e of userNextEnv) nextByName.set(e.name, e)
+    for (const e of preservedRuntimeEnv) nextByName.set(e.name, e)
+    const nextEnv = [...nextByName.values()]
     if (nextEnv.length > 0) {
       container.env = nextEnv
     } else {
