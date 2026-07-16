@@ -20,12 +20,14 @@ export function TestResultAlert({ result }: { result: GitTestResult }) {
       tone={tone}
       title={result.message}
       description={
+        // Alert renders the description inside a <p>, so only phrasing content
+        // is valid here — spans styled as blocks, not divs.
         result.details && result.details.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <span style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {result.details.map((d, i) => (
-              <div key={i}>{d}</div>
+              <span key={i}>{d}</span>
             ))}
-          </div>
+          </span>
         ) : undefined
       }
     />

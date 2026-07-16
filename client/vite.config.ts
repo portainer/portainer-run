@@ -60,6 +60,23 @@ export default defineConfig(({ mode }) => {
               if (portainerApiKey && !req.headers['x-api-key']) {
                 proxyReq.setHeader('X-API-Key', portainerApiKey)
               }
+              // Strip the browser's cache validators so Portainer can never
+              // answer 304 Not Modified — every request gets a fresh 200.
+              proxyReq.removeHeader('if-none-match')
+              proxyReq.removeHeader('if-modified-since')
+            })
+            proxy.on('proxyRes', (proxyRes) => {
+              // Drop every upstream caching signal and force no-store, so the
+              // browser never serves a stale Portainer response in dev. This is
+              // dev-only; in prod the real addon gateway sits in front instead.
+              delete proxyRes.headers['etag']
+              delete proxyRes.headers['last-modified']
+              delete proxyRes.headers['expires']
+              delete proxyRes.headers['vary']
+              proxyRes.headers['cache-control'] =
+                'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0'
+              proxyRes.headers['pragma'] = 'no-cache'
+              proxyRes.headers['expires'] = '0'
             })
           },
         },

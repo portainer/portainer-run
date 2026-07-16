@@ -8,9 +8,8 @@ import type {
   SidebarSection,
 } from '@ds/v3-templates/AppShell/AppShell'
 import { Button } from '@ds/v3-components/Button/Button'
-import { StatusDot } from '@ds/v3-components/StatusDot/StatusDot'
 
-import { useAppStore, visibleEnvironments } from '../store/useAppStore.js'
+import { useAppStore } from '../store/useAppStore.js'
 import { disconnect } from '../services/session.js'
 import { ROUTES } from '../lib/routes.js'
 import { getBreadcrumbItems } from '../lib/breadcrumbs.js'
@@ -40,8 +39,6 @@ export function AppLayout() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
 
-  const environments = useAppStore((s) => s.environments)
-  const disabledEnvs = useAppStore((s) => s.disabledEnvs)
   const isAdmin = useAppStore((s) => s.isAdmin)
   const isAiAvailable = useAppStore((s) => s.isAiAvailable)
   const version = useAppStore((s) => s.version)
@@ -72,18 +69,6 @@ export function AppLayout() {
 
   const breadcrumbs = useShellBreadcrumbs()
 
-  const vis = useMemo(
-    () => visibleEnvironments({ environments, disabledEnvs }),
-    [environments, disabledEnvs],
-  )
-
-  const statusText =
-    vis.length === 0
-      ? '0 environments'
-      : vis.length === 1
-        ? vis[0].Name
-        : `${vis.length} environments`
-
   function handleNavClick(id: string) {
     if (id === 'sign-out') {
       disconnect()
@@ -107,33 +92,17 @@ export function AppLayout() {
         collapsedLogo={<SidebarLogoCollapsed />}
         breadcrumbs={breadcrumbs}
         actions={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span
-                  title="Connected — use Disconnect in the nav to sign out"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                fontSize: 12,
-                color: 'var(--muted)',
-                whiteSpace: 'nowrap',
-              }}
+          isAiAvailable ? (
+            <Button
+              variant={chatOpen ? 'filled' : 'light'}
+              size="sm"
+              leftSection={<MessageSquare size={13} />}
+              onClick={() => setChatOpen(!chatOpen)}
+              title="Assistant"
             >
-              <StatusDot tone="success" />
-              {statusText}
-            </span>
-            {isAiAvailable ? (
-              <Button
-                variant={chatOpen ? 'filled' : 'light'}
-                size="sm"
-                leftSection={<MessageSquare size={13} />}
-                onClick={() => setChatOpen(!chatOpen)}
-                title="Assistant"
-              >
-                Assistant
-              </Button>
-            ) : null}
-          </div>
+              Assistant
+            </Button>
+          ) : undefined
         }
         avatarSlot={<AccountMenuSlot />}
         sidebarFooter={

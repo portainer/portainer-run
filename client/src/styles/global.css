@@ -89,3 +89,131 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ─── Design-system PageHeader overrides ─────────────────────────────────────
+   The DS PageHeader renders notification and help buttons unconditionally and
+   the submodule is read-only, so hide them here. Selectors match the DOM in
+   design-system/src/v3-templates/Header/PageHeader.tsx. */
+
+.ph-right .ph-notif-wrap {
+  display: none;
+}
+
+/* Help icon: the only direct button child of the right zone with .ph-aux
+   (the custom actions slot is a div.ph-aux). */
+.ph-right > button.ph-aux {
+  display: none;
+}
+
+/* ─── Account menu (app-owned — see components/AccountMenuSlot.tsx) ────────── */
+
+@keyframes acm-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.acm-panel {
+  position: fixed;
+  z-index: 9500;
+  width: 280px;
+  background: var(--content-bg, #ffffff);
+  border: 1px solid var(--border, #ecedee);
+  border-radius: var(--radius-xl, 12px);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.1),
+    0 2px 8px rgba(0, 0, 0, 0.06);
+  animation: acm-in 140ms ease-out;
+  overflow: hidden;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+@media (max-width: 639px) {
+  .acm-panel {
+    max-width: calc(100vw - 32px);
+    right: 16px !important;
+  }
+}
+
+.acm-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+}
+
+.acm-user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.acm-user-name {
+  font-size: var(--font-size-heading, 15px);
+  font-weight: 600;
+  color: var(--text, #111827);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.acm-user-role {
+  font-size: var(--font-size-base, 13px);
+  color: var(--muted, #667085);
+}
+
+.acm-sep {
+  height: 1px;
+  background: var(--border, #ecedee);
+}
+
+.acm-section {
+  padding: 14px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.acm-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted, #667085);
+}
+
+.acm-logout {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--status-danger, #f04438);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 100ms ease-out;
+}
+
+.acm-logout:hover {
+  background: color-mix(
+    in srgb,
+    var(--status-danger, #f04438) 6%,
+    var(--content-bg, #fff)
+  );
+}
+
+.acm-logout:focus-visible {
+  outline: 2px solid var(--status-danger, #f04438);
+  outline-offset: -2px;
+}

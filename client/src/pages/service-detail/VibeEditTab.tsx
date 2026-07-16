@@ -132,7 +132,11 @@ export function VibeEditTab({
           port: svcPort,
           ingress:
             exposeType === 'Ingress'
-              ? { host: ingHost, path: ingPath, ingressClass: ingClass }
+              ? {
+                  host: ingHost.trim(),
+                  path: ingPath.trim() || '/',
+                  ingressClass: ingClass.trim(),
+                }
               : undefined,
         }),
       })
@@ -164,7 +168,9 @@ export function VibeEditTab({
           gitPath,
           envId,
           ns: namespace,
-          envVars: envVars.filter((v) => v.key && v.key.trim()),
+          envVars: envVars
+            .map((v) => ({ ...v, key: v.key.trim() }))
+            .filter((v) => v.key),
         }),
       })
       const data = await res.json().catch(() => ({}))

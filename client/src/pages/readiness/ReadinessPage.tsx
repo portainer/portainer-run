@@ -172,7 +172,10 @@ export function ReadinessPage() {
   const showGrid = byEnv !== null
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div
+      className="ash-content"
+      style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+    >
       <PageTitle
         title="Cluster Readiness"
         description="Verify each environment has ingress, load balancing, storage, and healthy nodes"
