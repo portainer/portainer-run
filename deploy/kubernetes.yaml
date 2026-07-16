@@ -52,7 +52,7 @@ data:
   # HTTP_PORT: "80"
 
   # ── Addon-gateway mode ───────────────────────────────────────────────────
-  # Served as a Portainer addon at <portainer>/addons/portainer-run/. TLS
+  # Served as a Portainer addon at <portainer>/addons/run/. TLS
   # terminates at the Portainer gateway, which proxies plain HTTP to us, so we
   # serve HTTP directly. Without this we run HTTPS + an HTTP→HTTPS redirect on
   # port 80; the gateway hits that redirect and bounces the browser to the
