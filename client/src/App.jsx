@@ -3,9 +3,9 @@ import { inflightDedupe } from './lib/inflightDedupe.js'
 import { useAppStore } from './store/useAppStore.js'
 import { bootstrap } from './services/session.js'
 import { AppRoutes } from './AppRoutes.jsx'
-import { DeleteModal } from './components/DeleteModal.jsx'
-import { RestartModal } from './components/RestartModal.jsx'
-import { Toasts } from './components/Toasts.jsx'
+import { DeleteModal } from './components/DeleteModal'
+import { RestartModal } from './components/RestartModal'
+import { Toasts } from './components/Toasts'
 
 export function App() {
   const connected = useAppStore((s) => s.connected)
@@ -15,7 +15,7 @@ export function App() {
   }, [])
 
   return (
-    <div className="app">
+    <div>
       <AppRoutes />
       {connected ? <DeleteModal /> : null}
       {connected ? <RestartModal /> : null}
