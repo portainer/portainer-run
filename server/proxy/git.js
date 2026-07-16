@@ -307,9 +307,20 @@ function request(method, urlStr, headers, body) {
       res.on('end', () => {
         const text = Buffer.concat(chunks).toString('utf8')
         if (res.statusCode >= 400) {
-          let msg = `HTTP ${res.statusCode}`
-          try { msg = JSON.parse(text)?.message || msg } catch { /* ignore */ }
-          return reject(new Error(msg))
+          // Provider bodies (e.g. GitHub's `{"message":"Not Found"}`) are terse
+          // and drop the request context, so fold the method/host/path/status
+          // into the message. Only the pathname is logged — never headers/query,
+          // which can carry credentials.
+          let detail = ''
+          try { detail = JSON.parse(text)?.message || '' } catch { /* ignore */ }
+          const err = new Error(
+            `git ${method} ${u.host}${u.pathname} → HTTP ${res.statusCode}` +
+              (detail ? `: ${detail}` : ''),
+          )
+          err.status = res.statusCode
+          err.method = method
+          err.url = `${u.origin}${u.pathname}`
+          return reject(err)
         }
         try {
           resolve(JSON.parse(text))

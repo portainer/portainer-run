@@ -42,26 +42,28 @@ export function EmptyRepoWarning({
       tone="warning"
       title="Repository is empty"
       description={
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div>
+        // Alert renders the description inside a <p>, so only phrasing content
+        // is valid here; the button goes in the `action` slot instead.
+        <span style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <span>
             This repository has no commits. Portainer-Run needs at least one commit before it
             can push manifests and source files. Click Initialize to create an initial commit
             automatically.
-          </div>
+          </span>
           {error && (
-            <div style={{ color: 'var(--status-danger, #f04438)', fontSize: 11 }}>{error}</div>
+            <span style={{ color: 'var(--status-danger, #f04438)', fontSize: 11 }}>{error}</span>
           )}
-          <div>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={initializing}
-              onClick={() => void handleInitialize()}
-            >
-              {initializing ? 'Initializing…' : 'Initialize Repository'}
-            </Button>
-          </div>
-        </div>
+        </span>
+      }
+      action={
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={initializing}
+          onClick={() => void handleInitialize()}
+        >
+          {initializing ? 'Initializing…' : 'Initialize Repository'}
+        </Button>
       }
     />
   )

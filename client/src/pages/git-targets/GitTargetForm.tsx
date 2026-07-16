@@ -34,6 +34,21 @@ function defaultPayload() {
   }
 }
 
+// Fields left untrimmed: an SSH key spans multiple lines and a passphrase may
+// legitimately contain leading/trailing spaces. Everything else is an
+// identifier or URL where surrounding whitespace is always a mistake.
+const UNTRIMMED_FIELDS = new Set(['sshKey', 'sshPassphrase'])
+
+function trimmedPayload(p: any) {
+  const out: any = { ...p }
+  for (const key of Object.keys(out)) {
+    if (typeof out[key] === 'string' && !UNTRIMMED_FIELDS.has(key)) {
+      out[key] = out[key].trim()
+    }
+  }
+  return out
+}
+
 const HINT_STYLE: React.CSSProperties = { fontSize: 12, color: 'var(--muted)' }
 const MONO_INPUT: React.CSSProperties = { fontFamily: MONO_FONT, fontSize: 12 }
 
@@ -69,7 +84,9 @@ export function GitTargetForm({
     setTesting(true)
     setTestResult(null)
     try {
-      const r = await testGitTargetPayload(payload)
+      const trimmed = trimmedPayload(payload)
+      setPayload(trimmed)
+      const r = await testGitTargetPayload(trimmed)
       setTestResult({
         ok: true,
         message: r.message,
@@ -100,8 +117,12 @@ export function GitTargetForm({
     setError('')
     setSaving(true)
     try {
+      // Trim to strip stray whitespace (e.g. a trailing space in the repo slug,
+      // a common copy-paste artefact that otherwise 404s against the provider).
+      const trimmed = trimmedPayload(payload)
+      setPayload(trimmed)
       // The JSDoc types in gitTargets.js omit `shared`, but the API accepts it.
-      const body = { name: name.trim(), payload, shared } as any
+      const body = { name: name.trim(), payload: trimmed, shared } as any
       let result
       if (initial?.id) {
         result = await updateGitTarget(initial.id, body)

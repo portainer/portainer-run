@@ -28,6 +28,31 @@ function RunBadge({ size = 'md' }: { size?: 'sm' | 'md' }) {
   )
 }
 
+// The wordmark is a transparent alpha mask (white text on transparent). Painting
+// it with the current text color keeps the background transparent and lets the
+// foreground follow the theme — dark in light mode, light in dark mode.
+const WORDMARK_ASPECT = 2129 / 262
+const WORDMARK_HEIGHT = 20
+
+function PortainerWordmark() {
+  const src = `${import.meta.env.BASE_URL}portainer-wordmark.png`
+  const mask = `url("${src}") left center / contain no-repeat`
+  return (
+    <span
+      role="img"
+      aria-label="Portainer"
+      style={{
+        display: 'block',
+        height: WORDMARK_HEIGHT,
+        width: Math.round(WORDMARK_HEIGHT * WORDMARK_ASPECT),
+        background: 'var(--text, #111827)',
+        WebkitMask: mask,
+        mask,
+      }}
+    />
+  )
+}
+
 export function SidebarLogo() {
   return (
     <div
@@ -39,11 +64,7 @@ export function SidebarLogo() {
       }}
       title="Portainer-Run — Dashboard"
     >
-      <img
-        src={`${import.meta.env.BASE_URL}portainer-logo.png`}
-        alt="Portainer"
-        style={{ height: 20, width: 'auto', display: 'block' }}
-      />
+      <PortainerWordmark />
       <RunBadge />
     </div>
   )

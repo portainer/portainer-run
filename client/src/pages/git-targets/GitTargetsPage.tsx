@@ -94,7 +94,10 @@ export function GitTargetsPage() {
 
   if (adding || editing) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div
+        className="ash-content"
+        style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+      >
         <PageTitle
           title={editing ? 'Edit Git Target' : 'Add Git Target'}
           description="Configure a repository to store Kubernetes manifests"
@@ -112,7 +115,10 @@ export function GitTargetsPage() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div
+      className="ash-content"
+      style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+    >
       <PageTitle
         title="Git Targets"
         description="Repositories where Portainer-Run commits Kubernetes manifests for GitOps deployment. Credentials are stored encrypted. Add a target here before deploying."

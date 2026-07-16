@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { FileText, Loader2, Lock, Upload, X } from 'lucide-react'
+import { Check, FileText, Loader2, Lock, Upload, X } from 'lucide-react'
 
 import { Alert } from '@ds/v3-components/Alert/Alert'
 import { Badge } from '@ds/v3-components/Badge/Badge'
@@ -8,6 +8,8 @@ import { Button } from '@ds/v3-components/Button/Button'
 import { FormControl, Input } from '@ds/v3-components/FormField/FormField'
 import { SegmentedControl } from '@ds/v3-components/Segmented/Segmented'
 import { Select } from '@ds/v3-components/Select/Select'
+import { Timeline, TimelineItem } from '@ds/v3-components/Timeline/Timeline'
+import type { TimelineTone } from '@ds/v3-components/Timeline/Timeline'
 import { MultiStepWizard } from '@ds/v3-templates/MultiStepWizard/MultiStepWizard'
 import type { WizardContext, WizardStep } from '@ds/v3-templates/MultiStepWizard/MultiStepWizard'
 import { PageTitle } from '@ds/v3-templates/PageTitle/PageTitle'
@@ -193,6 +195,7 @@ const SECRET_PATTERN =
 
 function DropZone({ onFiles }: { onFiles: (files: UploadedFile[]) => void }) {
   const [dragging, setDragging] = useState(false)
+  const [hover, setHover] = useState(false)
   const folderRef = useRef<HTMLInputElement>(null)
   const filesRef = useRef<HTMLInputElement>(null)
 
@@ -203,20 +206,41 @@ function DropZone({ onFiles }: { onFiles: (files: UploadedFile[]) => void }) {
     if (result) onFiles(result)
   }
 
+  const active = dragging || hover
+  const accent = 'var(--accent, #2e90fa)'
+
   return (
     <div
+      role="button"
+      tabIndex={0}
       onDragOver={(e) => {
         e.preventDefault()
         setDragging(true)
       }}
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onClick={() => folderRef.current?.click()}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          folderRef.current?.click()
+        }
+      }}
       style={{
-        border: `1.5px dashed ${dragging ? 'var(--accent, #2e90fa)' : 'var(--border)'}`,
-        borderRadius: 8,
-        padding: '32px 20px',
+        border: `1.5px dashed ${active ? accent : 'var(--border)'}`,
+        borderRadius: 12,
+        padding: '40px 24px',
         textAlign: 'center',
-        background: dragging ? 'var(--bg)' : 'transparent',
+        cursor: 'pointer',
+        outline: 'none',
+        background: dragging
+          ? `color-mix(in srgb, ${accent} 8%, transparent)`
+          : hover
+            ? 'color-mix(in srgb, var(--text) 3%, transparent)'
+            : 'transparent',
+        transition: 'border-color 120ms ease, background-color 120ms ease',
       }}
     >
       <input
@@ -239,15 +263,48 @@ function DropZone({ onFiles }: { onFiles: (files: UploadedFile[]) => void }) {
           if (e.target.files?.length) void readFileList(e.target.files).then(onFiles)
         }}
       />
-      <Upload size={22} style={{ marginBottom: 14, color: 'var(--muted)' }} />
-      <div style={{ fontSize: 15, color: 'var(--text)', marginBottom: 14 }}>
-        Drop your project folder here
+      <div
+        style={{
+          width: 52,
+          height: 52,
+          borderRadius: '50%',
+          margin: '0 auto 16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: `color-mix(in srgb, ${accent} 12%, transparent)`,
+          color: accent,
+          transition: 'transform 120ms ease',
+          transform: active ? 'translateY(-2px)' : 'none',
+        }}
+      >
+        <Upload size={22} />
+      </div>
+      <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>
+        {dragging ? 'Drop to upload' : 'Drop your project folder here'}
+      </div>
+      <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 18 }}>
+        or browse below — we&rsquo;ll detect the runtime automatically
       </div>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-        <Button variant="ghost" size="sm" onClick={() => folderRef.current?.click()}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation()
+            folderRef.current?.click()
+          }}
+        >
           Upload folder
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => filesRef.current?.click()}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation()
+            filesRef.current?.click()
+          }}
+        >
           Upload files
         </Button>
       </div>
@@ -368,6 +425,39 @@ function StepHeading({ children }: { children: React.ReactNode }) {
 const HINT_STYLE: React.CSSProperties = { fontSize: 12, color: 'var(--muted)' }
 
 // ---------------------------------------------------------------------------
+// Startup progress (deploy → starting → ready)
+// ---------------------------------------------------------------------------
+
+const STARTUP_POLL_MS = 3000
+// Vibe apps run npm/pip installs in init containers, so first boot can be slow.
+const STARTUP_TIMEOUT_MS = 5 * 60 * 1000
+
+type StartupPhase = 'deploying' | 'starting' | 'ready' | 'error' | 'timeout'
+
+// Mirrors sanitizeStackName in server/routes/vibe.js: the deployment name and
+// `app` label are derived from the entered app name, so we must match them when
+// polling for readiness.
+function sanitizeAppName(name: string) {
+  return name.replace(/[^a-z0-9-]/gi, '-').toLowerCase()
+}
+
+// A subset of the human-friendly reasons from server/env-status.js that mean the
+// app cannot recover on its own — surfacing these lets us stop waiting early.
+function isBlockingReason(reason: string | null): boolean {
+  if (!reason) return false
+  const r = reason.toLowerCase()
+  return (
+    r.includes('keeps crashing') ||
+    r.includes('download the image') ||
+    r.includes('image name is invalid') ||
+    r.includes('failed to start') ||
+    r.includes('missing config') ||
+    r.includes('memory limit') ||
+    r.includes('exiting with errors')
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -451,6 +541,22 @@ export function VibeDeploy() {
   const [stagedParams, setStagedParams] = useState<any>(null)
   const [deploying, setDeploying] = useState(false)
   const gitOps = useGitOpsSelection()
+
+  // ---- Startup progress (final step) ----
+  const [startupPhase, setStartupPhase] = useState<StartupPhase | null>(null)
+  const [startupReason, setStartupReason] = useState<string | null>(null)
+  const [startupUrl, setStartupUrl] = useState<string | null>(null)
+  const [startupErrorMsg, setStartupErrorMsg] = useState<string | null>(null)
+  const [startupFailStage, setStartupFailStage] = useState<'deploy' | 'start' | null>(null)
+  // Cancels the poll loop on unmount / navigation; sp used by "keep waiting".
+  const startupCancelRef = useRef(false)
+  const startupSpRef = useRef<any>(null)
+
+  useEffect(() => {
+    return () => {
+      startupCancelRef.current = true
+    }
+  }, [])
 
   const resolvedNs = manualNs ? manualNsValue.trim() : namespace
   const permKey = envId && resolvedNs ? `${envId}:${resolvedNs}` : null
@@ -722,15 +828,17 @@ export function VibeDeploy() {
   }
 
   async function fetchGitSourceFiles() {
-    if (!gitSourceTargetId || !gitSourceBranch) {
+    const branch = gitSourceBranch.trim()
+    const path = gitSourcePath.trim()
+    if (!gitSourceTargetId || !branch) {
       pushToast('Select a git target and branch', 'err')
       return
     }
     setGitSourceFetching(true)
     try {
-      const pathParam = gitSourcePath ? `&path=${encodeURIComponent(gitSourcePath)}` : ''
+      const pathParam = path ? `&path=${encodeURIComponent(path)}` : ''
       const r = await serverFetch(
-        `/api/connections/${gitSourceTargetId}/files?branch=${encodeURIComponent(gitSourceBranch)}${pathParam}`,
+        `/api/connections/${gitSourceTargetId}/files?branch=${encodeURIComponent(branch)}${pathParam}`,
       )
       const data = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`)
@@ -791,7 +899,14 @@ export function VibeDeploy() {
 
     // Build deploy params for GitOpsStep dry-run + actual deploy
     // Priority: user-entered svcPort > PORT env var > runtime default
-    const portEnvVar = envVars.find((v) => v.key === 'PORT')?.value
+    // Normalise env vars once: trim names (a stray space is an invalid
+    // Kubernetes env-var name and would also break the PORT lookup below) and
+    // drop blanks. Values are left as-typed.
+    const cleanEnvVars = envVars
+      .map((v) => ({ ...v, key: v.key.trim() }))
+      .filter((v) => v.key)
+
+    const portEnvVar = cleanEnvVars.find((v) => v.key === 'PORT')?.value
     const portValue = parseInt(String(svcPort || portEnvVar || detectedRuntime?.port || 80), 10)
     const resolvedPort = isNaN(portValue) ? 80 : portValue
 
@@ -802,7 +917,7 @@ export function VibeDeploy() {
       command: startCmd ? startCmd.split(/\s+/) : undefined,
       workingDir: detectedRuntime?.workDir || '/app',
       ports: [{ containerPort: resolvedPort, protocol: 'TCP' }],
-      env: envVars.filter((v) => v.key).map((v) => ({ name: v.key, value: v.value })),
+      env: cleanEnvVars.map((v) => ({ name: v.key, value: v.value })),
     }
 
     const params = {
@@ -828,10 +943,10 @@ export function VibeDeploy() {
       exposeType: exposeType,
       servicePorts: [resolvedPort],
       ingress: {
-        host: ingHost,
+        host: ingHost.trim(),
         path: ingPath || '/',
         port: resolvedPort,
-        ingressClass: ingClass,
+        ingressClass: ingClass.trim(),
       },
       // Vibe-specific extras passed through to server
       vibeParams: {
@@ -839,7 +954,7 @@ export function VibeDeploy() {
         runtimeImage: detectedRuntime?.image || 'node:22',
         startCmd: startCmd.trim(),
         workDir: detectedRuntime?.workDir || '/app',
-        envVars: envVars.filter((v) => v.key),
+        envVars: cleanEnvVars,
         sourceType,
         // Upload source
         sourceFiles:
@@ -851,8 +966,8 @@ export function VibeDeploy() {
           sourceType === 'git'
             ? {
                 gitTargetId: gitSourceTargetId,
-                branch: gitSourceBranch,
-                path: gitSourcePath || '',
+                branch: gitSourceBranch.trim(),
+                path: gitSourcePath.trim(),
               }
             : null,
       },
@@ -883,6 +998,14 @@ export function VibeDeploy() {
     const sp = _params || stagedParams
     if (!sp) return
     setDeploying(true)
+    // Enter the startup progress view — the wizard body switches to the Timeline.
+    startupCancelRef.current = false
+    startupSpRef.current = sp
+    setStartupReason(null)
+    setStartupUrl(null)
+    setStartupErrorMsg(null)
+    setStartupFailStage(null)
+    setStartupPhase('deploying')
     try {
       const res = await serverFetch('/api/vibe/deploy', {
         method: 'POST',
@@ -910,28 +1033,121 @@ export function VibeDeploy() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
-      pushToast(`${sp.appName} deployed successfully`, 'ok')
-      void manualRefresh()
+      // Deploy accepted — now wait for the app to actually come up. Kick off the
+      // background cache refreshes so the Applications list is warm once we finish.
       schedulePostDeployRefreshes()
-      navigate(ROUTES.services)
-      // Reset form
-      setFiles([])
-      setStagedParams(null)
-      setRuntimeConfirmed(false)
-      setEnvVarsConfirmed(false)
-      setDeployConfigConfirmed(false)
-      setAppName('')
-      setEnvId('')
-      setNamespace('')
-      setExposeType('NodePort')
-      setIngHost('')
-      setIngClass('')
-      goTo('files')
+      setStartupPhase('starting')
+      void waitForAppReady(sp)
     } catch (e: any) {
+      setStartupErrorMsg(e?.message || 'Unknown error')
+      setStartupFailStage('deploy')
+      setStartupPhase('error')
       pushToast('Deploy failed: ' + (e?.message || 'Unknown error'), 'err')
     } finally {
       setDeploying(false)
     }
+  }
+
+  // Poll Kubernetes (via Portainer) until the app's pods are ready, surfacing a
+  // friendly status while it boots. Stops on ready, a blocking error, cancel, or
+  // timeout.
+  async function waitForAppReady(sp: any) {
+    const safeApp = sanitizeAppName(sp.appName)
+    const deadline = Date.now() + STARTUP_TIMEOUT_MS
+
+    while (!startupCancelRef.current && Date.now() < deadline) {
+      let reason: string | null = null
+      let url: string | null = null
+      try {
+        const r = await serverFetch(
+          `/env-status/${sp.envId}?ns=${encodeURIComponent(sp.ns)}`,
+        )
+        if (r.ok) {
+          const j = await r.json()
+          const info = j?.data?.[safeApp]
+          reason = info?.statusReason ?? null
+          url = info?.accessUrl ?? null
+        }
+      } catch {
+        /* transient — keep polling */
+      }
+
+      let ready = false
+      try {
+        const dr = await kubeFetch(
+          token,
+          sp.envId,
+          `/apis/apps/v1/namespaces/${sp.ns}/deployments/${safeApp}`,
+        )
+        if (dr.ok) {
+          const dep = await dr.json()
+          const readyReplicas = dep?.status?.readyReplicas || 0
+          const desired = dep?.spec?.replicas ?? 0
+          ready = desired > 0 && readyReplicas >= desired
+        }
+      } catch {
+        /* transient — keep polling */
+      }
+
+      if (startupCancelRef.current) return
+
+      if (ready) {
+        setStartupUrl(url)
+        setStartupReason(null)
+        setStartupPhase('ready')
+        void manualRefresh()
+        pushToast(`${sp.appName} is up and running`, 'ok')
+        return
+      }
+
+      if (isBlockingReason(reason)) {
+        setStartupReason(reason)
+        setStartupFailStage('start')
+        setStartupPhase('error')
+        return
+      }
+
+      setStartupReason(reason)
+      await new Promise((resolve) => setTimeout(resolve, STARTUP_POLL_MS))
+    }
+
+    if (!startupCancelRef.current) {
+      setStartupPhase('timeout')
+    }
+  }
+
+  // Clear all deploy form state — used after the flow completes or is abandoned.
+  function resetDeployForm() {
+    startupCancelRef.current = true
+    setStartupPhase(null)
+    setStartupReason(null)
+    setStartupUrl(null)
+    setStartupErrorMsg(null)
+    setStartupFailStage(null)
+    setFiles([])
+    setStagedParams(null)
+    setRuntimeConfirmed(false)
+    setEnvVarsConfirmed(false)
+    setDeployConfigConfirmed(false)
+    setAppName('')
+    setEnvId('')
+    setNamespace('')
+    setExposeType('NodePort')
+    setIngHost('')
+    setIngClass('')
+    goTo('files')
+  }
+
+  function finishToServices() {
+    resetDeployForm()
+    navigate(ROUTES.services)
+  }
+
+  function resumeWaiting() {
+    if (!startupSpRef.current) return
+    startupCancelRef.current = false
+    setStartupPhase('starting')
+    void waitForAppReady(startupSpRef.current)
   }
 
   // ---- Wizard steps (dynamic: settings only with .env.example, storage only
@@ -953,9 +1169,9 @@ export function VibeDeploy() {
           ? 'var(--status-danger, #f04438)'
           : 'var(--muted)'
 
-  // Single git target: deploy fires straight from the Deploy step and we show
-  // a progress panel in place of step content (original "Deploying" section).
-  const autoDeploying = gitTargetsList.length === 1 && stagedParams != null
+  // Once a deploy is in flight the wizard body switches to the startup Timeline
+  // (covers both the single-target auto-deploy and the multi-target storage step).
+  const startupActive = startupPhase != null
 
   // ---- Step content renderers ----
 
@@ -1531,18 +1747,96 @@ export function VibeDeploy() {
     )
   }
 
-  function renderDeployingPanel() {
+  function renderStartupPanel() {
+    const phase = startupPhase
+    const spinner = <Loader2 size={12} className="animate-spin" />
+    const check = <Check size={12} strokeWidth={2.5} />
+    const cross = <X size={12} strokeWidth={2.5} />
+
+    const deployFailed = phase === 'error' && startupFailStage === 'deploy'
+    const startFailed = phase === 'error' && startupFailStage === 'start'
+
+    // Step 1 — Deploying
+    let s1: { tone: TimelineTone; bullet?: React.ReactNode; desc: React.ReactNode }
+    if (phase === 'deploying') {
+      s1 = { tone: 'accent', bullet: spinner, desc: 'Saving your app and setting things up' }
+    } else if (deployFailed) {
+      s1 = { tone: 'danger', bullet: cross, desc: startupErrorMsg || 'Something went wrong while setting up' }
+    } else {
+      s1 = { tone: 'success', bullet: check, desc: 'Saved and set up' }
+    }
+
+    // Step 2 — Starting
+    let s2: { tone: TimelineTone; bullet?: React.ReactNode; desc: React.ReactNode }
+    if (phase === 'deploying' || deployFailed) {
+      s2 = { tone: 'neutral', desc: 'Waiting for your app to start' }
+    } else if (phase === 'starting') {
+      s2 = { tone: 'accent', bullet: spinner, desc: startupReason || 'Waiting for your app to start' }
+    } else if (phase === 'timeout') {
+      s2 = { tone: 'warning', bullet: spinner, desc: startupReason || 'This is taking longer than usual — still starting' }
+    } else if (startFailed) {
+      s2 = { tone: 'danger', bullet: cross, desc: startupReason || "Your app couldn't start" }
+    } else {
+      s2 = { tone: 'success', bullet: check, desc: 'Started successfully' }
+    }
+
+    // Step 3 — Ready
+    const s3: { tone: TimelineTone; bullet?: React.ReactNode; desc: React.ReactNode } =
+      phase === 'ready'
+        ? { tone: 'success', bullet: check, desc: 'Your app is up and running' }
+        : { tone: 'neutral', desc: 'Your app will be live here' }
+
     return (
       <div>
-        <StepHeading>Deploying</StepHeading>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '28px 20px' }}>
-          <Loader2 size={18} className="animate-spin" style={{ flexShrink: 0, color: 'var(--muted)' }} />
-          <span style={{ color: 'var(--muted)', fontSize: 14 }}>
-            Deploying your app — this may take a moment…
-          </span>
+        <StepHeading>{phase === 'ready' ? 'Your app is live' : 'Deploying your app'}</StepHeading>
+        <div style={{ maxWidth: 460, padding: '8px 4px 4px' }}>
+          <Timeline>
+            <TimelineItem tone={s1.tone} bullet={s1.bullet} title="Deploying" description={s1.desc} />
+            <TimelineItem tone={s2.tone} bullet={s2.bullet} title="Starting" description={s2.desc} />
+            <TimelineItem tone={s3.tone} bullet={s3.bullet} title="Ready" description={s3.desc} />
+          </Timeline>
         </div>
+        {renderStartupActions()}
       </div>
     )
+  }
+
+  function renderStartupActions() {
+    if (startupPhase === 'ready') {
+      return (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
+          {startupUrl && (
+            <Button onClick={() => window.open(startupUrl, '_blank', 'noopener,noreferrer')}>
+              Open my app
+            </Button>
+          )}
+          <Button variant={startupUrl ? 'ghost' : undefined} onClick={finishToServices}>
+            Go to my apps
+          </Button>
+        </div>
+      )
+    }
+    if (startupPhase === 'error') {
+      return (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
+          <Button onClick={finishToServices}>View application</Button>
+          <Button variant="ghost" onClick={resetDeployForm}>
+            Start over
+          </Button>
+        </div>
+      )
+    }
+    if (startupPhase === 'timeout') {
+      return (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
+          <Button onClick={resumeWaiting}>Keep waiting</Button>
+          <Button variant="ghost" onClick={finishToServices}>
+            View application
+          </Button>
+        </div>
+      )
+    }
+    return null
   }
 
   function renderStorageStep() {
@@ -1562,7 +1856,7 @@ export function VibeDeploy() {
   function renderFooter(ctx: WizardContext) {
     ctxRef.current = ctx
 
-    if (autoDeploying) {
+    if (startupActive) {
       return <span />
     }
 
@@ -1646,7 +1940,10 @@ export function VibeDeploy() {
   // ---- Render ----
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div
+      className="ash-content"
+      style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+    >
       <PageTitle
         title="Deploy"
         description="Drop the files your AI coding tool generated: we handle git, runtime detection, and deployment."
@@ -1672,7 +1969,7 @@ export function VibeDeploy() {
       <MultiStepWizard steps={wizardSteps} footer={renderFooter}>
         {(ctx) => {
           ctxRef.current = ctx
-          if (autoDeploying) return renderDeployingPanel()
+          if (startupActive) return renderStartupPanel()
           switch (ctx.activeStep) {
             case 'files':
               return renderFilesStep()

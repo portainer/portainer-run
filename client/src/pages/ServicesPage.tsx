@@ -444,9 +444,6 @@ export function ServicesPage() {
           description="Your deployed applications, across all environments"
           actions={
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <Button size="sm" onClick={() => navigate(ROUTES.deploy)}>
-                + Deploy
-              </Button>
               <span
                 title={
                   cacheStatus === 'cached'
@@ -475,6 +472,9 @@ export function ServicesPage() {
                 onClick={() => void manualRefresh()}
               >
                 Refresh
+              </Button>
+              <Button size="sm" onClick={() => navigate(ROUTES.deploy)}>
+                + Deploy
               </Button>
             </div>
           }

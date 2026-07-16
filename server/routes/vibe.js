@@ -764,7 +764,17 @@ async function handleVibeDeploy(req, res) {
       stackId: stackResult?.Id || stackResult?.id || null,
     })
   } catch (err) {
-    console.error('[vibe deploy error]', err.message || err)
+    console.error('[vibe deploy error]', {
+      message: err?.message || String(err),
+      status: err?.status,
+      method: err?.method,
+      url: err?.url,
+      appName: safeApp,
+      ns,
+      envId,
+      manifestPath,
+      stack: err?.stack,
+    })
     return json(res, 500, { error: err.message || 'Deploy failed' })
   }
 }
@@ -887,9 +897,21 @@ function portainerRequest(target, userToken, method, path, body, contentType = '
       upRes.on('end', () => {
         const text = Buffer.concat(chunks).toString('utf8')
         if (upRes.statusCode >= 400) {
-          let msg = `Portainer API HTTP ${upRes.statusCode}`
-          try { msg = JSON.parse(text)?.message || msg } catch { /* ignore */ }
-          return reject(new Error(msg))
+          // Keep the method/path/status alongside Portainer's own message so a
+          // routing 404 ("Not Found") is distinguishable from a resource 404.
+          let detail = ''
+          try {
+            const parsed = JSON.parse(text)
+            detail = parsed?.message || parsed?.details || ''
+          } catch { /* ignore */ }
+          const err = new Error(
+            `Portainer ${method} ${path.split('?')[0]} → HTTP ${upRes.statusCode}` +
+              (detail ? `: ${detail}` : ''),
+          )
+          err.status = upRes.statusCode
+          err.method = method
+          err.url = path.split('?')[0]
+          return reject(err)
         }
         try { resolve(JSON.parse(text)) } catch { resolve(text) }
       })
