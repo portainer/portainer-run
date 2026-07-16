@@ -1,6 +1,6 @@
-# Portainer-Run — Kubernetes deployment manifest
+# Portainer-Run — Kubernetes deployment manifest example for development
 #
-# Deploys Portainer-Run as a single pod in the portainer-run namespace.
+# Deploys Portainer-Run as a single pod in the portainer-addon-portainer-run namespace.
 #
 # Required: update PORTAINER_URL and ENCRYPTION_KEY in the ConfigMap before applying.
 # Optional components are commented out with instructions below.
@@ -15,7 +15,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: portainer-run
+  name: portainer-addon-portainer-run
   labels:
     app: portainer-run
 
@@ -26,7 +26,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: portainer-run-config
-  namespace: portainer-run
+  namespace: portainer-addon-portainer-run
 data:
   PORTAINER_URL: "https://portainer.portainer.svc.cluster.local:9443"
   # Cluster-internal DNS is the default (addon runs alongside Portainer).
@@ -75,9 +75,9 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: portainer-run-secret
-  namespace: portainer-run
+  namespace: portainer-addon-portainer-run
 type: Opaque
-data:
+stringData:
   # ── Required: encryption key ────────────────────────────────────────────────
   # Encrypts stored Git target credentials at rest. Min 32 chars.
   # Generate: openssl rand -hex 32 | base64
@@ -99,7 +99,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: portainer-run-cache
-  namespace: portainer-run
+  namespace: portainer-addon-portainer-run
 spec:
   accessModes:
     - ReadWriteOnce
@@ -113,7 +113,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: portainer-run
-  namespace: portainer-run
+  namespace: portainer-addon-portainer-run
   labels:
     app: portainer-run
 spec:
@@ -199,7 +199,7 @@ spec:
             # kubectl create secret tls portainer-run-tls \
             #   --cert=/path/to/fullchain.pem \
             #   --key=/path/to/privkey.pem \
-            #   -n portainer-run
+            #   -n portainer-addon-portainer-run
             # - name: tls-certs
             #   mountPath: /certs
             #   readOnly: true
@@ -256,7 +256,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: portainer-run
-  namespace: portainer-run
+  namespace: portainer-addon-portainer-run
   labels:
     app: portainer-run
 spec:
@@ -288,7 +288,7 @@ spec:
 # kind: Ingress
 # metadata:
 #   name: portainer-run
-#   namespace: portainer-run
+#   namespace: portainer-addon-portainer-run
 #   annotations:
 #     # nginx:
 #     kubernetes.io/ingress.class: "nginx"
