@@ -4,6 +4,23 @@ import { getCachedUser, setCachedUser } from './userCache.js'
 import { resolvePortainerTarget } from '../resolve-portainer.js'
 
 /**
+ * Build the auth header for an outbound request to Portainer, matching the
+ * token type — mirroring Portainer's own bouncer. API access tokens (the "ptr_"
+ * prefix) authenticate via X-API-Key; session JWTs via the portainer_api_key
+ * cookie. Only the matching header is sent, never both: Portainer's apiKeyLookup
+ * runs first and 401s when X-API-Key holds a non-API-key value (e.g. a JWT)
+ * instead of falling through to the cookie lookup. Routing by type lets the MCP
+ * server be driven by a long-lived X-API-Key while the browser keeps its JWT.
+ * @param {string} token
+ * @returns {Record<string, string>}
+ */
+export function portainerAuthHeaders(token) {
+  return token.startsWith('ptr_')
+    ? { 'X-API-Key': token }
+    : { 'Cookie': `portainer_api_key=${token}` }
+}
+
+/**
  * Make a GET request directly to a Portainer instance.
  * @param {{ host, port, isHttps }} target
  * @param {string} token
@@ -17,7 +34,7 @@ export function portainerGet(target, token, path) {
       port: target.port,
       path,
       method: 'GET',
-      headers: { 'X-API-Key': token, 'Content-Type': 'application/json' },
+      headers: { ...portainerAuthHeaders(token), 'Content-Type': 'application/json' },
       rejectUnauthorized: false,
     }, (res) => {
       let body = ''
@@ -45,7 +62,7 @@ export async function resolveCallerIdentity(req) {
   const cached = getCachedUser(token)
   if (cached) return { ...cached, token }
 
-  const target = resolvePortainerTarget(req)
+  const target = resolvePortainerTarget()
   if (!target) return null
 
   try {
@@ -61,10 +78,17 @@ export async function resolveCallerIdentity(req) {
 }
 
 /**
- * Extract bearer token from Authorization header or X-API-Key header.
+ * Extract the Portainer JWT from the inbound request.
+ * Cookie (portainer_api_key) takes priority — this is the addon-gateway auth path.
+ * Falls back to Authorization: Bearer and X-API-Key for backward compatibility.
  * @param {import('http').IncomingMessage} req
  */
 export function extractToken(req) {
+  const cookieHeader = req.headers['cookie'] || ''
+  for (const part of cookieHeader.split(';')) {
+    const [k, ...v] = part.trim().split('=')
+    if (k.trim() === 'portainer_api_key') return v.join('=').trim()
+  }
   const auth = req.headers['authorization'] || ''
   if (auth.toLowerCase().startsWith('bearer ')) return auth.slice(7).trim()
   return req.headers['x-api-key'] || ''

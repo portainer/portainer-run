@@ -1,5 +1,15 @@
 import https from 'node:https'
 import http from 'node:http'
+import { AsyncLocalStorage } from 'node:async_hooks'
+
+// Carries the current connection's `tlsSkipVerify` setting down to the low-level `request()`
+// helper without threading it through every one of this module's ~60 call sites. Each exported
+// entry point seeds the store from its `payload` on the way in.
+const tlsContext = new AsyncLocalStorage()
+
+function withTlsContext(payload, fn) {
+  return tlsContext.run({ skipVerify: Boolean(payload.tlsSkipVerify) }, fn)
+}
 
 /**
  * Commit one or more files to a git repo.
@@ -9,10 +19,12 @@ import http from 'node:http'
  * @param {{ path: string, content: string }[]} files
  */
 export async function commitFiles(payload, branch, message, files) {
-  const { provider } = payload
-  if (provider === 'github') return commitGitHub(payload, branch, message, files)
-  if (provider === 'gitlab') return commitGitLab(payload, branch, message, files)
-  return commitGitea(payload, branch, message, files)
+  return withTlsContext(payload, () => {
+    const { provider } = payload
+    if (provider === 'github') return commitGitHub(payload, branch, message, files)
+    if (provider === 'gitlab') return commitGitLab(payload, branch, message, files)
+    return commitGitea(payload, branch, message, files)
+  })
 }
 
 /**
@@ -21,23 +33,25 @@ export async function commitFiles(payload, branch, message, files) {
  * @returns {Promise<string[]>}
  */
 export async function getBranches(payload) {
-  const { provider, repo, url: baseUrl } = payload
-  const headers = buildHeaders(payload)
+  return withTlsContext(payload, async () => {
+    const { provider, repo, url: baseUrl } = payload
+    const headers = buildHeaders(payload)
 
-  if (provider === 'github') {
-    const base = githubApiBase(payload)
-    const data = await request('GET', `${base}/repos/${repo}/branches`, headers)
+    if (provider === 'github') {
+      const base = githubApiBase(payload)
+      const data = await request('GET', `${base}/repos/${repo}/branches`, headers)
+      return data.map((b) => b.name)
+    }
+    if (provider === 'gitlab') {
+      const base = gitlabApiBase(payload)
+      const encoded = encodeURIComponent(repo)
+      const data = await request('GET', `${base}/api/v4/projects/${encoded}/repository/branches`, headers)
+      return data.map((b) => b.name)
+    }
+    const base = baseUrl || ''
+    const data = await request('GET', `${base}/api/v1/repos/${repo}/branches`, headers)
     return data.map((b) => b.name)
-  }
-  if (provider === 'gitlab') {
-    const base = gitlabApiBase(payload)
-    const encoded = encodeURIComponent(repo)
-    const data = await request('GET', `${base}/api/v4/projects/${encoded}/repository/branches`, headers)
-    return data.map((b) => b.name)
-  }
-  const base = baseUrl || ''
-  const data = await request('GET', `${base}/api/v1/repos/${repo}/branches`, headers)
-  return data.map((b) => b.name)
+  })
 }
 
 /**
@@ -46,44 +60,46 @@ export async function getBranches(payload) {
  * @param {string} branch
  */
 export async function ensureBranch(payload, branch) {
-  const { provider, repo, url: baseUrl } = payload
-  const headers = buildHeaders(payload)
-  const branches = await getBranches(payload)
-  if (branches.includes(branch)) return { ok: true, created: false }
+  return withTlsContext(payload, async () => {
+    const { provider, repo, url: baseUrl } = payload
+    const headers = buildHeaders(payload)
+    const branches = await getBranches(payload)
+    if (branches.includes(branch)) return { ok: true, created: false }
 
-  if (provider === 'github') {
-    const base = githubApiBase(payload)
-    const repoData = await request('GET', `${base}/repos/${repo}`, headers)
-    const defaultBranch = repoData.default_branch
-    const refData = await request('GET', `${base}/repos/${repo}/git/ref/heads/${defaultBranch}`, headers)
-    const sha = refData.object.sha
-    if (branch === defaultBranch) return { ok: true, created: false }
-    await request('POST', `${base}/repos/${repo}/git/refs`, headers, {
-      ref: `refs/heads/${branch}`,
-      sha,
+    if (provider === 'github') {
+      const base = githubApiBase(payload)
+      const repoData = await request('GET', `${base}/repos/${repo}`, headers)
+      const defaultBranch = repoData.default_branch
+      const refData = await request('GET', `${base}/repos/${repo}/git/ref/heads/${defaultBranch}`, headers)
+      const sha = refData.object.sha
+      if (branch === defaultBranch) return { ok: true, created: false }
+      await request('POST', `${base}/repos/${repo}/git/refs`, headers, {
+        ref: `refs/heads/${branch}`,
+        sha,
+      })
+      return { ok: true, created: true }
+    }
+
+    if (provider === 'gitlab') {
+      const base = gitlabApiBase(payload)
+      const encoded = encodeURIComponent(repo)
+      const projData = await request('GET', `${base}/api/v4/projects/${encoded}`, headers)
+      await request('POST', `${base}/api/v4/projects/${encoded}/repository/branches`, headers, {
+        branch,
+        ref: projData.default_branch,
+      })
+      return { ok: true, created: true }
+    }
+
+    // Gitea
+    const base = baseUrl || ''
+    const repoData = await request('GET', `${base}/api/v1/repos/${repo}`, headers)
+    await request('POST', `${base}/api/v1/repos/${repo}/branches`, headers, {
+      new_branch_name: branch,
+      old_branch_name: repoData.default_branch,
     })
     return { ok: true, created: true }
-  }
-
-  if (provider === 'gitlab') {
-    const base = gitlabApiBase(payload)
-    const encoded = encodeURIComponent(repo)
-    const projData = await request('GET', `${base}/api/v4/projects/${encoded}`, headers)
-    await request('POST', `${base}/api/v4/projects/${encoded}/repository/branches`, headers, {
-      branch,
-      ref: projData.default_branch,
-    })
-    return { ok: true, created: true }
-  }
-
-  // Gitea
-  const base = baseUrl || ''
-  const repoData = await request('GET', `${base}/api/v1/repos/${repo}`, headers)
-  await request('POST', `${base}/api/v1/repos/${repo}/branches`, headers, {
-    new_branch_name: branch,
-    old_branch_name: repoData.default_branch,
   })
-  return { ok: true, created: true }
 }
 
 // --- provider implementations ---
@@ -219,7 +235,7 @@ async function commitGitea(payload, branch, message, files) {
  * @param {object} payload
  * @returns {string}
  */
-function githubApiBase(payload) {
+export function githubApiBase(payload) {
   const url = (payload.url || '').trim().replace(/\/+$/, '')
   if (!url) return 'https://api.github.com'
   // Accept either the web host (https://ghe.example.com) or a full
@@ -278,7 +294,11 @@ function request(method, urlStr, headers, body) {
       path: u.pathname + u.search,
       method,
       headers: reqHeaders,
-      rejectUnauthorized: false,
+      // Verify TLS by default. Git credentials cross the public internet here, unlike the
+      // in-cluster Portainer API calls elsewhere in this server. `tlsSkipVerify` is an explicit
+      // per-target opt-out (set on the connection) for self-signed internal git servers; for
+      // internal-CA setups, set NODE_EXTRA_CA_CERTS instead.
+      rejectUnauthorized: !tlsContext.getStore()?.skipVerify,
     }
 
     const req = transport.request(opts, (res) => {
@@ -314,10 +334,12 @@ function request(method, urlStr, headers, body) {
  * @param {string} message  commit message
  */
 export async function deleteFile(payload, branch, filePath, message) {
-  const { provider } = payload
-  if (provider === 'github') return deleteFileGitHub(payload, branch, filePath, message)
-  if (provider === 'gitlab') return deleteFileGitLab(payload, branch, filePath, message)
-  return deleteFileGitea(payload, branch, filePath, message)
+  return withTlsContext(payload, () => {
+    const { provider } = payload
+    if (provider === 'github') return deleteFileGitHub(payload, branch, filePath, message)
+    if (provider === 'gitlab') return deleteFileGitLab(payload, branch, filePath, message)
+    return deleteFileGitea(payload, branch, filePath, message)
+  })
 }
 
 async function deleteFileGitHub(payload, branch, filePath, message) {
@@ -381,10 +403,12 @@ async function deleteFileGitea(payload, branch, filePath, message) {
  * @param {string} message
  */
 export async function deleteDirectory(payload, branch, dirPath, message) {
-  const { provider } = payload
-  if (provider === 'github') return deleteDirectoryGitHub(payload, branch, dirPath, message)
-  if (provider === 'gitlab') return deleteDirectoryGitLab(payload, branch, dirPath, message)
-  return deleteDirectoryGitea(payload, branch, dirPath, message)
+  return withTlsContext(payload, () => {
+    const { provider } = payload
+    if (provider === 'github') return deleteDirectoryGitHub(payload, branch, dirPath, message)
+    if (provider === 'gitlab') return deleteDirectoryGitLab(payload, branch, dirPath, message)
+    return deleteDirectoryGitea(payload, branch, dirPath, message)
+  })
 }
 
 /**
@@ -403,10 +427,12 @@ export async function deleteDirectory(payload, branch, dirPath, message) {
 export async function deletePaths(payload, branch, paths, message) {
   const clean = (paths || []).map((p) => String(p || '').replace(/\/+$/, '')).filter(Boolean)
   if (clean.length === 0) return { ok: true, deleted: 0 }
-  const { provider } = payload
-  if (provider === 'github') return deletePathsGitHub(payload, branch, clean, message)
-  if (provider === 'gitlab') return deletePathsGitLab(payload, branch, clean, message)
-  return deletePathsGitea(payload, branch, clean, message)
+  return withTlsContext(payload, () => {
+    const { provider } = payload
+    if (provider === 'github') return deletePathsGitHub(payload, branch, clean, message)
+    if (provider === 'gitlab') return deletePathsGitLab(payload, branch, clean, message)
+    return deletePathsGitea(payload, branch, clean, message)
+  })
 }
 
 /** True when a blob path should be removed given the requested paths. */
@@ -667,6 +693,10 @@ export function buildRepoHttpsUrl(payload) {
  * @param {object} payload
  */
 export async function testGitConnection(payload) {
+  return withTlsContext(payload, () => testGitConnectionImpl(payload))
+}
+
+async function testGitConnectionImpl(payload) {
   const { provider, repo, url: baseUrl } = payload
   const headers = buildHeaders(payload)
 
@@ -779,10 +809,12 @@ export async function testGitConnection(payload) {
  * @returns {Promise<string>}  raw file content
  */
 export async function fetchFile(payload, branch, filePath) {
-  const { provider } = payload
-  if (provider === 'github') return fetchFileGitHub(payload, branch, filePath)
-  if (provider === 'gitlab') return fetchFileGitLab(payload, branch, filePath)
-  return fetchFileGitea(payload, branch, filePath)
+  return withTlsContext(payload, () => {
+    const { provider } = payload
+    if (provider === 'github') return fetchFileGitHub(payload, branch, filePath)
+    if (provider === 'gitlab') return fetchFileGitLab(payload, branch, filePath)
+    return fetchFileGitea(payload, branch, filePath)
+  })
 }
 
 async function fetchFileGitHub(payload, branch, filePath) {
@@ -827,10 +859,12 @@ async function fetchFileGitea(payload, branch, filePath) {
  * @returns {Promise<Array<{ path: string, type: 'file'|'dir' }>>}
  */
 export async function listFiles(payload, branch, dirPath = '') {
-  const { provider } = payload
-  if (provider === 'github') return listFilesGitHubFlat(payload, branch, dirPath)
-  if (provider === 'gitlab') return listFilesGitLabFlat(payload, branch, dirPath)
-  return listFilesGiteaFlat(payload, branch, dirPath)
+  return withTlsContext(payload, () => {
+    const { provider } = payload
+    if (provider === 'github') return listFilesGitHubFlat(payload, branch, dirPath)
+    if (provider === 'gitlab') return listFilesGitLabFlat(payload, branch, dirPath)
+    return listFilesGiteaFlat(payload, branch, dirPath)
+  })
 }
 
 async function listFilesGitHubFlat(payload, branch, dirPath) {

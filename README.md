@@ -40,7 +40,7 @@ Portainer-Run sits in that gap. The source folder an AI coding tool produces is 
 
 ## What it does
 
-Portainer-Run connects to your Portainer instance using a personal access token. Access is governed entirely by your Portainer RBAC role. Once connected it provides a unified view across all Kubernetes environments your account can reach.
+Portainer-Run authenticates against your Portainer instance using your Portainer session (or, for non-browser clients like MCP, an API access token). Access is governed entirely by your Portainer RBAC role. Once connected it provides a unified view across all Kubernetes environments your account can reach.
 
 **Applications** is the primary operational view and the landing page after login. It lists all deployments tagged `managed-by=portainer-run` with a traffic light status per row, sortable by name, environment, health, or creation date. Status reasons are read from pod state and shown in plain English: "App keeps crashing (4 restarts)", "Can't download the image", "No node has enough resources", and so on. The access column shows a clickable address, and a Deployed by column shows who created each application, which is useful where a project space is shared across a team. Each row has Logs, Restart, and Delete actions. A **+ Deploy** button in the page header opens the Deploy page.
 
@@ -82,6 +82,8 @@ The Test button on each target checks connectivity and reports read and write pe
 
 The target form states the minimum token scope for each provider. For GitLab this is the `api` scope: a narrower combination such as `read_api` plus `write_repository` passes GitLab's own form checks but fails when Portainer-Run writes manifests and creates the GitOps stack, so the form calls this out explicitly. This is advisory guidance rather than validation, because there is no reliable cross-provider way to introspect a token's granted scopes before use.
 
+TLS is verified by default on requests to the git provider, since the target's token travels over that connection. When pointing a target at a self-hosted server with a self-signed certificate (custom URL for GitHub Enterprise, self-hosted GitLab, or Gitea), the target form exposes a "Skip TLS verification" toggle as an explicit per-target opt-out. This is not something Portainer-Run can fix on your behalf — prefer replacing the self-signed certificate on the git server itself with one from a trusted CA (e.g. Let's Encrypt), or, for an internal CA, redeploy Portainer-Run with `NODE_EXTRA_CA_CERTS` pointed at your CA bundle, over enabling this toggle.
+
 For GitHub Enterprise Server, keep the provider set to GitHub and enter your server host in the GitHub server URL field. Portainer-Run uses the GitHub-compatible REST API at `/api/v3` on that host. Do not use the "Other" provider for GitHub Enterprise: that path targets the Gitea API.
 
 For self-hosted GitLab, keep the provider set to GitLab and enter your server host in the GitLab server URL field. Leave it blank for gitlab.com.
@@ -100,9 +102,9 @@ The logged-in Portainer username is shown in the Account section of the navigati
 
 ## MCP endpoint
 
-Portainer-Run exposes an MCP (Model Context Protocol) endpoint at `POST /mcp` that allows AI coding tools to deploy applications directly.
+Portainer-Run exposes an MCP (Model Context Protocol) endpoint at `POST /mcp` that allows AI coding tools to deploy applications directly. When Portainer-Run runs as a Portainer addon, this endpoint is reached through the Portainer addon gateway at `https://<portainer-host>/addons/portainer-run/mcp` (the gateway authenticates the request, then strips the `/addons/portainer-run` prefix before forwarding to `/mcp`).
 
-Authentication uses either `Authorization: Bearer <portainer-token>` or `X-API-Key: <portainer-token>`. The token is validated against Portainer's `/users/me` endpoint on first use and cached for five minutes.
+Authentication accepts a Portainer **API access token** via `X-API-Key: <token>` (recommended for MCP clients — these tokens are long-lived, unlike browser session JWTs), the browser session JWT via the `portainer_api_key` cookie (the addon-gateway path), or `Authorization: Bearer <jwt>`. Portainer-Run validates the credential against the same Portainer instance, routing it by type to match Portainer's own auth: tokens with the `ptr_` prefix go via `X-API-Key`, JWTs via the session cookie. The result is validated against Portainer's `/users/me` endpoint on first use and cached for five minutes.
 
 The server returns workflow guidance in the MCP `initialize` response (`instructions`). Compliant clients surface this to the model automatically, so it knows to gather the required deployment details (environment, namespace, git target, exposure, ingress host, port behavior) and confirm them before deploying, without the user having to prompt for it.
 
@@ -120,7 +122,7 @@ Available tools:
 
 `get_app_status` returns the running status of a deployed application from the server-side cache, plus a live access `url` resolved from the Service or Ingress.
 
-To connect Claude Desktop, add the following to `claude_desktop_config.json` (requires Node.js for `mcp-remote`):
+To connect Claude Desktop, add the following to `claude_desktop_config.json` (requires Node.js for `mcp-remote`). Use a Portainer API access token (Account → Access Tokens) so the connection does not expire with a browser session:
 
 ```json
 {
@@ -129,23 +131,28 @@ To connect Claude Desktop, add the following to `claude_desktop_config.json` (re
       "command": "npx",
       "args": [
         "mcp-remote@latest",
-        "https://your-portainer-run/mcp",
+        "https://<portainer-host>/addons/portainer-run/mcp",
         "--header",
-        "Authorization: Bearer YOUR_PORTAINER_TOKEN"
-      ]
+        "X-API-Key: YOUR_PORTAINER_API_TOKEN"
+      ],
+      "env": {
+        "NODE_TLS_REJECT_UNAUTHORIZED": "0"
+      }
     }
   }
 }
 ```
+
+The `NODE_TLS_REJECT_UNAUTHORIZED: "0"` line is only needed when Portainer serves a self-signed or internal-CA certificate — it lets `mcp-remote` complete the TLS handshake. It disables certificate verification for the `mcp-remote` process, so use it only against trusted internal hosts and drop it once a publicly-trusted certificate is in place.
 
 Config file location: `%APPDATA%\Claude\claude_desktop_config.json` on Windows, `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS.
 
 To verify the endpoint is working before connecting a client:
 
 ```bash
-curl -k -X POST https://your-portainer-run/mcp \
+curl -k -X POST https://<portainer-host>/addons/portainer-run/mcp \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "X-API-Key: YOUR_PORTAINER_API_TOKEN" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
 
@@ -276,11 +283,11 @@ If the container cannot resolve your Portainer hostname (error: `EAI_AGAIN`), ad
 
 ## Connecting
 
-Navigate to `https://<your-host>` and enter a Portainer personal access token. Generate one in Portainer under Account, then Access Tokens. The token scope determines what Portainer-Run can see and do: namespace-scoped tokens require manual namespace entry on deploy; cluster-scoped tokens enumerate namespaces automatically.
+Portainer-Run runs as a Portainer addon. Reach it at `https://<portainer-host>/addons/portainer-run/` after logging in to Portainer; the addon gateway authenticates the request against your Portainer session, so there is no separate token entry. Unauthenticated requests are handed off to the Portainer login page. Your Portainer RBAC role determines what Portainer-Run can see and do: namespace-scoped access requires manual namespace entry on deploy; cluster-scoped access enumerates namespaces automatically.
 
 Portainer's RBAC applies in full. Users with admin role in Portainer see the Admin section including Cluster Readiness and shared git target management. Non-admin users see only their own targets plus any shared targets an admin has created.
 
-Sessions persist across page refreshes and are cleared on disconnect.
+The browser session lasts as long as the Portainer session cookie; logging out clears it. Non-browser clients such as the MCP endpoint authenticate with a Portainer API access token instead (see [MCP endpoint](#mcp-endpoint)).
 
 ## Notes on scope
 

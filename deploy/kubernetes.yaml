@@ -28,9 +28,10 @@ metadata:
   name: portainer-run-config
   namespace: portainer-run
 data:
-  PORTAINER_URL: "https://portainer.example.com:9443"
-  # For deployments where Portainer-Run is in the same cluster as Portainer.
-  # PORTAINER_URL: "https://portainer.portainer.svc.cluster.local:9443" 
+  PORTAINER_URL: "https://portainer.portainer.svc.cluster.local:9443"
+  # Cluster-internal DNS is the default (addon runs alongside Portainer).
+  # For an external Portainer, use its public URL instead:
+  # PORTAINER_URL: "https://portainer.example.com:9443"
 
   # ── Ingress base domain ─────────────────────────────────────────────────────
   # If set, Ingress templates default to appname.BASE_DOMAIN as the host.
@@ -49,6 +50,15 @@ data:
   # Only needed if you change containerPort below to match.
   # PORT: "443"
   # HTTP_PORT: "80"
+
+  # ── Addon-gateway mode ───────────────────────────────────────────────────
+  # Served as a Portainer addon at <portainer>/addons/portainer-run/. TLS
+  # terminates at the Portainer gateway, which proxies plain HTTP to us, so we
+  # serve HTTP directly. Without this we run HTTPS + an HTTP→HTTPS redirect on
+  # port 80; the gateway hits that redirect and bounces the browser to the
+  # cluster DNS name, out of the Portainer base URL.
+  SERVE_HTTP: "1"
+  PORT: "80"
 
   # ── Cache directory ──────────────────────────────────────────────────────────
   # Override the directory used for persistent cache (default: /app/data).
@@ -116,10 +126,21 @@ spec:
       labels:
         app: portainer-run
     spec:
+      # The ServiceAccount token stays mounted: the server auto-detects
+      # CONFIG_NAMESPACE from it. If it is ever disabled, pin CONFIG_NAMESPACE
+      # in the ConfigMap at the same time or state silently moves to kube-system.
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: portainer-run
           image: portainer/portainer-run:latest
           imagePullPolicy: Always
+          # Note: no runAsNonRoot / drop-ALL-caps / readOnlyRootFilesystem — the
+          # server binds a privileged port (80/443, needs CAP_NET_BIND_SERVICE)
+          # and writes a self-signed cert to /app in TLS mode.
+          securityContext:
+            allowPrivilegeEscalation: false
           ports:
             - name: https
               containerPort: 443
@@ -194,8 +215,8 @@ spec:
           livenessProbe:
             httpGet:
               path: /config
-              port: 443
-              scheme: HTTPS
+              port: 80
+              scheme: HTTP
             initialDelaySeconds: 15
             periodSeconds: 30
             failureThreshold: 3
@@ -203,8 +224,8 @@ spec:
           readinessProbe:
             httpGet:
               path: /config
-              port: 443
-              scheme: HTTPS
+              port: 80
+              scheme: HTTP
             initialDelaySeconds: 10
             periodSeconds: 10
 

@@ -52,6 +52,7 @@ async function traverseEntry(entry) {
   return []
 }
 import { useAppStore } from '../../store/useAppStore.js'
+import { serverFetch } from '../../lib/api.js'
 import { restartDeployment } from '../../lib/restartDeployment.js'
 import { refreshCache } from '../../services/refreshDeployments.js'
 
@@ -74,7 +75,6 @@ const SECRET_PATTERN = /SECRET|KEY|TOKEN|PASSWORD|PASS|AUTH|CREDENTIAL/i
  */
 export default function VibeEditTab({ d, envId, namespace, name, gitOpsInfo, onSaved }) {
   const token = useAppStore((s) => s.token)
-  const { portainerBaseUrl, portainerFromServer } = useAppStore.getState()
   const pushToast = useAppStore((s) => s.pushToast)
 
   const [files, setFiles] = useState([])
@@ -102,10 +102,7 @@ export default function VibeEditTab({ d, envId, namespace, name, gitOpsInfo, onS
 
   useEffect(() => {
     if (!gitOpsInfo?.gitTargetId || !gitOpsInfo?.gitBranch || !gitPath) return
-    const h = { 'X-API-Key': token }
-    const u = (portainerBaseUrl || '').trim()
-    if (u && !portainerFromServer) h['X-Portainer-URL'] = u
-    fetch(`/api/vibe/manifest-exposure?gitTargetId=${gitOpsInfo.gitTargetId}&branch=${encodeURIComponent(gitOpsInfo.gitBranch)}&gitPath=${encodeURIComponent(gitPath)}`, { headers: h })
+    serverFetch(`/api/vibe/manifest-exposure?gitTargetId=${gitOpsInfo.gitTargetId}&branch=${encodeURIComponent(gitOpsInfo.gitBranch)}&gitPath=${encodeURIComponent(gitPath)}`)
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
         if (!data) return
@@ -121,10 +118,7 @@ export default function VibeEditTab({ d, envId, namespace, name, gitOpsInfo, onS
   // Load current environment variables from the committed manifest
   useEffect(() => {
     if (!gitOpsInfo?.gitTargetId || !gitOpsInfo?.gitBranch || !gitPath) return
-    const h = { 'X-API-Key': token }
-    const u = (portainerBaseUrl || '').trim()
-    if (u && !portainerFromServer) h['X-Portainer-URL'] = u
-    fetch(`/api/vibe/manifest-env?gitTargetId=${gitOpsInfo.gitTargetId}&branch=${encodeURIComponent(gitOpsInfo.gitBranch)}&gitPath=${encodeURIComponent(gitPath)}`, { headers: h })
+    serverFetch(`/api/vibe/manifest-env?gitTargetId=${gitOpsInfo.gitTargetId}&branch=${encodeURIComponent(gitOpsInfo.gitBranch)}&gitPath=${encodeURIComponent(gitPath)}`)
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
         if (data && Array.isArray(data.env)) setEnvVars(data.env)
@@ -132,13 +126,6 @@ export default function VibeEditTab({ d, envId, namespace, name, gitOpsInfo, onS
       })
       .catch(() => setEnvLoaded(true))
   }, [gitOpsInfo?.gitTargetId, gitOpsInfo?.gitBranch, gitPath])
-
-  function serverHeaders() {
-    const h = { 'Content-Type': 'application/json', 'X-API-Key': token }
-    const u = (portainerBaseUrl || '').trim()
-    if (u && !portainerFromServer) h['X-Portainer-URL'] = u
-    return h
-  }
 
   async function handleSaveExposure() {
     if (!gitOpsInfo?.gitTargetId || !gitPath) {
@@ -148,9 +135,9 @@ export default function VibeEditTab({ d, envId, namespace, name, gitOpsInfo, onS
     setSavingExposure(true)
     setExposureError('')
     try {
-      const res = await fetch('/api/vibe/update-exposure', {
+      const res = await serverFetch('/api/vibe/update-exposure', {
         method: 'POST',
-        headers: serverHeaders(),
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           gitTargetId: gitOpsInfo.gitTargetId,
           branch: gitOpsInfo.gitBranch,
@@ -181,9 +168,9 @@ export default function VibeEditTab({ d, envId, namespace, name, gitOpsInfo, onS
     setSavingEnv(true)
     setEnvError('')
     try {
-      const res = await fetch('/api/vibe/update-env', {
+      const res = await serverFetch('/api/vibe/update-env', {
         method: 'POST',
-        headers: serverHeaders(),
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           gitTargetId: gitOpsInfo.gitTargetId,
           branch: gitOpsInfo.gitBranch,
@@ -282,17 +269,10 @@ export default function VibeEditTab({ d, envId, namespace, name, gitOpsInfo, onS
     setDeploying(true)
     setError('')
     try {
-      const headers = {
-        'Content-Type': 'application/json',
-        'X-API-Key': token,
-      }
-      const u = (portainerBaseUrl || '').trim()
-      if (u && !portainerFromServer) headers['X-Portainer-URL'] = u
-
       // 1. Commit new source files to git
-      const res = await fetch('/api/vibe/update', {
+      const res = await serverFetch('/api/vibe/update', {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           gitTargetId: gitOpsInfo.gitTargetId,
           branch: gitBranch,

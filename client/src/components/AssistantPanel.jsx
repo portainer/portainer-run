@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAppStore, visibleDeployments } from '../store/useAppStore.js'
+import { serverFetch } from '../lib/api.js'
 import { serviceDetailPath } from '../lib/routes.js'
 import { getAssistantModel } from '../lib/assistant/aiModel.js'
-import { mdToHtml } from '../lib/assistant/markdown.js'
+import { AssistantMarkdown } from './AssistantMarkdown.jsx'
 import { readTriageSseStream } from '../lib/assistant/parseStream.js'
 import { gatherServiceDiagnostics } from '../lib/assistant/diagnostics.js'
 import { buildAssistantContext } from '../lib/assistant/buildContext.js'
@@ -148,7 +149,7 @@ ${deployInstructions}`
     setThinking(null)
 
     try {
-      const response = await fetch('/ai/triage', {
+      const response = await serverFetch('/ai/triage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -321,10 +322,9 @@ ${deployInstructions}`
             <div key={row.id} className="chat-msg">
               <div className="chat-msg-assistant">
                 {row.isMd ? (
-                  <div
-                    style={{ minHeight: 8 }}
-                    dangerouslySetInnerHTML={{ __html: mdToHtml(row.text || (row.stream ? '…' : '—')) }}
-                  />
+                  <div style={{ minHeight: 8 }}>
+                    <AssistantMarkdown>{row.text || (row.stream ? '…' : '—')}</AssistantMarkdown>
+                  </div>
                 ) : (
                   <span style={{ whiteSpace: 'pre-wrap' }}>{row.text}</span>
                 )}
