@@ -1,0 +1,3 @@
+[submodule "client/design-system"]
+	path = client/design-system
+	url = git@github.com:portainer/design-system.git

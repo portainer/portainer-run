@@ -1,14 +1,14 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAppStore } from './store/useAppStore.js'
-import { MainLayout } from './components/MainLayout.jsx'
-import { ServicesPage } from './components/ServicesPage.jsx'
-import { ReadinessPage } from './components/ReadinessPage.jsx'
-import { GitTargetsPage } from './components/GitTargetsPage.jsx'
+import { AppLayout } from './components/AppLayout'
+import { ServicesPage } from './pages/ServicesPage'
+import { ReadinessPage } from './pages/readiness/ReadinessPage'
+import { GitTargetsPage } from './pages/git-targets/GitTargetsPage'
 import {
   ServiceDetailIndexRedirect,
   ServiceDetailPage,
-} from './components/ServiceDetailPage.jsx'
-import { VibeDeploy } from './components/VibeDeploy.jsx'
+} from './pages/service-detail/ServiceDetailPage'
+import { VibeDeploy } from './pages/deploy/DeployPage'
 import { ROUTES } from './lib/routes.js'
 
 /** Shown briefly while bootstrap() validates the Portainer session cookie.
@@ -31,7 +31,7 @@ function RootRedirect() {
 function AuthedLayout() {
   const c = useAppStore((s) => s.connected)
   if (!c) return <SessionLoading />
-  return <MainLayout />
+  return <AppLayout />
 }
 
 export function AppRoutes() {

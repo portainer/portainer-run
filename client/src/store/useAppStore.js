@@ -7,7 +7,7 @@ const initialCache = {
   everLoaded: false,
 }
 
-export const useAppStore = create((set, get) => ({
+export const useAppStore = create((set, _get) => ({
   token: '',
   /** @deprecated Portainer target is fixed server-side; retained only for legacy store reads. */
   portainerBaseUrl: '',
