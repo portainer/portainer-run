@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ROUTES } from '../lib/routes.js'
 import { listGitTargets } from '../lib/gitTargets.js'
 import { useAppStore, visibleEnvironments, isEnvDisabled } from '../store/useAppStore.js'
+import { serverFetch } from '../lib/api.js'
 import { fetchNamespaceOptions } from '../lib/deployK8s.js'
 import { kubeFetch } from '../lib/api.js'
 import { checkEnvPermissions } from '../lib/envPermissions.js'
@@ -675,14 +676,9 @@ export function VibeDeploy() {
     }
     setGitSourceFetching(true)
     try {
-      const { token, portainerBaseUrl, portainerFromServer } = useAppStore.getState()
-      const headers = { 'X-API-Key': token }
-      const u = (portainerBaseUrl || '').trim()
-      if (u && !portainerFromServer) headers['X-Portainer-URL'] = u
       const pathParam = gitSourcePath ? `&path=${encodeURIComponent(gitSourcePath)}` : ''
-      const r = await fetch(
+      const r = await serverFetch(
         `/api/connections/${gitSourceTargetId}/files?branch=${encodeURIComponent(gitSourceBranch)}${pathParam}`,
-        { headers }
       )
       const data = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`)
@@ -704,11 +700,7 @@ export function VibeDeploy() {
   async function loadGitSourceBranches(targetId) {
     if (!targetId) return
     try {
-      const { token, portainerBaseUrl, portainerFromServer } = useAppStore.getState()
-      const headers = { 'X-API-Key': token }
-      const u = (portainerBaseUrl || '').trim()
-      if (u && !portainerFromServer) headers['X-Portainer-URL'] = u
-      const r = await fetch(`/api/connections/${targetId}/branches`, { headers })
+      const r = await serverFetch(`/api/connections/${targetId}/branches`)
       const data = await r.json().catch(() => ({}))
       setGitSourceBranches(data.branches || [])
     } catch { setGitSourceBranches([]) }
@@ -814,17 +806,9 @@ export function VibeDeploy() {
     if (!sp) return
     setDeploying(true)
     try {
-      const { portainerBaseUrl, portainerFromServer, token: tok } = useAppStore.getState()
-      const headers = {
-        'Content-Type': 'application/json',
-        'X-API-Key': tok,
-      }
-      const u = (portainerBaseUrl || '').trim()
-      if (u && !portainerFromServer) headers['X-Portainer-URL'] = u
-
-      const res = await fetch('/api/vibe/deploy', {
+      const res = await serverFetch('/api/vibe/deploy', {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           gitTargetId,
           branch,

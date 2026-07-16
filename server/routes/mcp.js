@@ -248,8 +248,8 @@ async function fetchDisabledEnvs(target, token, envIds) {
 
 async function toolListEnvironments(req) {
   const token = extractToken(req)
-  const target = resolvePortainerTarget(req)
-  if (!target) throw new Error('Cannot resolve Portainer target — ensure PORTAINER_URL is set or send X-Portainer-URL header')
+  const target = resolvePortainerTarget()
+  if (!target) throw new Error('Cannot resolve Portainer target — ensure PORTAINER_URL is set on the server')
 
   const eps = await portainerGet(target, token, '/api/endpoints')
   // Portainer EndpointType: 1=Docker, 2=Agent-on-Docker, 3=Azure, 4=Edge-agent-on-Docker,
@@ -272,7 +272,7 @@ async function toolListNamespaces(req, args) {
   // Validate envId is numeric to prevent path injection into Portainer API
   if (!/^\d+$/.test(String(envId))) throw new Error('envId must be a numeric environment ID')
   const token = extractToken(req)
-  const target = resolvePortainerTarget(req)
+  const target = resolvePortainerTarget()
   if (!target) throw new Error('Cannot resolve Portainer target')
 
   // Portainer-native, access-policy-aware endpoint: returns only the namespaces
@@ -337,7 +337,7 @@ async function toolListIngressClasses(req, args) {
   // Validate envId is numeric to prevent path injection into Portainer API
   if (!/^\d+$/.test(String(envId))) throw new Error('envId must be a numeric environment ID')
   const token = extractToken(req)
-  const target = resolvePortainerTarget(req)
+  const target = resolvePortainerTarget()
   if (!target) throw new Error('Cannot resolve Portainer target')
 
   const classes = await fetchIngressClasses(target, token, envId)
@@ -595,7 +595,7 @@ async function toolDeployVibeApp(req, args, caller) {
   // Best effort — if the lookup fails or it's ambiguous, deploy without a class.
   if (exposeType === 'Ingress' && !resolvedIngress.ingressClass) {
     try {
-      const target = resolvePortainerTarget(req)
+      const target = resolvePortainerTarget()
       if (target) {
         const classes = await fetchIngressClasses(target, extractToken(req), envId)
         const chosen = classes.find((c) => c.isDefault) || (classes.length === 1 ? classes[0] : null)
@@ -629,14 +629,13 @@ async function toolDeployVibeApp(req, args, caller) {
 
   // Build a minimal stream-compatible mock request
   const token = extractToken(req)
-  const portainerUrl = req.headers['x-portainer-url'] || req.headers['X-Portainer-URL'] || ''
 
   // Resolve the environment name so committed git paths match the UI, which
   // writes under the environment NAME rather than the numeric ID. Falls back
   // to the ID-based path (handled downstream) if the lookup is unavailable.
   let resolvedEnvName = ''
   try {
-    const target = resolvePortainerTarget(req)
+    const target = resolvePortainerTarget()
     if (target) {
       const ep = await portainerGet(target, token, `/api/endpoints/${envId}`)
       if (ep && ep.Name) resolvedEnvName = ep.Name
@@ -676,7 +675,6 @@ async function toolDeployVibeApp(req, args, caller) {
     headers: {
       'content-type': 'application/json',
       'x-api-key': token,
-      ...(portainerUrl ? { 'x-portainer-url': portainerUrl } : {}),
     },
     on(event, handler) {
       if (event === 'data') process.nextTick(() => handler(mockBodyBuf))
@@ -710,7 +708,7 @@ async function toolDeployVibeApp(req, args, caller) {
   // NodePort/LoadBalancer addresses are assigned asynchronously so we poll briefly.
   let access = null
   try {
-    const target = resolvePortainerTarget(req)
+    const target = resolvePortainerTarget()
     if (exposeType === 'Ingress' && resolvedIngress.host) {
       const p = resolvedIngress.path && resolvedIngress.path !== '/' ? resolvedIngress.path : ''
       access = { url: `http://${resolvedIngress.host}${p}`, label: resolvedIngress.host, type: 'ingress' }
@@ -750,7 +748,7 @@ async function toolGetAppStatus(req, args) {
     throw new Error('envId must be the numeric environment ID from list_environments')
   }
   const token = extractToken(req)
-  const target = resolvePortainerTarget(req)
+  const target = resolvePortainerTarget()
   if (!target) {
     return { found: false, message: 'Could not resolve the Portainer target for this request.' }
   }

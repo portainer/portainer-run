@@ -3,21 +3,12 @@
  * All requests go to the portainer-run server (not directly to git providers).
  */
 
-import { useAppStore } from '../store/useAppStore.js'
-
-function serverHeaders() {
-  const { portainerBaseUrl, portainerFromServer, token } = useAppStore.getState()
-  const h = { 'Content-Type': 'application/json' }
-  if (token) h['X-API-Key'] = token
-  const u = (portainerBaseUrl || '').trim()
-  if (u && !portainerFromServer) h['X-Portainer-URL'] = u
-  return h
-}
+import { serverFetch as rawFetch } from './api.js'
 
 async function serverFetch(path, opts = {}) {
-  const res = await fetch(path, {
+  const res = await rawFetch(path, {
     ...opts,
-    headers: { ...serverHeaders(), ...(opts.headers || {}) },
+    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)

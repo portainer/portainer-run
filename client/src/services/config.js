@@ -1,11 +1,12 @@
 import { inflightDedupe } from '../lib/inflightDedupe.js'
 import { useAppStore } from '../store/useAppStore.js'
+import { serverFetch } from '../lib/api.js'
 
 export async function loadServerConfig() {
   return inflightDedupe('server-config', async () => {
   const st = useAppStore.getState
   try {
-    const r = await fetch('/config')
+    const r = await serverFetch('/config')
     if (!r.ok) throw new Error('HTTP ' + r.status)
     const d = await r.json()
     st().setPortainerFromServer(!!d.portainerFromServer)

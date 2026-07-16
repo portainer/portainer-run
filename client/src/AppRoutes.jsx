@@ -1,6 +1,5 @@
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAppStore } from './store/useAppStore.js'
-import { ConnectScreen } from './components/ConnectScreen.jsx'
 import { MainLayout } from './components/MainLayout.jsx'
 import { ServicesPage } from './components/ServicesPage.jsx'
 import { ReadinessPage } from './components/ReadinessPage.jsx'
@@ -10,36 +9,28 @@ import {
   ServiceDetailPage,
 } from './components/ServiceDetailPage.jsx'
 import { VibeDeploy } from './components/VibeDeploy.jsx'
-import { ROUTES, getSafeAppPath } from './lib/routes.js'
+import { ROUTES } from './lib/routes.js'
+
+/** Shown briefly while bootstrap() validates the Portainer session cookie.
+ *  If there is no valid session, bootstrap() does a full-page redirect to the
+ *  Portainer login, so this never sticks around when unauthenticated. */
+function SessionLoading() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+      Loading…
+    </div>
+  )
+}
 
 function RootRedirect() {
   const c = useAppStore((s) => s.connected)
   if (c) return <Navigate to={ROUTES.services} replace />
-  return <Navigate to={ROUTES.connect} replace />
-}
-
-function ConnectPage() {
-  const c = useAppStore((s) => s.connected)
-  const loc = useLocation()
-  if (c) {
-    const to = getSafeAppPath(loc.state?.from) || ROUTES.services
-    return <Navigate to={to} replace />
-  }
-  return <ConnectScreen />
+  return <SessionLoading />
 }
 
 function AuthedLayout() {
   const c = useAppStore((s) => s.connected)
-  const loc = useLocation()
-  if (!c) {
-    return (
-      <Navigate
-        to={ROUTES.connect}
-        replace
-        state={{ from: loc.pathname + loc.search }}
-      />
-    )
-  }
+  if (!c) return <SessionLoading />
   return <MainLayout />
 }
 
@@ -47,7 +38,6 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<RootRedirect />} />
-      <Route path="connect" element={<ConnectPage />} />
       <Route element={<AuthedLayout />}>
         <Route path="dashboard" element={<Navigate to={ROUTES.services} replace />} />
         <Route path="applications" element={<ServicesPage />} />
