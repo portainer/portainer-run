@@ -6,18 +6,23 @@ import { resolvePortainerTarget } from '../resolve-portainer.js'
 /**
  * Build the auth header for an outbound request to Portainer, matching the
  * token type — mirroring Portainer's own bouncer. API access tokens (the "ptr_"
- * prefix) authenticate via X-API-Key; session JWTs via the portainer_api_key
- * cookie. Only the matching header is sent, never both: Portainer's apiKeyLookup
- * runs first and 401s when X-API-Key holds a non-API-key value (e.g. a JWT)
- * instead of falling through to the cookie lookup. Routing by type lets the MCP
- * server be driven by a long-lived X-API-Key while the browser keeps its JWT.
+ * prefix) authenticate via X-API-Key; session JWTs via Authorization: Bearer.
+ * Only the matching header is sent, never both: Portainer's apiKeyLookup runs
+ * first and 401s when X-API-Key holds a non-API-key value (e.g. a JWT) instead
+ * of falling through to the JWT lookup. Routing by type lets the MCP server be
+ * driven by a long-lived X-API-Key while the browser keeps its JWT.
+ *
+ * The JWT must NOT be forwarded as the portainer_api_key cookie: Portainer's
+ * CSRF middleware fails closed on unsafe cookie-authenticated requests that
+ * lack Origin/Sec-Fetch-Site headers (which server-to-server requests never
+ * carry), while token-authenticated requests are exempt.
  * @param {string} token
  * @returns {Record<string, string>}
  */
 export function portainerAuthHeaders(token) {
   return token.startsWith('ptr_')
     ? { 'X-API-Key': token }
-    : { 'Cookie': `portainer_api_key=${token}` }
+    : { 'Authorization': `Bearer ${token}` }
 }
 
 /**
