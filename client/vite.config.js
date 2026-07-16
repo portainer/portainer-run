@@ -21,7 +21,9 @@ export default defineConfig({
       // Portainer's own API (cookie-authenticated, same-origin in prod).
       '/api': target,
       // Portainer Run backend endpoints, reached under the addon base prefix.
-      [BASE]: target,
+      // The gateway strips the prefix in prod; in dev we strip it here so the
+      // server sees the unprefixed paths it routes on (/config, /api/vibe, ...).
+      [BASE]: { ...target, rewrite: (p) => p.replace(BASE.replace(/\/$/, ''), '') },
     },
   },
 })
