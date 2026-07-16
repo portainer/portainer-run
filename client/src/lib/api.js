@@ -1,5 +1,5 @@
 // Auth model: Portainer Run is served as an addon behind the Portainer gateway
-// at `import.meta.env.BASE_URL` (e.g. /addons/portainer-run/), same-origin with
+// at `import.meta.env.BASE_URL` (e.g. /addons/run/), same-origin with
 // Portainer. The browser carries Portainer's HttpOnly `portainer_api_key`
 // session cookie automatically, so:
 //   - Calls to Portainer's own API go to the root-relative `/api` (NOT prefixed
