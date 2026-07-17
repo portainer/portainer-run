@@ -201,12 +201,12 @@ export function ServiceDetailMetricsTab({
             <span style={{ fontSize: 12, color: 'var(--muted)', fontFamily: MONO_FONT }}>
               Polling (15s)
             </span>
-            <Button variant="ghost" size="sm" onClick={stopPolling}>
+            <Button variant="ghost" onClick={stopPolling}>
               Stop
             </Button>
           </>
         ) : (
-          <Button size="sm" onClick={startPolling}>
+          <Button onClick={startPolling}>
             Start
           </Button>
         )}

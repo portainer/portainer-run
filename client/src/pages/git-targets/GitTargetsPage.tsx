@@ -207,7 +207,6 @@ export function GitTargetsPage() {
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
                   <Button
                     variant="ghost"
-                    size="sm"
                     onClick={() => void handleTest(conn.id)}
                     disabled={testing[conn.id]}
                   >
@@ -215,13 +214,12 @@ export function GitTargetsPage() {
                   </Button>
                   {(!conn.shared || isAdmin) && (
                     <>
-                      <Button variant="ghost" size="sm" onClick={() => void handleEdit(conn)}>
+                      <Button variant="ghost" onClick={() => void handleEdit(conn)}>
                         Edit
                       </Button>
                       <Button
                         variant="light"
                         color="danger"
-                        size="sm"
                         onClick={() => void handleDelete(conn.id, conn.name)}
                       >
                         Delete

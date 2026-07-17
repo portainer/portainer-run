@@ -58,7 +58,6 @@ export function EmptyRepoWarning({
       action={
         <Button
           variant="ghost"
-          size="sm"
           disabled={initializing}
           onClick={() => void handleInitialize()}
         >

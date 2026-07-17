@@ -1,6 +1,5 @@
 import {
   ArrowLeft,
-  LogOut,
   MonitorPlay,
   Settings,
   ShieldCheck,
@@ -65,12 +64,6 @@ const ADMIN_SECTION: NavSection = {
   ],
 }
 
-const ACCOUNT_SECTION: NavSection = {
-  id: 'account',
-  label: 'Account',
-  items: [{ id: 'sign-out', label: 'Sign out', icon: LogOut }],
-}
-
 /** Non-admins get the Git Targets page under a "Settings" label. */
 const SETTINGS_SECTION: NavSection = {
   id: 'settings',
@@ -87,6 +80,6 @@ const SETTINGS_SECTION: NavSection = {
 
 export function navSections(isAdmin: boolean): NavSection[] {
   return isAdmin
-    ? [WORKLOADS_SECTION, DEPLOY_SECTION, ADMIN_SECTION, ACCOUNT_SECTION]
-    : [WORKLOADS_SECTION, DEPLOY_SECTION, ACCOUNT_SECTION, SETTINGS_SECTION]
+    ? [WORKLOADS_SECTION, DEPLOY_SECTION, ADMIN_SECTION]
+    : [WORKLOADS_SECTION, DEPLOY_SECTION, SETTINGS_SECTION]
 }

@@ -30,9 +30,14 @@ function lineClass(text: string): string {
 }
 
 const LINE_COLOR: Record<string, string> = {
-  'log-err': 'var(--status-danger, #f97066)',
-  'log-warn': 'var(--status-warning, #fdb022)',
+  'log-err': 'var(--status-danger, #f87171)',
+  'log-warn': 'var(--status-warning, #fbbf24)',
 }
+
+// Logs render in a terminal that stays dark in every theme, matching the
+// Portainer logs viewer: near-black body with cyan monospace output.
+const TERMINAL_BG = '#0a0c0f'
+const TERMINAL_TEXT = '#7db3c8'
 
 const LOGS_TRIAGE_SYSTEM = `You are an operations assistant helping a user diagnose a containerised application. Use plain English — avoid Kubernetes jargon where possible, and explain technical terms when you must use them.
 
@@ -361,7 +366,6 @@ Analyse this data and follow the instructions in your system prompt.`
             {aiBadge}
           </Badge>
           <Button
-            size="xs"
             onClick={() => void runLogsTriage()}
             disabled={aiBusy || !!loadErr}
           >
@@ -397,7 +401,6 @@ Analyse this data and follow the instructions in your system prompt.`
             </Badge>
             <Button
               variant="ghost"
-              size="xs"
               aria-label="Close analysis"
               onClick={() => {
                 setAiPanelOpen(false)
@@ -442,57 +445,65 @@ Analyse this data and follow the instructions in your system prompt.`
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 8,
+            gap: 10,
             flexWrap: 'wrap',
-            padding: '8px 10px',
+            padding: '10px 14px',
             borderBottom: '1px solid var(--border)',
             background: 'var(--bg)',
           }}
         >
-          <Select
-            fieldSize="sm"
-            value={pod}
-            onChange={(e) => onPodChange(e.target.value)}
-            disabled={!pods.length}
-            options={
-              pods.length
-                ? pods.map((p) => ({ value: p.name, label: p.name }))
-                : [{ value: '', label: 'No instances' }]
-            }
-          />
-          <Select
-            fieldSize="sm"
-            value={container}
-            onChange={(e) => {
-              setContainer(e.target.value)
-              stopStream()
-              setLogLines([])
-              setOutputErr('')
-            }}
-            disabled={!currentContainers.length}
-            options={currentContainers.map((c) => ({ value: c, label: c }))}
-          />
-          <Select
-            fieldSize="sm"
-            value={severity}
-            onChange={(e) => setSeverity(e.target.value)}
-            options={[
-              { value: 'all', label: 'All lines' },
-              { value: 'warn', label: 'Warnings + errors' },
-              { value: 'err', label: 'Errors only' },
-            ]}
-          />
+          {/* FieldSelect always renders full-width, so each Select is wrapped
+              in a flex box to keep the filters on one horizontal row (matching
+              portainer-dev's application logs layout). */}
+          <div style={{ flex: '1 1 200px', minWidth: 180 }}>
+            <Select
+              fieldSize="sm"
+              value={pod}
+              onChange={(e) => onPodChange(e.target.value)}
+              disabled={!pods.length}
+              options={
+                pods.length
+                  ? pods.map((p) => ({ value: p.name, label: p.name }))
+                  : [{ value: '', label: 'No instances' }]
+              }
+            />
+          </div>
+          <div style={{ flex: '1 1 150px', minWidth: 130 }}>
+            <Select
+              fieldSize="sm"
+              value={container}
+              onChange={(e) => {
+                setContainer(e.target.value)
+                stopStream()
+                setLogLines([])
+                setOutputErr('')
+              }}
+              disabled={!currentContainers.length}
+              options={currentContainers.map((c) => ({ value: c, label: c }))}
+            />
+          </div>
+          <div style={{ flex: '0 1 160px', minWidth: 140 }}>
+            <Select
+              fieldSize="sm"
+              value={severity}
+              onChange={(e) => setSeverity(e.target.value)}
+              options={[
+                { value: 'all', label: 'All lines' },
+                { value: 'warn', label: 'Warnings + errors' },
+                { value: 'err', label: 'Errors only' },
+              ]}
+            />
+          </div>
           <Input
             type="search"
             fieldSize="sm"
             placeholder="Filter…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ maxWidth: 180 }}
+            style={{ flex: '1 1 160px', minWidth: 120, maxWidth: 220 }}
           />
           <Button
             variant="ghost"
-            size="sm"
             onClick={() => void onFetchOnce()}
             disabled={!pod || busy === 'fetch'}
           >
@@ -500,20 +511,19 @@ Analyse this data and follow the instructions in your system prompt.`
           </Button>
           {!streaming ? (
             <Button
-              size="sm"
               onClick={() => void onStartStream()}
               disabled={!pod || busy === 'stream'}
             >
               {busy === 'stream' ? 'Connecting…' : 'Stream'}
             </Button>
           ) : (
-            <Button color="danger" size="sm" onClick={stopStream}>
+            <Button color="danger" onClick={stopStream}>
               Stop stream
             </Button>
           )}
           {streaming ? (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <StatusDot tone="success" animation="pulse" />
+              <StatusDot tone="danger" animation="pulse" />
               <span style={{ color: 'var(--muted)', fontSize: 12 }}>Live</span>
             </span>
           ) : null}
@@ -521,10 +531,13 @@ Analyse this data and follow the instructions in your system prompt.`
         {loadErr ? (
           <div
             style={{
-              padding: 12,
-              color: 'var(--status-warning, #f79009)',
+              padding: 16,
+              minHeight: 380,
+              background: TERMINAL_BG,
+              color: 'var(--status-warning, #fbbf24)',
               fontFamily: MONO_FONT,
               fontSize: 12,
+              lineHeight: 1.7,
             }}
           >
             {loadErr}
@@ -533,15 +546,15 @@ Analyse this data and follow the instructions in your system prompt.`
           <div
             ref={outRef}
             style={{
-              padding: 12,
-              minHeight: 200,
-              maxHeight: 480,
+              padding: 16,
+              minHeight: 380,
+              maxHeight: 520,
               overflowY: 'auto',
-              background: '#0b0e14',
-              color: '#c7cdd8',
+              background: TERMINAL_BG,
+              color: TERMINAL_TEXT,
               fontFamily: MONO_FONT,
               fontSize: 12,
-              lineHeight: 1.5,
+              lineHeight: 1.7,
               display: 'flex',
               flexDirection: 'column',
             }}

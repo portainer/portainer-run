@@ -206,7 +206,8 @@ export async function handleConnections(req, res, pathname) {
   }
 
   // GET /api/connections/:id/files?branch=&path=
-  // Lists files at a given path in the repo for runtime detection
+  // Lists a single directory level at `path` (repo root when omitted) for
+  // runtime detection and the lazy-loading source folder picker.
   const filesMatch = pathname.match(/^\/api\/connections\/([^/]+)\/files$/)
   if (filesMatch && method === 'GET') {
     const id = filesMatch[1]

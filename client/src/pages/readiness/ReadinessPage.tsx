@@ -181,7 +181,6 @@ export function ReadinessPage() {
         description="Verify each environment has ingress, load balancing, storage, and healthy nodes"
         actions={
           <Button
-            size="sm"
             disabled={running || !environments.length}
             leftSection={<ShieldCheck size={13} />}
             onClick={() => void runChecks()}
@@ -241,7 +240,6 @@ export function ReadinessPage() {
                       <Button
                         variant="light"
                         color={dis ? 'success' : 'danger'}
-                        size="xs"
                         onClick={() => void toggleEnvDisabled(env.Id, env.Name)}
                       >
                         {dis ? '✓ Re-enable' : '⊘ Disable'}

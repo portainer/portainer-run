@@ -271,15 +271,10 @@ ${deployInstructions}`
       style={{
         display: 'flex',
         flexDirection: 'column',
-        position: 'fixed',
-        top: 0,
-        right: 0,
-        width: 360,
-        height: '100vh',
-        zIndex: 9999,
+        width: '100%',
+        height: '100%',
         background: 'var(--content-bg, var(--bg))',
         borderLeft: '1px solid var(--border)',
-        boxShadow: '-4px 0 20px rgba(0,0,0,0.25)',
         overflow: 'hidden',
       }}
     >
@@ -296,7 +291,7 @@ ${deployInstructions}`
       >
         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Assistant</span>
         <div style={{ flex: 1 }} />
-        <Button variant="ghost" size="sm" onClick={onClose} title="Close panel">
+        <Button variant="ghost" onClick={onClose} title="Close panel">
           Close
         </Button>
       </div>
@@ -323,7 +318,6 @@ ${deployInstructions}`
           fieldSize="sm"
         />
         <Button
-          size="sm"
           style={{ alignSelf: 'flex-end' }}
           onClick={() => void sendChat()}
           disabled={sending || !input.trim()}
@@ -392,7 +386,6 @@ ${deployInstructions}`
                     <Button
                       key={a.label}
                       variant={a.secondary ? 'ghost' : 'light'}
-                      size="xs"
                       onClick={a.onClick}
                     >
                       {a.label}

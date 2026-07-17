@@ -242,7 +242,6 @@ export function GitOpsStepFields({
                   </div>
                   <Button
                     variant="ghost"
-                    size="sm"
                     onClick={() => {
                       s.setUseCustomBranch(true)
                       s.setCustomBranch('')
@@ -263,7 +262,6 @@ export function GitOpsStepFields({
                   />
                   <Button
                     variant="ghost"
-                    size="sm"
                     onClick={() => {
                       s.setUseCustomBranch(false)
                       s.setCustomBranch('')

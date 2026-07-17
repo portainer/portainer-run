@@ -1,3 +1,4 @@
+import type { ServerResponse } from 'node:http'
 import { defineConfig } from 'vitest/config'
 import { loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -56,6 +57,35 @@ export default defineConfig(({ mode }) => {
           secure: false,
           changeOrigin: true,
           configure: (proxy) => {
+            // Vite's built-in proxy error handler writes a bare 502 with no
+            // cache directives. Chrome's in-memory cache then replays that 502
+            // on a normal reload (only a hard reload clears it), so a transient
+            // upstream blip right after a dev-server restart wedges the app.
+            // Handle the error first (this runs before Vite's handler) and send
+            // no-store so the error is never cached. Runs only for HTTP
+            // responses; WebSocket upgrade errors (a raw socket) fall through.
+            proxy.on('error', (err, _req, res) => {
+              const httpRes = res as ServerResponse
+              if (
+                typeof httpRes.writeHead !== 'function' ||
+                httpRes.headersSent ||
+                httpRes.writableEnded
+              ) {
+                return
+              }
+              httpRes.writeHead(502, {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+                Pragma: 'no-cache',
+                Expires: '0',
+              })
+              httpRes.end(
+                JSON.stringify({
+                  error: 'bad_gateway',
+                  message: `Portainer API upstream unavailable: ${err.message}`,
+                }),
+              )
+            })
             proxy.on('proxyReq', (proxyReq, req) => {
               if (portainerApiKey && !req.headers['x-api-key']) {
                 proxyReq.setHeader('X-API-Key', portainerApiKey)

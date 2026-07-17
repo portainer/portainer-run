@@ -241,7 +241,6 @@ export function ServiceDetailRevisionsTab({
             </Badge>
             <Button
               variant="ghost"
-              size="xs"
               onClick={() => void rollbackTo(String(rev))}
               disabled={isRolling}
             >

@@ -145,12 +145,11 @@ export function DeleteModal() {
         </div>
       </DialogBody>
       <DialogFooter>
-        <Button variant="ghost" size="sm" onClick={handleCancel} disabled={deleting}>
+        <Button variant="ghost" onClick={handleCancel} disabled={deleting}>
           Cancel
         </Button>
         <Button
           color="danger"
-          size="sm"
           onClick={() => void confirm()}
           disabled={deleting || confirmText.toLowerCase() !== 'delete'}
         >

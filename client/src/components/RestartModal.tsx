@@ -62,10 +62,10 @@ export function RestartModal() {
         </div>
       </DialogBody>
       <DialogFooter>
-        <Button variant="ghost" size="sm" onClick={handleCancel} disabled={restarting}>
+        <Button variant="ghost" onClick={handleCancel} disabled={restarting}>
           Cancel
         </Button>
-        <Button color="warning" size="sm" onClick={() => void confirm()} disabled={restarting}>
+        <Button color="warning" onClick={() => void confirm()} disabled={restarting}>
           {restarting ? 'Restarting…' : 'Restart'}
         </Button>
       </DialogFooter>
