@@ -382,7 +382,6 @@ export function VibeEditTab({
           {exposureError && <div style={ERROR_TEXT}>{exposureError}</div>}
           <div>
             <Button
-              size="sm"
               onClick={() => void handleSaveExposure()}
               disabled={savingExposure}
             >
@@ -437,7 +436,6 @@ export function VibeEditTab({
                 />
                 <Button
                   variant="ghost"
-                  size="xs"
                   aria-label="Remove variable"
                   onClick={() =>
                     setEnvVars((prev) => prev.filter((_, j) => j !== i))
@@ -450,7 +448,6 @@ export function VibeEditTab({
           </div>
           <Button
             variant="ghost"
-            size="sm"
             style={{ alignSelf: 'flex-start' }}
             onClick={() => setEnvVars((prev) => [...prev, { key: '', value: '' }])}
           >
@@ -462,7 +459,6 @@ export function VibeEditTab({
           {envError && <div style={ERROR_TEXT}>{envError}</div>}
           <div>
             <Button
-              size="sm"
               onClick={() => void handleSaveEnv()}
               disabled={savingEnv || !envLoaded}
             >
@@ -497,14 +493,12 @@ export function VibeEditTab({
               <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
                 <Button
                   variant="ghost"
-                  size="sm"
                   onClick={() => folderRef.current?.click()}
                 >
                   Select folder
                 </Button>
                 <Button
                   variant="ghost"
-                  size="sm"
                   onClick={() => filesRef.current?.click()}
                 >
                   Select files
@@ -523,7 +517,7 @@ export function VibeEditTab({
                 <span style={{ fontSize: 11, color: 'var(--muted)' }}>
                   {files.length} file{files.length !== 1 ? 's' : ''} selected
                 </span>
-                <Button variant="ghost" size="xs" onClick={() => setFiles([])}>
+                <Button variant="ghost" onClick={() => setFiles([])}>
                   Remove all
                 </Button>
               </div>
@@ -595,14 +589,12 @@ export function VibeEditTab({
                 {hiddenInputs}
                 <Button
                   variant="ghost"
-                  size="sm"
                   onClick={() => folderRef.current?.click()}
                 >
                   + Add folder
                 </Button>
                 <Button
                   variant="ghost"
-                  size="sm"
                   onClick={() => filesRef.current?.click()}
                 >
                   + Add files

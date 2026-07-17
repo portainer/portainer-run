@@ -206,7 +206,7 @@ function EnvValue({ envKey, value }: { envKey: string; value: string }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
       <span style={mono}>{revealed ? value : '••••••••'}</span>
-      <Button variant="ghost" size="xs" onClick={() => setRevealed((r) => !r)}>
+      <Button variant="ghost" onClick={() => setRevealed((r) => !r)}>
         {revealed ? 'Hide' : 'Reveal'}
       </Button>
     </span>
@@ -786,7 +786,6 @@ export function ServiceDetailPage() {
             >
               <Button
                 variant="light"
-                size="sm"
                 leftSection={<RefreshCw size={13} />}
                 title="Refresh service details"
                 onClick={() => void runRefresh()}
@@ -796,7 +795,6 @@ export function ServiceDetailPage() {
               </Button>
               <Button
                 variant="light"
-                size="sm"
                 leftSection={<RotateCw size={13} />}
                 title="Rolling restart — pods are replaced one by one"
                 onClick={() => void runRestart()}
@@ -806,7 +804,6 @@ export function ServiceDetailPage() {
               </Button>
               <Button
                 variant="light"
-                size="sm"
                 leftSection={<Play size={13} />}
                 title="Set replicas to 1 (when scaled to zero)"
                 onClick={() => void runStart()}
@@ -816,7 +813,6 @@ export function ServiceDetailPage() {
               </Button>
               <Button
                 variant="light"
-                size="sm"
                 leftSection={<Pause size={13} />}
                 title="Scale to zero replicas (workloads off)"
                 onClick={() => void runStop()}
@@ -835,14 +831,13 @@ export function ServiceDetailPage() {
             actionBarBusy ? null : (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {technical && (
-                  <Button variant="light" size="sm" onClick={openMigrateDialog}>
+                  <Button variant="light" onClick={openMigrateDialog}>
                     Migrate
                   </Button>
                 )}
                 <Button
                   variant="light"
                   color="danger"
-                  size="sm"
                   leftSection={<Trash2 size={13} />}
                   disabled={!perms?.canDelete}
                   title={
@@ -890,7 +885,6 @@ export function ServiceDetailPage() {
           <div style={{ flex: 1 }} />
           <Button
             variant="ghost"
-            size="sm"
             onClick={toggleTechnical}
             aria-expanded={technical}
           >
@@ -1194,14 +1188,12 @@ export function ServiceDetailPage() {
         <DialogFooter>
           <Button
             variant="ghost"
-            size="sm"
             onClick={() => setMigrateOpen(false)}
             disabled={migratePending}
           >
             Cancel
           </Button>
           <Button
-            size="sm"
             onClick={() => void runMigrate('clone')}
             disabled={migratePending}
           >
@@ -1209,7 +1201,6 @@ export function ServiceDetailPage() {
           </Button>
           <Button
             color="danger"
-            size="sm"
             onClick={() => void runMigrate('move')}
             disabled={migratePending}
           >

@@ -10,7 +10,6 @@ import type {
 import { Button } from '@ds/v3-components/Button/Button'
 
 import { useAppStore } from '../store/useAppStore.js'
-import { disconnect } from '../services/session.js'
 import { ROUTES } from '../lib/routes.js'
 import { getBreadcrumbItems } from '../lib/breadcrumbs.js'
 import { navSections } from '../nav/sections'
@@ -70,47 +69,58 @@ export function AppLayout() {
   const breadcrumbs = useShellBreadcrumbs()
 
   function handleNavClick(id: string) {
-    if (id === 'sign-out') {
-      disconnect()
-      return
-    }
     const item = sections.flatMap((s) => s.items).find((i) => i.id === id)
     if (item?.path) navigate(item.path)
   }
 
   return (
-    <>
-      {isAiAvailable ? (
-        <AssistantPanel open={chatOpen} onClose={() => setChatOpen(false)} />
-      ) : null}
+    <div style={{ display: 'flex', width: '100%', height: '100vh', overflow: 'hidden' }}>
+      {/* App shell shrinks to make room for the assistant panel instead of being
+          covered by it. */}
+      <div style={{ flex: 1, minWidth: 0, height: '100vh' }}>
+        <AppShell
+          sections={shellSections}
+          activeId={activeId}
+          onItemClick={handleNavClick}
+          logo={<SidebarLogo />}
+          collapsedLogo={<SidebarLogoCollapsed />}
+          breadcrumbs={breadcrumbs}
+          actions={
+            isAiAvailable ? (
+              <Button
+                variant={chatOpen ? 'filled' : 'light'}
+                leftSection={<MessageSquare size={13} />}
+                onClick={() => setChatOpen(!chatOpen)}
+                title="Assistant"
+              >
+                Assistant
+              </Button>
+            ) : undefined
+          }
+          avatarSlot={<AccountMenuSlot />}
+          sidebarFooter={
+            <span title="Portainer-Run release">Portainer-Run {version}</span>
+          }
+        >
+          <Outlet />
+        </AppShell>
+      </div>
 
-      <AppShell
-        sections={shellSections}
-        activeId={activeId}
-        onItemClick={handleNavClick}
-        logo={<SidebarLogo />}
-        collapsedLogo={<SidebarLogoCollapsed />}
-        breadcrumbs={breadcrumbs}
-        actions={
-          isAiAvailable ? (
-            <Button
-              variant={chatOpen ? 'filled' : 'light'}
-              size="sm"
-              leftSection={<MessageSquare size={13} />}
-              onClick={() => setChatOpen(!chatOpen)}
-              title="Assistant"
-            >
-              Assistant
-            </Button>
-          ) : undefined
-        }
-        avatarSlot={<AccountMenuSlot />}
-        sidebarFooter={
-          <span title="Portainer-Run release">Portainer-Run {version}</span>
-        }
-      >
-        <Outlet />
-      </AppShell>
-    </>
+      {/* Assistant panel: an in-flow column on the right. Kept mounted (width 0
+          when closed) so chat history survives open/close. */}
+      {isAiAvailable ? (
+        <div
+          style={{
+            flexShrink: 0,
+            height: '100vh',
+            width: chatOpen ? 400 : 0,
+            overflow: 'hidden',
+            transition: 'width 180ms ease-out',
+          }}
+        >
+          <AssistantPanel open={chatOpen} onClose={() => setChatOpen(false)} />
+        </div>
+      ) : null}
+    </div>
   )
 }

@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Check, FileText, Loader2, Lock, Upload, X } from 'lucide-react'
 
 import { Alert } from '@ds/v3-components/Alert/Alert'
 import { Badge } from '@ds/v3-components/Badge/Badge'
 import { Button } from '@ds/v3-components/Button/Button'
+import type { FileNode } from '@ds/v3-components/FilePicker/FilePicker'
 import { FormControl, Input } from '@ds/v3-components/FormField/FormField'
 import { SegmentedControl } from '@ds/v3-components/Segmented/Segmented'
 import { Select } from '@ds/v3-components/Select/Select'
@@ -15,7 +16,9 @@ import type { WizardContext, WizardStep } from '@ds/v3-templates/MultiStepWizard
 import { PageTitle } from '@ds/v3-templates/PageTitle/PageTitle'
 
 import { ROUTES } from '../../lib/routes.js'
-import { listGitTargets } from '../../lib/gitTargets.js'
+import { listGitTargets, listRepoDir } from '../../lib/gitTargets.js'
+import { dirEntriesToNodes } from './gitRepoTree'
+import { GitFolderTree } from './GitFolderTree'
 import {
   useAppStore,
   visibleEnvironments,
@@ -289,7 +292,6 @@ function DropZone({ onFiles }: { onFiles: (files: UploadedFile[]) => void }) {
       <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
         <Button
           variant="ghost"
-          size="sm"
           onClick={(e) => {
             e.stopPropagation()
             folderRef.current?.click()
@@ -299,7 +301,6 @@ function DropZone({ onFiles }: { onFiles: (files: UploadedFile[]) => void }) {
         </Button>
         <Button
           variant="ghost"
-          size="sm"
           onClick={(e) => {
             e.stopPropagation()
             filesRef.current?.click()
@@ -493,9 +494,9 @@ export function VibeDeploy() {
   // Git source fields
   const [gitSourceTargetId, setGitSourceTargetId] = useState('')
   const [gitSourceBranch, setGitSourceBranch] = useState('main')
+  // Subfolder chosen in the file picker — becomes gitSource.path at deploy time.
   const [gitSourcePath, setGitSourcePath] = useState('')
   const [gitSourceBranches, setGitSourceBranches] = useState<string[]>([])
-  const [gitSourceFetching, setGitSourceFetching] = useState(false)
   const [gitSourceConfirmed, setGitSourceConfirmed] = useState(false)
 
   // ---- Step 2: runtime ----
@@ -580,8 +581,14 @@ export function VibeDeploy() {
       })
   }, [envId, resolvedNs, token, envPermissions, patchEnvPermissions])
 
-  // Auto-detect runtime when files change
+  // Auto-detect runtime for uploaded files. This must also re-run when the user
+  // toggles the source type back to "upload": switching tabs clears
+  // detectedRuntime, and since the files array itself is unchanged the runtime
+  // would otherwise stay null and deploy would fall back to node:22 — e.g. a
+  // static HTML upload would wrongly run in the Node container. Git detection is
+  // owned by handleGitFolderSelect, so skip while on the git tab.
   useEffect(() => {
+    if (sourceType !== 'upload') return
     if (!files.length) {
       setDetectedRuntime(null)
       setStartCmd('')
@@ -592,7 +599,7 @@ export function VibeDeploy() {
     setDetectedRuntime(rt)
     if (rt) setStartCmd(rt.defaultCmd(files))
     setRuntimeConfirmed(false)
-  }, [files])
+  }, [files, sourceType])
 
   // Auto-detect env vars when files change
   useEffect(() => {
@@ -606,6 +613,29 @@ export function VibeDeploy() {
     }
     setEnvVarsConfirmed(false)
   }, [files])
+
+  // Reset the folder selection whenever the target or branch changes. The
+  // folder picker (GitFolderTree) lazily loads directories on demand, so no
+  // repository preloading happens here — only the chosen folder is cleared.
+  useEffect(() => {
+    setGitSourceConfirmed(false)
+    setGitSourcePath('')
+    setDetectedRuntime(null)
+  }, [sourceType, gitSourceTargetId, gitSourceBranch])
+
+  // Fetch a single directory level for the folder picker. Called by
+  // GitFolderTree the first time the root or a folder is expanded.
+  const loadGitDir = useCallback(
+    async (path: string): Promise<FileNode[]> => {
+      const data: { files?: { path: string; type: 'file' | 'dir' }[] } = await listRepoDir(
+        gitSourceTargetId,
+        gitSourceBranch.trim(),
+        path,
+      )
+      return dirEntriesToNodes(path, data.files || [])
+    },
+    [gitSourceTargetId, gitSourceBranch],
+  )
 
   // Auto-derive app name from file list
   useEffect(() => {
@@ -816,46 +846,39 @@ export function VibeDeploy() {
         pushToast('Add at least one file', 'err')
         return
       }
-      ctx.goTo(hasEnvExample ? 'settings' : 'deploy')
+      ctx.goTo(hasEnvExample ? 'settings' : 'details')
     } else {
-      // git source — already confirmed, runtime detected
+      // git source — a subfolder must be chosen in the file picker first
       if (!gitSourceConfirmed) {
-        pushToast('Select a git source and fetch files', 'err')
+        pushToast('Select the folder that contains your app', 'err')
         return
       }
-      ctx.goTo(hasEnvExample ? 'settings' : 'deploy')
+      ctx.goTo(hasEnvExample ? 'settings' : 'details')
     }
   }
 
-  async function fetchGitSourceFiles() {
-    const branch = gitSourceBranch.trim()
-    const path = gitSourcePath.trim()
-    if (!gitSourceTargetId || !branch) {
-      pushToast('Select a git target and branch', 'err')
-      return
-    }
-    setGitSourceFetching(true)
+  // Select a single folder as the app root and detect its runtime. The folder's
+  // immediate files are fetched on demand (not preloaded) and detection runs on
+  // their base names, so markers like requirements.txt / package.json match at
+  // the folder root.
+  async function handleGitFolderSelect(folderPath: string) {
+    setGitSourcePath(folderPath)
+    setGitSourceConfirmed(true)
+    setDetectedRuntime(null)
     try {
-      const pathParam = path ? `&path=${encodeURIComponent(path)}` : ''
-      const r = await serverFetch(
-        `/api/connections/${gitSourceTargetId}/files?branch=${encodeURIComponent(branch)}${pathParam}`,
+      const data: { files?: { path: string; type: 'file' | 'dir' }[] } = await listRepoDir(
+        gitSourceTargetId,
+        gitSourceBranch.trim(),
+        folderPath,
       )
-      const data = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`)
-      // Run runtime detection against file names
-      const names = (data.files || [])
-        .filter((f: any) => f.type === 'file')
-        .map((f: any) => f.path)
-      const syntheticFiles = names.map((n: string) => ({ name: n, text: '' }))
+      const syntheticFiles = (data.files || [])
+        .filter((f) => f.type === 'file')
+        .map((f) => ({ name: f.path, text: '' }))
       const rt = detectRuntime(syntheticFiles)
       setDetectedRuntime(rt)
-      setStartCmd((rt as any)?.startCmd || '')
-      setGitSourceConfirmed(true)
-      pushToast('Files scanned — ready to deploy', 'ok')
-    } catch (e: any) {
-      pushToast(e?.message || 'Failed to fetch files from git', 'err')
-    } finally {
-      setGitSourceFetching(false)
+      setStartCmd(rt.defaultCmd(syntheticFiles))
+    } catch {
+      // Runtime detection is best-effort; deploy still falls back to defaults.
     }
   }
 
@@ -872,7 +895,7 @@ export function VibeDeploy() {
 
   function confirmEnvVars(ctx: WizardContext) {
     setEnvVarsConfirmed(true)
-    ctx.goTo('deploy')
+    ctx.goTo('details')
   }
 
   function confirmDeployConfig(ctx: WizardContext) {
@@ -998,7 +1021,8 @@ export function VibeDeploy() {
     const sp = _params || stagedParams
     if (!sp) return
     setDeploying(true)
-    // Enter the startup progress view — the wizard body switches to the Timeline.
+    // Advance to the final "Deploy" step, which renders the startup Timeline.
+    ctxRef.current?.goTo('deploy')
     startupCancelRef.current = false
     startupSpRef.current = sp
     setStartupReason(null)
@@ -1151,13 +1175,15 @@ export function VibeDeploy() {
   }
 
   // ---- Wizard steps (dynamic: settings only with .env.example, storage only
-  // when the user must choose between multiple git targets) ----
+  // when the user must choose between multiple git targets). The final "Deploy"
+  // step hosts the startup Timeline — configuration lives on the "Details" step. ----
 
   const wizardSteps: WizardStep[] = [
     { id: 'files', label: 'Files' },
     ...(hasEnvExample ? [{ id: 'settings', label: 'App settings' }] : []),
-    { id: 'deploy', label: 'Deploy' },
+    { id: 'details', label: 'Details' },
     ...(gitTargetsList.length !== 1 ? [{ id: 'storage', label: 'Storage' }] : []),
+    { id: 'deploy', label: 'Deploy' },
   ]
 
   const nsStatusColor =
@@ -1169,16 +1195,11 @@ export function VibeDeploy() {
           ? 'var(--status-danger, #f04438)'
           : 'var(--muted)'
 
-  // Once a deploy is in flight the wizard body switches to the startup Timeline
-  // (covers both the single-target auto-deploy and the multi-target storage step).
-  const startupActive = startupPhase != null
-
   // ---- Step content renderers ----
 
   function renderFilesStep() {
     return (
       <div>
-        <StepHeading>Step 1 — Files</StepHeading>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* Source type toggle */}
           <div style={{ alignSelf: 'flex-start' }}>
@@ -1210,7 +1231,7 @@ export function VibeDeploy() {
                     <span style={HINT_STYLE}>
                       {files.length} file{files.length !== 1 ? 's' : ''} selected
                     </span>
-                    <Button variant="ghost" size="xs" onClick={resetFiles}>
+                    <Button variant="ghost" onClick={resetFiles}>
                       Remove all
                     </Button>
                   </div>
@@ -1258,14 +1279,12 @@ export function VibeDeploy() {
                     />
                     <Button
                       variant="ghost"
-                      size="sm"
                       onClick={() => document.getElementById('vibe-add-folder')?.click()}
                     >
                       + Add folder
                     </Button>
                     <Button
                       variant="ghost"
-                      size="sm"
                       onClick={() => document.getElementById('vibe-add-files')?.click()}
                     >
                       + Add files
@@ -1298,50 +1317,48 @@ export function VibeDeploy() {
                   ]}
                 />
               </FormControl>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <FormControl label="Branch" style={{ flex: 1 }}>
-                  {gitSourceBranches.length > 0 ? (
-                    <Select
-                      value={gitSourceBranch}
-                      onChange={(e) => {
-                        setGitSourceBranch(e.target.value)
-                        setGitSourceConfirmed(false)
-                      }}
-                      options={gitSourceBranches.map((b) => ({ value: b, label: b }))}
-                    />
-                  ) : (
-                    <Input
-                      type="text"
-                      value={gitSourceBranch}
-                      onChange={(e) => {
-                        setGitSourceBranch(e.target.value)
-                        setGitSourceConfirmed(false)
-                      }}
-                      placeholder="main"
-                    />
-                  )}
-                </FormControl>
-                <FormControl
-                  label="Subfolder path (optional, default: repo root)"
-                  style={{ flex: 1 }}
-                >
+              <FormControl label="Branch">
+                {gitSourceBranches.length > 0 ? (
+                  <Select
+                    value={gitSourceBranch}
+                    onChange={(e) => setGitSourceBranch(e.target.value)}
+                    options={gitSourceBranches.map((b) => ({ value: b, label: b }))}
+                  />
+                ) : (
                   <Input
                     type="text"
-                    value={gitSourcePath}
-                    onChange={(e) => {
-                      setGitSourcePath(e.target.value)
-                      setGitSourceConfirmed(false)
-                    }}
-                    placeholder="src / leave empty for root"
+                    value={gitSourceBranch}
+                    onChange={(e) => setGitSourceBranch(e.target.value)}
+                    placeholder="main"
                   />
-                </FormControl>
-              </div>
-              {gitSourceConfirmed ? (
+                )}
+              </FormControl>
+
+              {!gitSourceTargetId || !gitSourceBranch.trim() ? (
+                <div style={HINT_STYLE}>Choose a target and branch to browse the repository.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={HINT_STYLE}>
+                    Expand folders to browse the repository and select the single folder that
+                    contains your app. We&rsquo;ll deploy that folder and detect its runtime
+                    automatically.
+                  </div>
+                  <GitFolderTree
+                    key={`${gitSourceTargetId}:${gitSourceBranch}`}
+                    loadChildren={loadGitDir}
+                    selectedPath={gitSourceConfirmed ? gitSourcePath : null}
+                    onSelect={handleGitFolderSelect}
+                    maxHeight={320}
+                  />
+                </div>
+              )}
+
+              {gitSourceConfirmed && (
                 <div
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 10,
+                    gap: 8,
                     padding: '10px 14px',
                     background: 'rgba(23,178,106,0.08)',
                     border: '1px solid rgba(23,178,106,0.3)',
@@ -1351,30 +1368,9 @@ export function VibeDeploy() {
                     color: 'var(--status-success, #17b26a)',
                   }}
                 >
-                  ✓ Files ready to deploy
-                  <span style={{ marginLeft: 'auto' }}>
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      onClick={() => {
-                        setGitSourceConfirmed(false)
-                        setDetectedRuntime(null)
-                      }}
-                    >
-                      Re-fetch
-                    </Button>
-                  </span>
-                </div>
-              ) : (
-                <div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={!gitSourceTargetId || !gitSourceBranch || gitSourceFetching}
-                    onClick={() => void fetchGitSourceFiles()}
-                  >
-                    {gitSourceFetching ? 'Fetching…' : 'Fetch & detect runtime'}
-                  </Button>
+                  ✓ Deploying{' '}
+                  <span style={{ color: 'var(--text)' }}>{gitSourcePath || 'repository root'}</span>
+                  {detectedRuntime ? ` as ${detectedRuntime.label}` : ''}
                 </div>
               )}
             </div>
@@ -1446,7 +1442,6 @@ export function VibeDeploy() {
                 />
                 <Button
                   variant="ghost"
-                  size="xs"
                   aria-label="Remove variable"
                   onClick={() => setEnvVars((prev) => prev.filter((_, j) => j !== i))}
                 >
@@ -1457,7 +1452,6 @@ export function VibeDeploy() {
           </div>
           <Button
             variant="ghost"
-            size="sm"
             style={{ alignSelf: 'flex-start' }}
             onClick={() => setEnvVars((prev) => [...prev, { key: '', value: '', custom: true }])}
           >
@@ -1473,7 +1467,7 @@ export function VibeDeploy() {
     )
   }
 
-  function renderDeployStep() {
+  function renderDetailsStep() {
     const availableEnvs = environments.filter((e: any) => !isEnvDisabled({ disabledEnvs }, e.Id))
     const singleEnv = availableEnvs.length === 1
     const singleNs = nsList.length === 1 && !nsLoading && !manualNs
@@ -1481,7 +1475,6 @@ export function VibeDeploy() {
 
     return (
       <div>
-        <StepHeading>Deploy your app</StepHeading>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ maxWidth: 420 }}>
             <FormControl label="App name" hint="Lowercase, alphanumeric and hyphens">
@@ -1856,15 +1849,11 @@ export function VibeDeploy() {
   function renderFooter(ctx: WizardContext) {
     ctxRef.current = ctx
 
-    if (startupActive) {
-      return <span />
-    }
-
     switch (ctx.activeStep) {
       case 'files':
         return (
           <>
-            <Button variant="ghost" onClick={resetFiles}>
+            <Button variant="ghost" onClick={() => navigate(ROUTES.services)}>
               Cancel
             </Button>
             <div className="msw-footer-right">
@@ -1888,7 +1877,7 @@ export function VibeDeploy() {
             </div>
           </>
         )
-      case 'deploy':
+      case 'details':
         return (
           <>
             <Button variant="ghost" onClick={() => ctx.goTo(hasEnvExample ? 'settings' : 'files')}>
@@ -1910,7 +1899,7 @@ export function VibeDeploy() {
             <Button
               variant="ghost"
               onClick={() => {
-                ctx.goTo('deploy')
+                ctx.goTo('details')
                 setDeployConfigConfirmed(false)
                 setStagedParams(null)
               }}
@@ -1941,9 +1930,14 @@ export function VibeDeploy() {
 
   return (
     <div
-      className="ash-content"
+      className="ash-content vibe-deploy"
       style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
     >
+      {/* The MultiStepWizard (design-system, read-only) always renders a
+          "Step X of Y: …" header and there is no prop to hide it. We pass no
+          title, so drop the whole header here rather than patching the
+          submodule (which would otherwise leave an empty padded gap). */}
+      <style>{`.vibe-deploy .msw-header { display: none; }`}</style>
       <PageTitle
         title="Deploy"
         description="Drop the files your AI coding tool generated: we handle git, runtime detection, and deployment."
@@ -1969,16 +1963,17 @@ export function VibeDeploy() {
       <MultiStepWizard steps={wizardSteps} footer={renderFooter}>
         {(ctx) => {
           ctxRef.current = ctx
-          if (startupActive) return renderStartupPanel()
           switch (ctx.activeStep) {
             case 'files':
               return renderFilesStep()
             case 'settings':
               return renderSettingsStep()
-            case 'deploy':
-              return renderDeployStep()
+            case 'details':
+              return renderDetailsStep()
             case 'storage':
               return renderStorageStep()
+            case 'deploy':
+              return renderStartupPanel()
             default:
               return null
           }

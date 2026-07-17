@@ -107,11 +107,16 @@ function serviceRowId(d: Deployment): string {
 }
 
 /* Shared grid template: Name | Environment | Project space | Health | Access |
-   Deployed | Deployed by | actions */
+   Deployed | Deployed by | actions.
+   The header and every row are independent grids. The actions column must be a
+   fixed width (not `auto`) so both resolve the same free space for the `fr`
+   tracks — otherwise the empty header cell and the buttons in each row give the
+   grids different free space and the headers drift out of alignment. */
+const ACTIONS_COL_WIDTH = 120
 const ROW_GRID: React.CSSProperties = {
   display: 'grid',
   gridTemplateColumns:
-    'minmax(140px, 1.4fr) minmax(100px, 1fr) minmax(100px, 1fr) minmax(140px, 1.2fr) minmax(90px, 0.9fr) minmax(70px, 0.6fr) minmax(90px, 0.9fr) auto',
+    `minmax(140px, 1.4fr) minmax(100px, 1fr) minmax(100px, 1fr) minmax(140px, 1.2fr) minmax(90px, 0.9fr) minmax(70px, 0.6fr) minmax(90px, 0.9fr) ${ACTIONS_COL_WIDTH}px`,
   alignItems: 'center',
   gap: 12,
   padding: '10px 14px',
@@ -292,12 +297,11 @@ function ServiceRow({
         {deployedBy}
       </div>
       <div
-        style={{ display: 'flex', gap: 4 }}
+        style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}
         onClick={(e) => e.stopPropagation()}
       >
         <Button
           variant="ghost"
-          size="xs"
           onClick={onViewLogs}
           disabled={!perms?.canViewLogs}
           title={
@@ -310,7 +314,6 @@ function ServiceRow({
         </Button>
         <Button
           variant="ghost"
-          size="xs"
           onClick={onRestart}
           disabled={!perms?.canRestart}
           title={
@@ -467,13 +470,12 @@ export function ServicesPage() {
               </span>
               <Button
                 variant="ghost"
-                size="sm"
                 leftSection={<RefreshCw size={13} />}
                 onClick={() => void manualRefresh()}
               >
                 Refresh
               </Button>
-              <Button size="sm" onClick={() => navigate(ROUTES.deploy)}>
+              <Button onClick={() => navigate(ROUTES.deploy)}>
                 + Deploy
               </Button>
             </div>
