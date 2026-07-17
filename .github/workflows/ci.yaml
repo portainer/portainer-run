@@ -35,8 +35,24 @@ jobs:
     runs-on: ubuntu-latest
     needs: tag
     steps:
+      # Exchange the org's GitHub App credentials for a short-lived, narrowly
+      # scoped installation token so checkout can pull the private design-system
+      # submodule (the default GITHUB_TOKEN can't see a separate repo).
+      - name: "[preparation] fetch GitHub App token"
+        id: fetch-token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
+        with:
+          app-id: ${{ secrets.PORTAINER_BOT_ID }}
+          private-key: ${{ secrets.PORTAINER_BOT_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: portainer-run,design-system
+          permission-contents: read
+
       - name: "[preparation] checkout the current branch"
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          submodules: recursive
+          token: ${{ steps.fetch-token.outputs.token }}
 
       - name: "[validation] check server syntax"
         run: node --check server/server.js
@@ -51,6 +67,9 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
         with:
+          # Use the local checkout (with the submodule already fetched) as the
+          # build context, so BuildKit doesn't re-clone the repo over SSH.
+          context: .
           push: false
           load: false
           platforms: linux/amd64,linux/arm64
@@ -91,6 +110,9 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
         with:
+          # Use the local checkout (with the submodule already fetched) as the
+          # build context, so BuildKit doesn't re-clone the repo over SSH.
+          context: .
           push: true
           platforms: linux/amd64,linux/arm64
           build-args: |
