@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Loader2, MessageSquare } from 'lucide-react'
+import { MessageSquare } from 'lucide-react'
 
 import { Button } from '@ds/v3-components/Button/Button'
 import { MessageBubble } from '@ds/v3-components/MessageBubble/MessageBubble'
+import { Thread } from '@ds/v3-components/Thread/Thread'
+import { TypingIndicator } from '@ds/v3-components/TypingIndicator/TypingIndicator'
 import { Textarea } from '@ds/v3-components/Textarea/Textarea'
 
 import { useAppStore, visibleDeployments } from '../store/useAppStore.js'
@@ -52,24 +54,14 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
     null,
   )
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
   const historyRef = useRef<Array<{ role: string; content: string }>>([])
   const sendingRef = useRef(false)
-
-  const scrollToBottom = useCallback(() => {
-    const el = scrollRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [])
 
   useEffect(() => {
     if (open) {
       setTimeout(() => inputRef.current?.focus(), 200)
     }
   }, [open])
-
-  useEffect(() => {
-    scrollToBottom()
-  }, [rows, thinking, open, scrollToBottom])
 
   const addUser = useCallback((text: string, userDisplay?: string) => {
     setRows((r) => [
@@ -296,20 +288,97 @@ ${deployInstructions}`
         </Button>
       </div>
 
-      {/* Input (kept above the messages, as in the original layout) */}
+      {/* Messages — newest at the bottom, thread auto-scrolls as they arrive. */}
+      <Thread
+        emptyState={
+          <>
+            <MessageSquare size={24} style={{ opacity: 0.3 }} />
+            <div style={{ maxWidth: 220, lineHeight: 1.6 }}>
+              Ask about your services or describe what you want to deploy.
+            </div>
+          </>
+        }
+      >
+        {rows.length === 0 && !thinking ? null : (
+          <>
+            {rows.map((row) => {
+              if (row.role === 'user') {
+                return (
+                  <MessageBubble key={row.id} role="user">
+                    {String(row.userDisplay ?? row.text ?? '')}
+                  </MessageBubble>
+                )
+              }
+              return (
+                <MessageBubble key={row.id} role="assistant" streaming={row.stream}>
+                  {row.isMd ? (
+                    <div style={{ minHeight: 8 }}>
+                      <AssistantMarkdown>
+                        {row.text || (row.stream ? '…' : '—')}
+                      </AssistantMarkdown>
+                    </div>
+                  ) : (
+                    <span style={{ whiteSpace: 'pre-wrap' }}>{row.text}</span>
+                  )}
+                  {row.actions && row.actions.length > 0 ? (
+                    <div
+                      style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}
+                    >
+                      {row.actions.map((a) => (
+                        <Button
+                          key={a.label}
+                          variant={a.secondary ? 'ghost' : 'light'}
+                          onClick={a.onClick}
+                        >
+                          {a.label}
+                        </Button>
+                      ))}
+                    </div>
+                  ) : null}
+                </MessageBubble>
+              )
+            })}
+            {thinking && (
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 6,
+                  alignItems: 'flex-start',
+                }}
+              >
+                <TypingIndicator
+                  label={
+                    thinking.phase === 'fetch'
+                      ? `Fetching diagnostics for ${thinking.name || 'application'}`
+                      : 'Analysing'
+                  }
+                />
+                {thinking.phase === 'fetch' && (
+                  <span style={{ fontSize: 11, color: 'var(--muted)', paddingLeft: 2 }}>
+                    Fetching diagnostics for {thinking.name || 'application'}…
+                  </span>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </Thread>
+
+      {/* Composer pinned to the bottom. */}
       <div
         style={{
           display: 'flex',
           flexDirection: 'column',
           gap: 8,
           padding: '12px 14px',
-          borderBottom: '1px solid var(--border)',
+          borderTop: '1px solid var(--border)',
           flexShrink: 0,
         }}
       >
         <Textarea
           ref={inputRef}
-          rows={4}
+          rows={3}
           placeholder={PLACEHOLDER}
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -324,95 +393,6 @@ ${deployInstructions}`
         >
           Send
         </Button>
-      </div>
-
-      {/* Messages */}
-      <div
-        ref={scrollRef}
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          overflowX: 'hidden',
-          padding: '12px 14px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 10,
-        }}
-      >
-        {rows.length === 0 && !thinking && (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%',
-              opacity: 0.6,
-            }}
-          >
-            <MessageSquare size={24} style={{ opacity: 0.3, marginBottom: 8 }} />
-            <div
-              style={{
-                fontSize: 12,
-                color: 'var(--muted)',
-                lineHeight: 1.6,
-                textAlign: 'center',
-              }}
-            >
-              Ask about your services or describe what you want to deploy.
-            </div>
-          </div>
-        )}
-        {rows.map((row) => {
-          if (row.role === 'user') {
-            return (
-              <MessageBubble key={row.id} role="user">
-                {String(row.userDisplay ?? row.text ?? '')}
-              </MessageBubble>
-            )
-          }
-          return (
-            <MessageBubble key={row.id} role="assistant" streaming={row.stream}>
-              {row.isMd ? (
-                <div style={{ minHeight: 8 }}>
-                  <AssistantMarkdown>{row.text || (row.stream ? '…' : '—')}</AssistantMarkdown>
-                </div>
-              ) : (
-                <span style={{ whiteSpace: 'pre-wrap' }}>{row.text}</span>
-              )}
-              {row.actions && row.actions.length > 0 ? (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
-                  {row.actions.map((a) => (
-                    <Button
-                      key={a.label}
-                      variant={a.secondary ? 'ghost' : 'light'}
-                      onClick={a.onClick}
-                    >
-                      {a.label}
-                    </Button>
-                  ))}
-                </div>
-              ) : null}
-            </MessageBubble>
-          )
-        })}
-        {thinking && (
-          <div
-            style={{
-              alignSelf: 'flex-start',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              fontSize: 12,
-              color: 'var(--muted)',
-            }}
-          >
-            <Loader2 size={11} className="animate-spin" />
-            {thinking.phase === 'fetch'
-              ? 'Fetching diagnostics for ' + (thinking.name || 'application') + '...'
-              : 'Analysing...'}
-          </div>
-        )}
       </div>
     </div>
   )
