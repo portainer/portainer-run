@@ -474,7 +474,7 @@ export function ServicesPage() {
                   <span>Access</span>
                   <span>Deployed</span>
                   <span className="svc-l-header-deployer">Deployed by</span>
-                  <span />
+                  <span>Actions</span>
                 </div>
               )}
               renderItem={(item) => {
