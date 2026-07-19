@@ -478,6 +478,10 @@ export function VibeDeploy() {
 
   const [noGitTargets, setNoGitTargets] = useState(false)
   const [gitTargetsList, setGitTargetsList] = useState<any[]>([])
+  // Gate the Storage step on this so the stepper settles into its final shape
+  // once, instead of showing Storage on first paint (empty list) and then
+  // dropping it after the fetch resolves with a single target (layout shift).
+  const [gitTargetsLoaded, setGitTargetsLoaded] = useState(false)
   useEffect(() => {
     listGitTargets()
       .then((r: any) => {
@@ -486,6 +490,7 @@ export function VibeDeploy() {
         setGitTargetsList(list)
       })
       .catch(() => {})
+      .finally(() => setGitTargetsLoaded(true))
   }, [])
 
   // ---- Step 1: files or git source ----
@@ -1182,7 +1187,9 @@ export function VibeDeploy() {
     { id: 'files', label: 'Files' },
     ...(hasEnvExample ? [{ id: 'settings', label: 'App settings' }] : []),
     { id: 'details', label: 'Details' },
-    ...(gitTargetsList.length !== 1 ? [{ id: 'storage', label: 'Storage' }] : []),
+    ...(gitTargetsLoaded && gitTargetsList.length !== 1
+      ? [{ id: 'storage', label: 'Storage' }]
+      : []),
     { id: 'deploy', label: 'Deploy' },
   ]
 

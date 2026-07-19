@@ -102,7 +102,7 @@ The logged-in Portainer username is shown in the Account section of the navigati
 
 ## MCP endpoint
 
-Portainer-Run exposes an MCP (Model Context Protocol) endpoint at `POST /mcp` that allows AI coding tools to deploy applications directly. When Portainer-Run runs as a Portainer addon, this endpoint is reached through the Portainer addon gateway at `https://<portainer-host>/addons/run/mcp` (the gateway authenticates the request, then strips the `/addons/run` prefix before forwarding to `/mcp`).
+Portainer-Run exposes an MCP (Model Context Protocol) endpoint at `POST /mcp` that allows AI coding tools to deploy applications directly. When Portainer-Run runs as a Portainer addon, this endpoint is reached through the Portainer addon gateway at `https://<portainer-host>/addons/portainer-run/mcp` (the gateway authenticates the request, then strips the `/addons/portainer-run` prefix before forwarding to `/mcp`).
 
 Authentication accepts a Portainer **API access token** via `X-API-Key: <token>` (recommended for MCP clients — these tokens are long-lived, unlike browser session JWTs), the browser session JWT via the `portainer_api_key` cookie (the addon-gateway path), or `Authorization: Bearer <jwt>`. Portainer-Run validates the credential against the same Portainer instance, routing it by type to match Portainer's own auth: tokens with the `ptr_` prefix go via `X-API-Key`, JWTs via the session cookie. The result is validated against Portainer's `/users/me` endpoint on first use and cached for five minutes.
 
@@ -131,7 +131,7 @@ To connect Claude Desktop, add the following to `claude_desktop_config.json` (re
       "command": "npx",
       "args": [
         "mcp-remote@latest",
-        "https://<portainer-host>/addons/run/mcp",
+        "https://<portainer-host>/addons/portainer-run/mcp",
         "--header",
         "X-API-Key: YOUR_PORTAINER_API_TOKEN"
       ],
@@ -150,7 +150,7 @@ Config file location: `%APPDATA%\Claude\claude_desktop_config.json` on Windows, 
 To verify the endpoint is working before connecting a client:
 
 ```bash
-curl -k -X POST https://<portainer-host>/addons/run/mcp \
+curl -k -X POST https://<portainer-host>/addons/portainer-run/mcp \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_PORTAINER_API_TOKEN" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
@@ -283,7 +283,7 @@ If the container cannot resolve your Portainer hostname (error: `EAI_AGAIN`), ad
 
 ## Connecting
 
-Portainer-Run runs as a Portainer addon. Reach it at `https://<portainer-host>/addons/run/` after logging in to Portainer; the addon gateway authenticates the request against your Portainer session, so there is no separate token entry. Unauthenticated requests are handed off to the Portainer login page. Your Portainer RBAC role determines what Portainer-Run can see and do: namespace-scoped access requires manual namespace entry on deploy; cluster-scoped access enumerates namespaces automatically.
+Portainer-Run runs as a Portainer addon. Reach it at `https://<portainer-host>/addons/portainer-run/` after logging in to Portainer; the addon gateway authenticates the request against your Portainer session, so there is no separate token entry. Unauthenticated requests are handed off to the Portainer login page. Your Portainer RBAC role determines what Portainer-Run can see and do: namespace-scoped access requires manual namespace entry on deploy; cluster-scoped access enumerates namespaces automatically.
 
 Portainer's RBAC applies in full. Users with admin role in Portainer see the Admin section including Cluster Readiness and shared git target management. Non-admin users see only their own targets plus any shared targets an admin has created.
 

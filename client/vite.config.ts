@@ -10,7 +10,7 @@ import { addonServerPlugin } from './vite.addonServerPlugin'
 // Served as a Portainer addon behind the gateway at this base path. The gateway
 // strips the prefix before forwarding to us; the build bakes it into asset URLs
 // and the router basename so the browser requests everything under the prefix.
-const BASE = process.env.ADDON_BASE_PATH || '/addons/run/'
+const BASE = process.env.ADDON_BASE_PATH || '/addons/portainer-run/'
 
 export default defineConfig(({ mode }) => {
   // Root .env holds the server config (PORTAINER_URL, etc.); reuse it here so
