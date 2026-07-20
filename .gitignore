@@ -3,6 +3,7 @@ dist
 .env
 data
 bun.lock
+.eslintcache
 
 # Auto-generated or local-only TLS (see server/tls.js, SSL_CERT / SSL_KEY / SSL_CERT_DIR)
 portainer-run.crt
