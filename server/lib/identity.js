@@ -4,18 +4,13 @@ import { getCachedUser, setCachedUser } from './userCache.js'
 import { resolvePortainerTarget } from '../resolve-portainer.js'
 
 /**
- * Build the auth header for an outbound request to Portainer, matching the
- * token type — mirroring Portainer's own bouncer. API access tokens (the "ptr_"
- * prefix) authenticate via X-API-Key; session JWTs via Authorization: Bearer.
- * Only the matching header is sent, never both: Portainer's apiKeyLookup runs
- * first and 401s when X-API-Key holds a non-API-key value (e.g. a JWT) instead
- * of falling through to the JWT lookup. Routing by type lets the MCP server be
- * driven by a long-lived X-API-Key while the browser keeps its JWT.
- *
- * The JWT must NOT be forwarded as the portainer_api_key cookie: Portainer's
- * CSRF middleware fails closed on unsafe cookie-authenticated requests that
- * lack Origin/Sec-Fetch-Site headers (which server-to-server requests never
- * carry), while token-authenticated requests are exempt.
+ * Build the outbound auth header for a call to Portainer, matching the token
+ * type: API access tokens ("ptr_" prefix) go on X-API-Key, session JWTs on
+ * Authorization: Bearer. Only the matching header is sent — Portainer's
+ * apiKeyLookup runs first and 401s if X-API-Key holds a JWT. A JWT must never
+ * be sent as the portainer_api_key cookie: core's CSRF check fails closed on
+ * unsafe cookie-authenticated requests lacking Origin/Sec-Fetch-Site (which
+ * server-to-server calls never send), but exempts token auth.
  * @param {string} token
  * @returns {Record<string, string>}
  */
@@ -93,18 +88,24 @@ export async function resolveCallerIdentity(req) {
 }
 
 /**
- * Extract the Portainer JWT from the inbound request.
- * Cookie (portainer_api_key) takes priority — this is the addon-gateway auth path.
- * Falls back to Authorization: Bearer and X-API-Key for backward compatibility.
+ * Extract the Portainer token from the inbound request.
+ * The addon gateway is authoritative for the credential: it stamps the session
+ * JWT as Authorization: Bearer and passes an API client's X-API-Key through, so
+ * those are the primary auth path. The portainer_api_key cookie is the fallback
+ * for local dev (no gateway) and older gateways that forward only the cookie.
  * @param {import('http').IncomingMessage} req
  */
 export function extractToken(req) {
+  const auth = req.headers['authorization'] || ''
+  if (auth.toLowerCase().startsWith('bearer ')) return auth.slice(7).trim()
+
+  const apiKey = req.headers['x-api-key']
+  if (apiKey) return apiKey
+
   const cookieHeader = req.headers['cookie'] || ''
   for (const part of cookieHeader.split(';')) {
     const [k, ...v] = part.trim().split('=')
     if (k.trim() === 'portainer_api_key') return v.join('=').trim()
   }
-  const auth = req.headers['authorization'] || ''
-  if (auth.toLowerCase().startsWith('bearer ')) return auth.slice(7).trim()
-  return req.headers['x-api-key'] || ''
+  return ''
 }
