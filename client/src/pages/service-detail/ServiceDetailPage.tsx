@@ -55,9 +55,24 @@ import { ServiceDetailLogsTab } from './ServiceDetailLogsTab'
 import { ServiceDetailMetricsTab } from './ServiceDetailMetricsTab'
 import { ServiceDetailRevisionsTab } from './ServiceDetailRevisionsTab'
 import { ServiceDetailEditTab } from './ServiceDetailEditTab'
+import type { Deployment, EnvVar } from '../../types/k8s'
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-type Deployment = any
+/** Live status/access details for an app, sourced from the env-status feed. */
+interface AppExtra {
+  reason?: string
+  accessUrl?: string | null
+  accessLabel?: string | null
+}
+
+/** Deploy-form container model produced by the JS deploy pipeline. */
+interface DeployFormContainer {
+  id: string
+  [key: string]: unknown
+}
+
+function errMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e)
+}
 
 /** Match old-implementation: Overview → Containers → Metrics → Logs → Revisions → Edit */
 const SIMPLE_TABS: TabItem[] = [
@@ -134,7 +149,7 @@ function OverviewExposure({
   return <Kv pairs={rows} />
 }
 
-function headerStatusFromDeployment(d: Deployment): {
+function headerStatusFromDeployment(d: Deployment | null): {
   status: string
   statusLabel: string
   statusTone: BadgeTone
@@ -180,7 +195,7 @@ function friendlyStatus(d: Deployment, reason: string | undefined) {
 }
 
 // Display value for an env entry, resolving valueFrom references to a note.
-function envDisplayValue(e: any): string {
+function envDisplayValue(e: EnvVar): string {
   if (e.value != null) return e.value
   if (e.valueFrom?.secretKeyRef) {
     const r = e.valueFrom.secretKeyRef
@@ -218,12 +233,12 @@ function EnvValue({ envKey, value }: { envKey: string; value: string }) {
  * objects already in hand (deployment + env-status cache), so it has no
  * dependency on the git target or the local database.
  */
-function SimpleOverview({ d, extra }: { d: Deployment; extra: any }) {
+function SimpleOverview({ d, extra }: { d: Deployment; extra: AppExtra }) {
   const { status, base, reason } = friendlyStatus(d, extra?.reason)
   const container = d.spec?.template?.spec?.containers?.[0]
   const envs = (container?.env || [])
-    .filter((e: any) => e && typeof e.name === 'string' && e.value != null)
-    .map((e: any) => ({ key: e.name, value: String(e.value) }))
+    .filter((e) => e && typeof e.name === 'string' && e.value != null)
+    .map((e) => ({ key: e.name, value: String(e.value) }))
   const tone =
     status === 'running' ? 'success'
       : status === 'error' ? 'danger'
@@ -416,9 +431,9 @@ export function ServiceDetailPage() {
         }
         const json = await r.json()
         setD(json)
-      } catch (e: any) {
+      } catch (e: unknown) {
         setD(null)
-        setErr(e?.message || 'Request failed')
+        setErr(errMessage(e) || 'Request failed')
       } finally {
         loadInFlight.current = null
       }
@@ -433,15 +448,15 @@ export function ServiceDetailPage() {
     setRestartPending(true)
     try {
       const updated = await restartDeployment(token, String(envId), namespace, name)
-      if (updated) setD(updated)
+      if (updated) setD(updated as Deployment)
       else void load()
       pushToast(`“${name}” is restarting — pods will be replaced one by one`, 'ok')
       setTimeout(() => {
         void refreshCache(false)
         void load()
       }, 2000)
-    } catch (e: any) {
-      pushToast('Restart failed: ' + (e?.message || String(e)), 'err')
+    } catch (e: unknown) {
+      pushToast('Restart failed: ' + errMessage(e), 'err')
     } finally {
       restartInFlight.current = false
       setRestartPending(false)
@@ -511,12 +526,12 @@ export function ServiceDetailPage() {
             tone: 'red',
           })
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         setMigrateNsList([])
         setMigrateManualNs(true)
         setMigrateNamespace('')
         setMigrateNsStatus({
-          text: e?.message || 'Error loading namespaces',
+          text: errMessage(e) || 'Error loading namespaces',
           tone: 'red',
         })
       } finally {
@@ -558,20 +573,23 @@ export function ServiceDetailPage() {
           namespace,
           name,
         )
-        const forBuild = withDefaultCnames(loaded.containers || [])
+        const forBuild: DeployFormContainer[] = withDefaultCnames(
+          loaded.containers || [],
+        )
         const pairs = forBuild
-          .map((c: any) => {
+          .map((c) => {
             const spec = buildK8sContainer(c)
             return spec ? { id: c.id, spec } : null
           })
           .filter(Boolean) as { id: string; spec: unknown }[]
         if (!pairs.length) throw new Error('No containers found to migrate')
         const volDefs = forBuild
-          .map((c: any) => readVolumeDefForDeploy(c))
+          .map((c) => readVolumeDefForDeploy(c))
           .filter(Boolean)
         const servicePorts = (loaded.svcPorts || [])
           .map((p: unknown) => parseInt(String(p), 10))
           .filter((n: number) => n > 0)
+        type DeployOptions = Parameters<typeof executeDeploy>[1]
         // executeDeploy's JSDoc only annotates containerRowIds, so TS rejects
         // the full options object; the shape matches what the JS expects.
         await executeDeploy(token, {
@@ -593,7 +611,7 @@ export function ServiceDetailPage() {
             port: loaded.ingPort || 80,
             ingressClass: (loaded.ingClass || '').trim(),
           },
-        } as any)
+        } as DeployOptions)
         if (mode === 'move') {
           const del = await kubeFetch(
             token,
@@ -620,11 +638,9 @@ export function ServiceDetailPage() {
             replace: true,
           })
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         pushToast(
-          (mode === 'move' ? 'Move' : 'Clone') +
-            ' failed: ' +
-            (e?.message || String(e)),
+          (mode === 'move' ? 'Move' : 'Clone') + ' failed: ' + errMessage(e),
           'err',
         )
       } finally {
@@ -658,8 +674,8 @@ export function ServiceDetailPage() {
         void refreshCache(false)
         void load()
       }, 2000)
-    } catch (e: any) {
-      pushToast('Start failed: ' + (e?.message || String(e)), 'err')
+    } catch (e: unknown) {
+      pushToast('Start failed: ' + errMessage(e), 'err')
     } finally {
       scaleInFlight.current = false
       setScalePending(false)
@@ -679,8 +695,8 @@ export function ServiceDetailPage() {
         void refreshCache(false)
         void load()
       }, 2000)
-    } catch (e: any) {
-      pushToast('Stop failed: ' + (e?.message || String(e)), 'err')
+    } catch (e: unknown) {
+      pushToast('Stop failed: ' + errMessage(e), 'err')
     } finally {
       scaleInFlight.current = false
       setScalePending(false)
@@ -946,7 +962,12 @@ export function ServiceDetailPage() {
                             ? String(spec.strategy.rollingUpdate.maxUnavailable)
                             : '—',
                         ],
-                        ['Created', new Date(d.metadata.creationTimestamp).toLocaleString()],
+                        [
+                          'Created',
+                          d.metadata.creationTimestamp
+                            ? new Date(d.metadata.creationTimestamp).toLocaleString()
+                            : '—',
+                        ],
                         ['Age', age(d.metadata.creationTimestamp)],
                       ]}
                     />
@@ -957,7 +978,7 @@ export function ServiceDetailPage() {
                 {(() => {
                   const env = d.spec?.template?.spec?.containers?.[0]?.env || []
                   const pairs: [string, React.ReactNode][] = env.length
-                    ? env.map((e: any) => [e.name, envDisplayValue(e)])
+                    ? env.map((e) => [e.name, envDisplayValue(e)])
                     : [['(none)', '—']]
                   return <Kv pairs={pairs} />
                 })()}
@@ -974,7 +995,7 @@ export function ServiceDetailPage() {
                 <Kv
                   pairs={
                     Object.keys(d.metadata?.labels || {}).length
-                      ? (Object.entries(d.metadata.labels) as [string, string][])
+                      ? (Object.entries(d.metadata.labels || {}) as [string, string][])
                       : [['(none)', '—']]
                   }
                 />
@@ -984,16 +1005,16 @@ export function ServiceDetailPage() {
                   <p style={{ color: 'var(--muted)' }}>No containers.</p>
                 ) : (
                   (d.spec?.template?.spec?.containers || []).map(
-                    (c: any, i: number) => {
+                    (c, i: number) => {
                       const ports =
                         (c.ports || [])
                           .map(
-                            (p: any) => `${p.containerPort}/${p.protocol || 'TCP'}`,
+                            (p) => `${p.containerPort}/${p.protocol || 'TCP'}`,
                           )
                           .join(', ') || '—'
                       const res = c.resources || {}
                       const mounts = (c.volumeMounts || [])
-                        .map((v: any) => v.mountPath + ' → ' + v.name)
+                        .map((v) => v.mountPath + ' → ' + v.name)
                         .join(', ')
                       return (
                         <div
@@ -1131,7 +1152,7 @@ export function ServiceDetailPage() {
                 disabled={migratePending}
                 options={[
                   { value: '', label: '— Select —' },
-                  ...visEnvs.map((e: any) => ({
+                  ...visEnvs.map((e: { Id: number; Name: string }) => ({
                     value: String(e.Id),
                     label: e.Name,
                   })),

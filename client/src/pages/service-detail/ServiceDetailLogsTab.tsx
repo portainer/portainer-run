@@ -342,6 +342,19 @@ Analyse this data and follow the instructions in your system prompt.`
     }
   }
 
+  // Once an instance is selected, start streaming automatically so opening the
+  // Logs tab shows live output without an extra click. Keyed on pod+container
+  // so it fires once per selection and never restarts after a manual stop.
+  const autoStreamKeyRef = useRef('')
+  useEffect(() => {
+    if (!pod) return
+    const key = `${pod}\u0000${container}`
+    if (autoStreamKeyRef.current === key) return
+    autoStreamKeyRef.current = key
+    void onStartStream()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pod, container])
+
   const currentContainers = useMemo(() => {
     const p = pods.find((x) => x.name === pod)
     return p?.containers || []

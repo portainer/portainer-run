@@ -20,6 +20,7 @@ import {
 } from '../hooks/useEnvStatus.js'
 import { age } from '../lib/utils.js'
 import { manualRefresh } from '../services/refreshDeployments.js'
+import type { Deployment } from '../types/k8s'
 
 const SERVICE_LIST_SORT = [
   { value: 'name', label: 'Name' },
@@ -48,9 +49,6 @@ const SVC_STATUS_SUBFILTER_EMPTY: Record<string, string> = {
   workloads_running: 'No running applications in this view.',
   no_workloads: 'No applications are scaled to zero in this view.',
 }
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
-type Deployment = any
 
 interface ListItem {
   id: string
@@ -171,8 +169,10 @@ function ServiceRow({
   // Fire permission check for this row's env+namespace if not yet cached
   useEffect(() => {
     if (envPermissions[permKey] !== undefined) return
-    void checkEnvPermissions(token, d._envId, d.metadata.namespace).then(
-      (p: unknown) => patchEnvPermissions(d._envId, d.metadata.namespace, p),
+    const envId = d._envId
+    if (envId == null) return
+    void checkEnvPermissions(token, envId, d.metadata.namespace).then(
+      (p: unknown) => patchEnvPermissions(envId, d.metadata.namespace, p),
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [permKey])
@@ -247,9 +247,9 @@ function ServiceRow({
         >
           <StatusDot tone={tone} />
           {label}
-          {d.spec?.replicas > 1 && (
+          {(d.spec?.replicas ?? 0) > 1 && (
             <span style={{ fontSize: 11, color: 'var(--muted)' }}>
-              {d.status?.readyReplicas || 0}/{d.spec.replicas}
+              {d.status?.readyReplicas || 0}/{d.spec?.replicas}
             </span>
           )}
         </span>
