@@ -118,10 +118,12 @@ body {
   }
 }
 
+/* Radix copies the content's computed z-index onto its positioning wrapper,
+   so set it here (not on the wrapper) to sit above the AppShell header. */
 .acm-panel {
-  position: fixed;
   z-index: 9500;
   width: 280px;
+  max-width: calc(100vw - 32px);
   background: var(--content-bg, #ffffff);
   border: 1px solid var(--border, #ecedee);
   border-radius: var(--radius-xl, 12px);
@@ -129,15 +131,9 @@ body {
     0 8px 32px rgba(0, 0, 0, 0.1),
     0 2px 8px rgba(0, 0, 0, 0.06);
   animation: acm-in 140ms ease-out;
+  transform-origin: var(--radix-popover-content-transform-origin);
   overflow: hidden;
   font-family: 'DM Sans', system-ui, sans-serif;
-}
-
-@media (max-width: 639px) {
-  .acm-panel {
-    max-width: calc(100vw - 32px);
-    right: 16px !important;
-  }
 }
 
 .acm-user {
