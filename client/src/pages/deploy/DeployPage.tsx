@@ -5,7 +5,10 @@ import { Alert } from '@ds/v3-components/Alert/Alert'
 import { Button } from '@ds/v3-components/Button/Button'
 import type { FileNode } from '@ds/v3-components/FilePicker/FilePicker'
 import { MultiStepWizard } from '@ds/v3-templates/MultiStepWizard/MultiStepWizard'
-import type { WizardContext, WizardStep } from '@ds/v3-templates/MultiStepWizard/MultiStepWizard'
+import type {
+  WizardContext,
+  WizardStep,
+} from '@ds/v3-templates/MultiStepWizard/MultiStepWizard'
 import { PageTitle } from '@ds/v3-templates/PageTitle/PageTitle'
 
 import { ROUTES } from '../../lib/routes.js'
@@ -55,7 +58,9 @@ export function VibeDeploy() {
   const envPermissions = useAppStore((s) => s.envPermissions)
   const patchEnvPermissions = useAppStore((s) => s.patchEnvPermissions)
   const pushToast = useAppStore((s) => s.pushToast)
-  const [ingressHostMap, setIngressHostMap] = useState<Record<string, string>>({})
+  const [ingressHostMap, setIngressHostMap] = useState<Record<string, string>>(
+    {},
+  )
 
   // Wizard navigation is owned by MultiStepWizard; keep the latest context so
   // async handlers (deploy success, file resets) can navigate too.
@@ -90,7 +95,9 @@ export function VibeDeploy() {
   const [gitSourceConfirmed, setGitSourceConfirmed] = useState(false)
 
   // ---- Step 2: runtime ----
-  const [detectedRuntime, setDetectedRuntime] = useState<RuntimeDef | null>(null)
+  const [detectedRuntime, setDetectedRuntime] = useState<RuntimeDef | null>(
+    null,
+  )
   const [startCmd, setStartCmd] = useState('')
   const [, setRuntimeConfirmed] = useState(false)
 
@@ -126,7 +133,13 @@ export function VibeDeploy() {
     probing: boolean
     ingressClasses: any[]
     defaultIngressClass: string | null
-  }>({ ingressOk: null, lbOk: null, probing: false, ingressClasses: [], defaultIngressClass: null })
+  }>({
+    ingressOk: null,
+    lbOk: null,
+    probing: false,
+    ingressClasses: [],
+    defaultIngressClass: null,
+  })
 
   // ---- Step 5: gitops (stagedParams) ----
   const [stagedParams, setStagedParams] = useState<any>(null)
@@ -138,7 +151,9 @@ export function VibeDeploy() {
   const [startupReason, setStartupReason] = useState<string | null>(null)
   const [startupUrl, setStartupUrl] = useState<string | null>(null)
   const [startupErrorMsg, setStartupErrorMsg] = useState<string | null>(null)
-  const [startupFailStage, setStartupFailStage] = useState<'deploy' | 'start' | null>(null)
+  const [startupFailStage, setStartupFailStage] = useState<
+    'deploy' | 'start' | null
+  >(null)
   // Cancels the poll loop on unmount / navigation; sp used by "keep waiting".
   const startupCancelRef = useRef(false)
   const startupSpRef = useRef<any>(null)
@@ -217,11 +232,8 @@ export function VibeDeploy() {
   // GitFolderTree the first time the root or a folder is expanded.
   const loadGitDir = useCallback(
     async (path: string): Promise<FileNode[]> => {
-      const data: { files?: { path: string; type: 'file' | 'dir' }[] } = await listRepoDir(
-        gitSourceTargetId,
-        gitSourceBranch.trim(),
-        path,
-      )
+      const data: { files?: { path: string; type: 'file' | 'dir' }[] } =
+        await listRepoDir(gitSourceTargetId, gitSourceBranch.trim(), path)
       return dirEntriesToNodes(path, data.files || [])
     },
     [gitSourceTargetId, gitSourceBranch],
@@ -235,24 +247,40 @@ export function VibeDeploy() {
       try {
         const parsed = JSON.parse(pkgFile.text)
         if (parsed?.name) {
-          setAppName(parsed.name.replace(/[^a-z0-9-]/gi, '-').toLowerCase().slice(0, 40))
+          setAppName(
+            parsed.name
+              .replace(/[^a-z0-9-]/gi, '-')
+              .toLowerCase()
+              .slice(0, 40),
+          )
           return
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
     // fallback to a slug from first meaningful file
     const mainFile = files.find((f) =>
-      ['server.js', 'app.py', 'main.py', 'app.rb', 'index.php'].includes(f.name),
+      ['server.js', 'app.py', 'main.py', 'app.rb', 'index.php'].includes(
+        f.name,
+      ),
     )
     if (mainFile) {
-      setAppName(mainFile.name.replace(/\.[^.]+$/, '').replace(/[^a-z0-9-]/gi, '-').toLowerCase())
+      setAppName(
+        mainFile.name
+          .replace(/\.[^.]+$/, '')
+          .replace(/[^a-z0-9-]/gi, '-')
+          .toLowerCase(),
+      )
     }
   }, [files]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-select environment when only one is available
   useEffect(() => {
     if (envId) return
-    const available = environments.filter((e: any) => !isEnvDisabled({ disabledEnvs }, e.Id))
+    const available = environments.filter(
+      (e: any) => !isEnvDisabled({ disabledEnvs }, e.Id),
+    )
     if (available.length === 1) {
       setEnvId(String(available[0].Id))
     }
@@ -261,15 +289,29 @@ export function VibeDeploy() {
   // Probe env capabilities when envId changes (for expose type filtering)
   useEffect(() => {
     if (!envId || !token) {
-      setEnvCapabilities({ ingressOk: null, lbOk: null, probing: false, ingressClasses: [], defaultIngressClass: null })
+      setEnvCapabilities({
+        ingressOk: null,
+        lbOk: null,
+        probing: false,
+        ingressClasses: [],
+        defaultIngressClass: null,
+      })
       return
     }
-    setEnvCapabilities({ ingressOk: null, lbOk: null, probing: true, ingressClasses: [], defaultIngressClass: null })
+    setEnvCapabilities({
+      ingressOk: null,
+      lbOk: null,
+      probing: true,
+      ingressClasses: [],
+      defaultIngressClass: null,
+    })
     Promise.all([checkIngress(token, envId), checkLoadBalancer(token, envId)])
       .then(([ingressResult, lbResult]: any[]) => {
         const defaultClass =
           ingressResult.defaultClass ||
-          (ingressResult.classes?.length === 1 ? ingressResult.classes[0].name : null)
+          (ingressResult.classes?.length === 1
+            ? ingressResult.classes[0].name
+            : null)
         const caps = {
           ingressOk: ingressResult.ok !== false,
           lbOk: lbResult.ok !== false,
@@ -290,7 +332,13 @@ export function VibeDeploy() {
       })
       .catch(() => {
         // On error, show all options (permissive fallback)
-        setEnvCapabilities({ ingressOk: true, lbOk: true, probing: false, ingressClasses: [], defaultIngressClass: null })
+        setEnvCapabilities({
+          ingressOk: true,
+          lbOk: true,
+          probing: false,
+          ingressClasses: [],
+          defaultIngressClass: null,
+        })
       })
   }, [envId, token])
 
@@ -303,7 +351,11 @@ export function VibeDeploy() {
       setIngressHostMap({})
       return
     }
-    kubeFetch(token, envId, `/apis/networking.k8s.io/v1/namespaces/${resolvedNs}/ingresses`)
+    kubeFetch(
+      token,
+      envId,
+      `/apis/networking.k8s.io/v1/namespaces/${resolvedNs}/ingresses`,
+    )
       .then(async (r: Response) => {
         if (!r.ok) {
           setIngressHostMap({})
@@ -312,7 +364,8 @@ export function VibeDeploy() {
         const data = await r.json()
         const items = data.items || []
         const adminIngresses = items.filter(
-          (item: any) => item.metadata?.labels?.['managed-by'] !== 'portainer-run',
+          (item: any) =>
+            item.metadata?.labels?.['managed-by'] !== 'portainer-run',
         )
         // Prefer admin-configured ingresses as the source of truth.
         // Fall back to managed ingresses only if no admin ones exist yet.
@@ -359,7 +412,10 @@ export function VibeDeploy() {
         if (r.ok) {
           if (r.manual) {
             setManualNs(true)
-            setNsHint({ text: 'Enter your project space name below', tone: 'warn' })
+            setNsHint({
+              text: 'Enter your project space name below',
+              tone: 'warn',
+            })
           } else {
             setNsList(r.namespaces)
             setManualNs(false)
@@ -376,7 +432,10 @@ export function VibeDeploy() {
           }
         } else {
           setManualNs(true)
-          setNsHint({ text: r.error || 'Could not load project spaces', tone: 'err' })
+          setNsHint({
+            text: r.error || 'Could not load project spaces',
+            tone: 'err',
+          })
         }
       })
       .catch(() => {
@@ -456,11 +515,8 @@ export function VibeDeploy() {
     setGitSourceConfirmed(true)
     setDetectedRuntime(null)
     try {
-      const data: { files?: { path: string; type: 'file' | 'dir' }[] } = await listRepoDir(
-        gitSourceTargetId,
-        gitSourceBranch.trim(),
-        folderPath,
-      )
+      const data: { files?: { path: string; type: 'file' | 'dir' }[] } =
+        await listRepoDir(gitSourceTargetId, gitSourceBranch.trim(), folderPath)
       const syntheticFiles = (data.files || [])
         .filter((f) => f.type === 'file')
         .map((f) => ({ name: f.path, text: '' }))
@@ -498,7 +554,10 @@ export function VibeDeploy() {
       return
     }
     if (perms && !perms.canCreatePvc) {
-      pushToast('No permission to create PersistentVolumeClaims in this project space', 'err')
+      pushToast(
+        'No permission to create PersistentVolumeClaims in this project space',
+        'err',
+      )
       return
     }
     if (!envId) {
@@ -515,12 +574,17 @@ export function VibeDeploy() {
     // Normalise env vars once: trim names (a stray space is an invalid
     // Kubernetes env-var name and would also break the PORT lookup below) and
     // drop blanks. Values are left as-typed.
+    // Strip the client-only `id` used for stable React keys; the server only
+    // consumes { key, value }.
     const cleanEnvVars = envVars
-      .map((v) => ({ ...v, key: v.key.trim() }))
+      .map(({ id: _id, ...v }) => ({ ...v, key: v.key.trim() }))
       .filter((v) => v.key)
 
     const portEnvVar = cleanEnvVars.find((v) => v.key === 'PORT')?.value
-    const portValue = parseInt(String(svcPort || portEnvVar || detectedRuntime?.port || 80), 10)
+    const portValue = parseInt(
+      String(svcPort || portEnvVar || detectedRuntime?.port || 80),
+      10,
+    )
     const resolvedPort = isNaN(portValue) ? 80 : portValue
 
     // Build a single-container spec representing the vibe deploy
@@ -534,11 +598,15 @@ export function VibeDeploy() {
     }
 
     const params = {
-      appName: appName.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+      appName: appName
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, '-'),
       ns: resolvedNs,
       envId,
       envName:
-        environments.find((e: any) => String(e.Id) === String(envId))?.Name || String(envId),
+        environments.find((e: any) => String(e.Id) === String(envId))?.Name ||
+        String(envId),
       instances,
       containerSpecs: [containerSpec],
       containerRowIds: ['vibe-0'],
@@ -572,7 +640,10 @@ export function VibeDeploy() {
         // Upload source
         sourceFiles:
           sourceType === 'upload'
-            ? files.map((f) => ({ path: f.webkitRelativePath || f.name, content: f.text }))
+            ? files.map((f) => ({
+                path: f.webkitRelativePath || f.name,
+                content: f.text,
+              }))
             : [],
         // Git source
         gitSource:
@@ -816,7 +887,11 @@ export function VibeDeploy() {
             <div className="msw-footer-right">
               <Button
                 onClick={() => confirmFiles(ctx)}
-                disabled={sourceType === 'upload' ? files.length === 0 : !gitSourceConfirmed}
+                disabled={
+                  sourceType === 'upload'
+                    ? files.length === 0
+                    : !gitSourceConfirmed
+                }
               >
                 Next →
               </Button>
@@ -837,7 +912,10 @@ export function VibeDeploy() {
       case 'details':
         return (
           <>
-            <Button variant="ghost" onClick={() => ctx.goTo(hasEnvExample ? 'settings' : 'files')}>
+            <Button
+              variant="ghost"
+              onClick={() => ctx.goTo(hasEnvExample ? 'settings' : 'files')}
+            >
               ← Back
             </Button>
             <div className="msw-footer-right">
@@ -870,7 +948,11 @@ export function VibeDeploy() {
                   const selection = gitOps.validate()
                   if (selection) void handleGitOpsConfirm(selection)
                 }}
-                disabled={deploying || !gitOps.selectedTargetId || !gitOps.resolvedBranch}
+                disabled={
+                  deploying ||
+                  !gitOps.selectedTargetId ||
+                  !gitOps.resolvedBranch
+                }
                 loading={deploying}
               >
                 {deploying ? 'Deploying…' : 'Commit & Deploy'}
@@ -906,9 +988,12 @@ export function VibeDeploy() {
           title="No git targets configured."
           description={
             <>
-              Portainer-Run requires a git repository to commit manifests and source files before
-              deploying.{' '}
-              <Link to={ROUTES.gitTargets} style={{ color: 'var(--accent, #2e90fa)' }}>
+              Portainer-Run requires a git repository to commit manifests and
+              source files before deploying.{' '}
+              <Link
+                to={ROUTES.gitTargets}
+                style={{ color: 'var(--accent, #2e90fa)' }}
+              >
                 Set one up in Git Targets
               </Link>{' '}
               first.

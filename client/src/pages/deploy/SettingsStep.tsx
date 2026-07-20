@@ -6,7 +6,7 @@ import { Input } from '@ds/v3-components/FormField/FormField'
 import { MONO_FONT, SECRET_PATTERN } from '../service-detail/detailUi'
 import { StepHeading } from './DeployStepUi'
 import { HINT_STYLE } from './deployStyles'
-import type { EnvVar } from './envExample'
+import { newEnvVarId, type EnvVar } from './envExample'
 
 /** Editable list of environment variables parsed from `.env.example`. */
 export function SettingsStep({
@@ -21,13 +21,13 @@ export function SettingsStep({
       <StepHeading>App settings</StepHeading>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ ...HINT_STYLE, marginBottom: 4 }}>
-          Your app needs a few settings — fill in the values below and they will be applied
-          securely at deploy time.
+          Your app needs a few settings — fill in the values below and they will
+          be applied securely at deploy time.
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {envVars.map((v, i) => (
+          {envVars.map((v) => (
             <div
-              key={i}
+              key={v.id}
               style={{
                 display: 'grid',
                 gridTemplateColumns: '160px 1fr auto',
@@ -43,7 +43,9 @@ export function SettingsStep({
                   style={{ fontFamily: MONO_FONT, fontSize: 12 }}
                   onChange={(e) =>
                     setEnvVars((prev) =>
-                      prev.map((x, j) => (j === i ? { ...x, key: e.target.value } : x)),
+                      prev.map((x) =>
+                        x.id === v.id ? { ...x, key: e.target.value } : x,
+                      ),
                     )
                   }
                 />
@@ -71,14 +73,18 @@ export function SettingsStep({
                 placeholder={SECRET_PATTERN.test(v.key) ? '••••••••' : 'value'}
                 onChange={(e) =>
                   setEnvVars((prev) =>
-                    prev.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)),
+                    prev.map((x) =>
+                      x.id === v.id ? { ...x, value: e.target.value } : x,
+                    ),
                   )
                 }
               />
               <Button
                 variant="ghost"
                 aria-label="Remove variable"
-                onClick={() => setEnvVars((prev) => prev.filter((_, j) => j !== i))}
+                onClick={() =>
+                  setEnvVars((prev) => prev.filter((x) => x.id !== v.id))
+                }
               >
                 ✕
               </Button>
@@ -88,14 +94,20 @@ export function SettingsStep({
         <Button
           variant="ghost"
           style={{ alignSelf: 'flex-start' }}
-          onClick={() => setEnvVars((prev) => [...prev, { key: '', value: '', custom: true }])}
+          onClick={() =>
+            setEnvVars((prev) => [
+              ...prev,
+              { id: newEnvVarId(), key: '', value: '', custom: true },
+            ])
+          }
         >
           + Add variable
         </Button>
         <div style={HINT_STYLE}>
-          Values whose name looks sensitive (password, token, key, secret, and similar) are
-          hidden here, stored in a Kubernetes Secret in your project space, and are never
-          written into the git repository. Other values are committed as plain configuration.
+          Values whose name looks sensitive (password, token, key, secret, and
+          similar) are hidden here, stored in a Kubernetes Secret in your
+          project space, and are never written into the git repository. Other
+          values are committed as plain configuration.
         </div>
       </div>
     </div>

@@ -2,7 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { FileText, Upload, X } from 'lucide-react'
 
 import { Button } from '@ds/v3-components/Button/Button'
-import { FormControl, Input, NumberInput } from '@ds/v3-components/FormField/FormField'
+import {
+  FormControl,
+  Input,
+  NumberInput,
+} from '@ds/v3-components/FormField/FormField'
 import { Select } from '@ds/v3-components/Select/Select'
 
 import { useAppStore } from '../../store/useAppStore.js'
@@ -70,7 +74,9 @@ export function VibeEditTab({
   const [exposureError, setExposureError] = useState('')
 
   // Environment variables — populated from the committed manifest on mount
-  const [envVars, setEnvVars] = useState<{ key: string; value: string }[]>([])
+  const [envVars, setEnvVars] = useState<
+    { id: string; key: string; value: string }[]
+  >([])
   const [envLoaded, setEnvLoaded] = useState(false)
   const [savingEnv, setSavingEnv] = useState(false)
   const [envError, setEnvError] = useState('')
@@ -102,7 +108,15 @@ export function VibeEditTab({
     )
       .then((r: Response) => (r.ok ? r.json() : null))
       .then((data: any) => {
-        if (data && Array.isArray(data.env)) setEnvVars(data.env)
+        if (data && Array.isArray(data.env)) {
+          setEnvVars(
+            data.env.map((e: { key: string; value: string }) => ({
+              id: crypto.randomUUID(),
+              key: e.key,
+              value: e.value,
+            })),
+          )
+        }
         setEnvLoaded(true)
       })
       .catch(() => setEnvLoaded(true))
@@ -166,7 +180,7 @@ export function VibeEditTab({
           envId,
           ns: namespace,
           envVars: envVars
-            .map((v) => ({ ...v, key: v.key.trim() }))
+            .map(({ id: _id, ...v }) => ({ ...v, key: v.key.trim() }))
             .filter((v) => v.key),
         }),
       })
@@ -186,7 +200,9 @@ export function VibeEditTab({
   const mainContainer =
     containers.find((c: any) => c.name === name) || containers[0]
   const currentImage = mainContainer?.image || '—'
-  const currentCmd = mainContainer?.command ? mainContainer.command.join(' ') : '—'
+  const currentCmd = mainContainer?.command
+    ? mainContainer.command.join(' ')
+    : '—'
 
   const sourcePath =
     d?.metadata?.annotations?.['portainer-run/vibe-source-path'] || ''
@@ -342,7 +358,10 @@ export function VibeEditTab({
           {(exposeType === 'NodePort' || exposeType === 'LoadBalancer') && (
             <FormControl label="Port">
               <div style={{ width: 120 }}>
-                <NumberInput value={svcPort} onChange={(v) => setSvcPort(Number(v))} />
+                <NumberInput
+                  value={svcPort}
+                  onChange={(v) => setSvcPort(Number(v))}
+                />
               </div>
             </FormControl>
           )}
@@ -396,9 +415,9 @@ export function VibeEditTab({
             securely and restarts the app.
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {envVars.map((v, i) => (
+            {envVars.map((v) => (
               <div
-                key={i}
+                key={v.id}
                 style={{
                   display: 'grid',
                   gridTemplateColumns: '160px 1fr auto',
@@ -413,8 +432,8 @@ export function VibeEditTab({
                   style={{ fontFamily: MONO_FONT, fontSize: 12 }}
                   onChange={(e) =>
                     setEnvVars((prev) =>
-                      prev.map((x, j) =>
-                        j === i ? { ...x, key: e.target.value } : x,
+                      prev.map((x) =>
+                        x.id === v.id ? { ...x, key: e.target.value } : x,
                       ),
                     )
                   }
@@ -422,11 +441,13 @@ export function VibeEditTab({
                 <Input
                   type={SECRET_PATTERN.test(v.key) ? 'password' : 'text'}
                   value={v.value}
-                  placeholder={SECRET_PATTERN.test(v.key) ? '••••••••' : 'value'}
+                  placeholder={
+                    SECRET_PATTERN.test(v.key) ? '••••••••' : 'value'
+                  }
                   onChange={(e) =>
                     setEnvVars((prev) =>
-                      prev.map((x, j) =>
-                        j === i ? { ...x, value: e.target.value } : x,
+                      prev.map((x) =>
+                        x.id === v.id ? { ...x, value: e.target.value } : x,
                       ),
                     )
                   }
@@ -435,7 +456,7 @@ export function VibeEditTab({
                   variant="ghost"
                   aria-label="Remove variable"
                   onClick={() =>
-                    setEnvVars((prev) => prev.filter((_, j) => j !== i))
+                    setEnvVars((prev) => prev.filter((x) => x.id !== v.id))
                   }
                 >
                   <X size={12} />
@@ -446,12 +467,18 @@ export function VibeEditTab({
           <Button
             variant="ghost"
             style={{ alignSelf: 'flex-start' }}
-            onClick={() => setEnvVars((prev) => [...prev, { key: '', value: '' }])}
+            onClick={() =>
+              setEnvVars((prev) => [
+                ...prev,
+                { id: crypto.randomUUID(), key: '', value: '' },
+              ])
+            }
           >
             + Add variable
           </Button>
           <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-            Values marked with •••• are treated as sensitive and hidden from view.
+            Values marked with •••• are treated as sensitive and hidden from
+            view.
           </div>
           {envError && <div style={ERROR_TEXT}>{envError}</div>}
           <div>
@@ -484,10 +511,14 @@ export function VibeEditTab({
                 size={18}
                 style={{ marginBottom: 8, color: 'var(--muted)' }}
               />
-              <div style={{ fontSize: 13, color: 'var(--text)', marginBottom: 10 }}>
+              <div
+                style={{ fontSize: 13, color: 'var(--text)', marginBottom: 10 }}
+              >
                 Drop a folder here, or select below
               </div>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+              <div
+                style={{ display: 'flex', gap: 8, justifyContent: 'center' }}
+              >
                 <Button
                   variant="ghost"
                   onClick={() => folderRef.current?.click()}
