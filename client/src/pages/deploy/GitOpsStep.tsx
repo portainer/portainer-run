@@ -7,9 +7,8 @@ import { Select } from '@ds/v3-components/Select/Select'
 
 import { listGitTargets, listBranches } from '../../lib/gitTargets.js'
 import { ROUTES } from '../../lib/routes.js'
+import type { GitTarget } from '../../types/gitTarget'
 import { MONO_FONT } from '../service-detail/detailUi'
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 const POLL_INTERVALS = [
   { value: '5m', label: '5 minutes' },
@@ -32,7 +31,7 @@ export interface GitOpsSelection {
  * Commit & Deploy button with correct enabled/disabled state.
  */
 export function useGitOpsSelection() {
-  const [targets, setTargets] = useState<any[]>([])
+  const [targets, setTargets] = useState<GitTarget[]>([])
   const [loadingTargets, setLoadingTargets] = useState(true)
   const [selectedTargetId, setSelectedTargetId] = useState('')
   const [branches, setBranches] = useState<string[]>([])
@@ -47,7 +46,7 @@ export function useGitOpsSelection() {
     void (async () => {
       try {
         const r = await listGitTargets()
-        const list = (r.connections || []) as any[]
+        const list = (r.connections || []) as GitTarget[]
         setTargets(list)
         if (list.length === 1) setSelectedTargetId(list[0].id)
       } catch {

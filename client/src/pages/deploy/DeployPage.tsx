@@ -40,11 +40,54 @@ import {
   type StartupPhase,
 } from './startup'
 import { FilesStep } from './FilesStep'
-import { DetailsStep } from './DetailsStep'
+import { DetailsStep, type EnvCapabilities } from './DetailsStep'
 import { SettingsStep } from './SettingsStep'
 import { StartupPanel } from './StartupPanel'
+import { errMessage } from '../../lib/errors'
+import type { Environment } from '../../types/environment'
+import type { GitTarget } from '../../types/gitTarget'
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface DeployIngress {
+  host: string
+  path: string
+  port: number
+  ingressClass: string
+}
+
+interface VibeParams {
+  runtime: string
+  runtimeImage: string
+  startCmd: string
+  workDir: string
+  envVars: { key: string; value: string }[]
+  sourceType: string
+  sourceFiles: { path: string; content: string }[]
+  gitSource: { gitTargetId: string; branch: string; path: string } | null
+}
+
+/**
+ * The fully-assembled deploy request built once the wizard's config step is
+ * confirmed. Pass-through collections (container/volume specs) are `unknown[]`
+ * because they are only forwarded to the server, never read on the client.
+ */
+interface DeployStagedParams {
+  appName: string
+  ns: string
+  envId: string
+  envName: string
+  instances: number
+  containerSpecs: unknown[]
+  containerRowIds: string[]
+  volumeDefs: unknown[]
+  exposeType: string
+  servicePorts: number[]
+  ingress: DeployIngress
+  vibeParams: VibeParams
+}
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -67,15 +110,15 @@ export function VibeDeploy() {
   const ctxRef = useRef<WizardContext | null>(null)
 
   const [noGitTargets, setNoGitTargets] = useState(false)
-  const [gitTargetsList, setGitTargetsList] = useState<any[]>([])
+  const [gitTargetsList, setGitTargetsList] = useState<GitTarget[]>([])
   // Gate the Storage step on this so the stepper settles into its final shape
   // once, instead of showing Storage on first paint (empty list) and then
   // dropping it after the fetch resolves with a single target (layout shift).
   const [gitTargetsLoaded, setGitTargetsLoaded] = useState(false)
   useEffect(() => {
     listGitTargets()
-      .then((r: any) => {
-        const list = r?.connections || []
+      .then((r) => {
+        const list = (r?.connections || []) as GitTarget[]
         setNoGitTargets(list.length === 0)
         setGitTargetsList(list)
       })
@@ -127,13 +170,7 @@ export function VibeDeploy() {
 
   // ---- Env capabilities (for expose type filtering) ----
   // null = not yet probed, true = available, false = not available
-  const [envCapabilities, setEnvCapabilities] = useState<{
-    ingressOk: boolean | null
-    lbOk: boolean | null
-    probing: boolean
-    ingressClasses: any[]
-    defaultIngressClass: string | null
-  }>({
+  const [envCapabilities, setEnvCapabilities] = useState<EnvCapabilities>({
     ingressOk: null,
     lbOk: null,
     probing: false,
@@ -142,7 +179,9 @@ export function VibeDeploy() {
   })
 
   // ---- Step 5: gitops (stagedParams) ----
-  const [stagedParams, setStagedParams] = useState<any>(null)
+  const [stagedParams, setStagedParams] = useState<DeployStagedParams | null>(
+    null,
+  )
   const [deploying, setDeploying] = useState(false)
   const gitOps = useGitOpsSelection()
 
@@ -156,7 +195,7 @@ export function VibeDeploy() {
   >(null)
   // Cancels the poll loop on unmount / navigation; sp used by "keep waiting".
   const startupCancelRef = useRef(false)
-  const startupSpRef = useRef<any>(null)
+  const startupSpRef = useRef<DeployStagedParams | null>(null)
 
   useEffect(() => {
     return () => {
@@ -178,7 +217,7 @@ export function VibeDeploy() {
     const key = `${envId}:${resolvedNs}`
     if (envPermissions[key] !== undefined) return
     checkEnvPermissions(token, envId, resolvedNs)
-      .then((p: any) => {
+      .then((p) => {
         patchEnvPermissions(envId, resolvedNs, p)
       })
       .catch(() => {
@@ -279,7 +318,7 @@ export function VibeDeploy() {
   useEffect(() => {
     if (envId) return
     const available = environments.filter(
-      (e: any) => !isEnvDisabled({ disabledEnvs }, e.Id),
+      (e: Environment) => !isEnvDisabled({ disabledEnvs }, e.Id),
     )
     if (available.length === 1) {
       setEnvId(String(available[0].Id))
@@ -306,7 +345,7 @@ export function VibeDeploy() {
       defaultIngressClass: null,
     })
     Promise.all([checkIngress(token, envId), checkLoadBalancer(token, envId)])
-      .then(([ingressResult, lbResult]: any[]) => {
+      .then(([ingressResult, lbResult]) => {
         const defaultClass =
           ingressResult.defaultClass ||
           (ingressResult.classes?.length === 1
@@ -364,7 +403,7 @@ export function VibeDeploy() {
         const data = await r.json()
         const items = data.items || []
         const adminIngresses = items.filter(
-          (item: any) =>
+          (item: { metadata?: { labels?: Record<string, string> } }) =>
             item.metadata?.labels?.['managed-by'] !== 'portainer-run',
         )
         // Prefer admin-configured ingresses as the source of truth.
@@ -408,7 +447,7 @@ export function VibeDeploy() {
     setNsList([])
     setNamespace('')
     fetchNamespaceOptions(token, envId)
-      .then((r: any) => {
+      .then((r) => {
         if (r.ok) {
           if (r.manual) {
             setManualNs(true)
@@ -597,7 +636,7 @@ export function VibeDeploy() {
       env: cleanEnvVars.map((v) => ({ name: v.key, value: v.value })),
     }
 
-    const params = {
+    const params: DeployStagedParams = {
       appName: appName
         .trim()
         .toLowerCase()
@@ -605,8 +644,8 @@ export function VibeDeploy() {
       ns: resolvedNs,
       envId,
       envName:
-        environments.find((e: any) => String(e.Id) === String(envId))?.Name ||
-        String(envId),
+        environments.find((e: Environment) => String(e.Id) === String(envId))
+          ?.Name || String(envId),
       instances,
       containerSpecs: [containerSpec],
       containerRowIds: ['vibe-0'],
@@ -677,7 +716,7 @@ export function VibeDeploy() {
 
   async function handleGitOpsConfirm(
     { gitTargetId, branch, pathPrefix, pollInterval }: GitOpsSelection,
-    _params: any = null,
+    _params: DeployStagedParams | null = null,
   ) {
     const sp = _params || stagedParams
     if (!sp) return
@@ -723,11 +762,12 @@ export function VibeDeploy() {
       schedulePostDeployRefreshes()
       setStartupPhase('starting')
       void waitForAppReady(sp)
-    } catch (e: any) {
-      setStartupErrorMsg(e?.message || 'Unknown error')
+    } catch (e) {
+      const msg = errMessage(e) || 'Unknown error'
+      setStartupErrorMsg(msg)
       setStartupFailStage('deploy')
       setStartupPhase('error')
-      pushToast('Deploy failed: ' + (e?.message || 'Unknown error'), 'err')
+      pushToast('Deploy failed: ' + msg, 'err')
     } finally {
       setDeploying(false)
     }
@@ -736,7 +776,7 @@ export function VibeDeploy() {
   // Poll Kubernetes (via Portainer) until the app's pods are ready, surfacing a
   // friendly status while it boots. Stops on ready, a blocking error, cancel, or
   // timeout.
-  async function waitForAppReady(sp: any) {
+  async function waitForAppReady(sp: DeployStagedParams) {
     const safeApp = sanitizeAppName(sp.appName)
     const deadline = Date.now() + STARTUP_TIMEOUT_MS
 
@@ -1038,7 +1078,7 @@ export function VibeDeploy() {
               return (
                 <DetailsStep
                   availableEnvs={environments.filter(
-                    (e: any) => !isEnvDisabled({ disabledEnvs }, e.Id),
+                    (e: Environment) => !isEnvDisabled({ disabledEnvs }, e.Id),
                   )}
                   appName={appName}
                   setAppName={setAppName}

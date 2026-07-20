@@ -5,14 +5,24 @@
  * properties optional to match what the API may omit.
  */
 
+export interface OwnerReference {
+  apiVersion?: string
+  kind: string
+  name: string
+  uid?: string
+  controller?: boolean
+}
+
 export interface ObjectMeta {
   name: string
   namespace: string
+  uid?: string
   creationTimestamp?: string
   resourceVersion?: string
   generation?: number
   labels?: Record<string, string>
   annotations?: Record<string, string>
+  ownerReferences?: OwnerReference[]
 }
 
 export interface EnvVarSource {
@@ -103,6 +113,31 @@ export interface Deployment {
   status?: DeploymentStatus
   _envId?: number
   _envName?: string
+}
+
+/** A Pod, covering only the fields the log/instance pickers read. */
+export interface Pod {
+  metadata: ObjectMeta
+  spec?: { containers?: Container[] }
+}
+
+/** A ReplicaSet, as read by the deployment revision-history tab. */
+export interface ReplicaSet {
+  metadata: ObjectMeta
+  spec?: { replicas?: number; template?: PodTemplateSpec }
+  status?: { readyReplicas?: number }
+}
+
+/** A container entry from the metrics.k8s.io PodMetrics resource. */
+export interface ContainerMetrics {
+  name: string
+  usage?: { cpu?: string; memory?: string }
+}
+
+/** A metrics.k8s.io PodMetrics sample for a single pod. */
+export interface PodMetrics {
+  metadata: { name: string; labels?: Record<string, string> }
+  containers?: ContainerMetrics[]
 }
 
 /** Runtime guard for values returned by loosely-typed (JS) fetch helpers. */

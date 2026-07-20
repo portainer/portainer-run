@@ -16,8 +16,7 @@ import {
   pct,
 } from '../../lib/k8sMetrics.js'
 import { MONO_FONT } from './detailUi'
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import type { Deployment, PodMetrics } from '../../types/k8s'
 
 interface Point {
   t: number
@@ -34,7 +33,7 @@ export function ServiceDetailMetricsTab({
   namespace,
   name,
 }: {
-  d: any
+  d: Deployment
   envId: string
   namespace: string
   name: string
@@ -83,8 +82,8 @@ export function ServiceDetailMetricsTab({
       const cutoff = now - 10 * 60 * 1000
       const hist = historyRef.current
 
-      const pods = (data.items || []).filter(
-        (p: any) =>
+      const pods = ((data.items || []) as PodMetrics[]).filter(
+        (p) =>
           p.metadata?.labels?.app === name ||
           (p.metadata?.name && String(p.metadata.name).startsWith(name + '-')),
       )
@@ -174,7 +173,7 @@ export function ServiceDetailMetricsTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick])
 
-  const containerOrder = containerSpecs.map((cs: any) => cs.name)
+  const containerOrder = containerSpecs.map((cs) => cs.name)
   const sortedContainers = useMemo(() => {
     const keys = Object.keys(aggregated)
     return [

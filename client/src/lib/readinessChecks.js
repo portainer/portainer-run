@@ -8,6 +8,8 @@ import { GPU_RESOURCE_KEYS } from './deployFormModel.js'
  * @property {TriBool} ok — true = pass, false = fail, null = warn / N/A
  * @property {string} label
  * @property {string} detail
+ * @property {Array<{name: string, isDefault?: boolean}>} [classes] — ingress classes (checkIngress only)
+ * @property {string|null} [defaultClass] — default ingress class name (checkIngress only)
  */
 
 /**

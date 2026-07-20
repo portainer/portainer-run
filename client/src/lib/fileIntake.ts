@@ -14,8 +14,6 @@ export interface UploadedFile {
   webkitRelativePath: string
 }
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 export async function extractZip(file: File): Promise<UploadedFile[]> {
   const arrayBuffer = await file.arrayBuffer()
   const uint8 = new Uint8Array(arrayBuffer)
@@ -45,7 +43,7 @@ export async function extractZip(file: File): Promise<UploadedFile[]> {
   })
 }
 
-function readFileEntry(entry: any): Promise<UploadedFile> {
+function readFileEntry(entry: FileSystemFileEntry): Promise<UploadedFile> {
   return new Promise((resolve) => {
     entry.file((file: File) => {
       const reader = new FileReader()
@@ -68,12 +66,14 @@ function readFileEntry(entry: any): Promise<UploadedFile> {
   })
 }
 
-function readDirEntry(dirEntry: any): Promise<any[]> {
+function readDirEntry(
+  dirEntry: FileSystemDirectoryEntry,
+): Promise<FileSystemEntry[]> {
   return new Promise((resolve) => {
     const reader = dirEntry.createReader()
-    const all: any[] = []
+    const all: FileSystemEntry[] = []
     function batch() {
-      reader.readEntries((entries: any[]) => {
+      reader.readEntries((entries: FileSystemEntry[]) => {
         if (!entries.length) {
           resolve(all)
           return
@@ -86,10 +86,10 @@ function readDirEntry(dirEntry: any): Promise<any[]> {
   })
 }
 
-async function traverseEntry(entry: any): Promise<UploadedFile[]> {
-  if (entry.isFile) return [await readFileEntry(entry)]
+async function traverseEntry(entry: FileSystemEntry): Promise<UploadedFile[]> {
+  if (entry.isFile) return [await readFileEntry(entry as FileSystemFileEntry)]
   if (entry.isDirectory) {
-    const children = await readDirEntry(entry)
+    const children = await readDirEntry(entry as FileSystemDirectoryEntry)
     const nested = await Promise.all(children.map(traverseEntry))
     return nested.flat()
   }
@@ -104,14 +104,14 @@ function readPlainFile(file: File): Promise<UploadedFile> {
         name: file.name,
         size: file.size,
         text: e.target?.result as string,
-        webkitRelativePath: (file as any).webkitRelativePath || file.name,
+        webkitRelativePath: file.webkitRelativePath || file.name,
       })
     reader.onerror = () =>
       resolve({
         name: file.name,
         size: file.size,
         text: '',
-        webkitRelativePath: (file as any).webkitRelativePath || file.name,
+        webkitRelativePath: file.webkitRelativePath || file.name,
       })
     reader.readAsText(file)
   })
@@ -141,20 +141,21 @@ export async function readDropEvent(
   const items = e.dataTransfer.items
   if (items && items.length) {
     const entries = Array.from(items)
-      .map((item: any) => item.webkitGetAsEntry?.())
-      .filter(Boolean)
+      .map((item) => item.webkitGetAsEntry?.())
+      .filter((entry): entry is FileSystemEntry => Boolean(entry))
     if (entries.length) {
       const zipEntries = entries.filter(
-        (entry: any) =>
-          entry.isFile && entry.name.toLowerCase().endsWith('.zip'),
+        (entry) => entry.isFile && entry.name.toLowerCase().endsWith('.zip'),
       )
       const otherEntries = entries.filter(
-        (entry: any) =>
-          !entry.isFile || !entry.name.toLowerCase().endsWith('.zip'),
+        (entry) => !entry.isFile || !entry.name.toLowerCase().endsWith('.zip'),
       )
       const zipFiles = await Promise.all(
         zipEntries.map(
-          (entry: any) => new Promise<File>((resolve) => entry.file(resolve)),
+          (entry) =>
+            new Promise<File>((resolve) =>
+              (entry as FileSystemFileEntry).file(resolve),
+            ),
         ),
       )
       const zipResults = await Promise.all(zipFiles.map(extractZip))

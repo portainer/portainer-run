@@ -16,8 +16,7 @@ import {
   overallEnvStatus,
   runReadinessForEnv,
 } from '../../lib/readinessChecks.js'
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import type { Environment } from '../../types/environment'
 
 const CHECK_LABELS = ['Ingress', 'Load Balancer', 'Storage', 'Nodes', 'GPU']
 
@@ -122,21 +121,17 @@ export function ReadinessPage() {
     }
     setByEnv(next)
     await Promise.all(
-      environments.map(async (env: any) => {
+      environments.map(async (env: Environment) => {
         try {
           const results = await runReadinessForEnv(token, env.Id)
-          setByEnv((prev) => ({
-            ...prev,
-            [env.Id]: { phase: 'done', results },
-          }))
+          const row: EnvRow = { phase: 'done', results }
+          setByEnv((prev) => ({ ...prev, [env.Id]: row }))
         } catch (e) {
-          setByEnv((prev) => ({
-            ...prev,
-            [env.Id]: {
-              phase: 'error',
-              err: e instanceof Error ? e.message : String(e),
-            },
-          }))
+          const row: EnvRow = {
+            phase: 'error',
+            err: e instanceof Error ? e.message : String(e),
+          }
+          setByEnv((prev) => ({ ...prev, [env.Id]: row }))
         }
       }),
     )
@@ -219,7 +214,7 @@ export function ReadinessPage() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {environments.map((env: any) => {
+          {environments.map((env: Environment) => {
             const row = byEnv?.[env.Id]
             const dis = isEnvDisabled({ disabledEnvs }, env.Id)
             let badgeState = 'checking'

@@ -17,8 +17,8 @@ import { readTriageSseStream } from '../lib/assistant/parseStream.js'
 import { gatherServiceDiagnostics } from '../lib/assistant/diagnostics.js'
 import { buildAssistantContext } from '../lib/assistant/buildContext.js'
 import { parseScaleAction } from '../lib/assistant/deployPreview.js'
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import { errMessage } from '../lib/errors'
+import type { Deployment } from '../types/k8s'
 
 const PLACEHOLDER =
   'Ask about your services, or describe what you want to deploy...'
@@ -110,7 +110,7 @@ export function AssistantPanel({
     const fromRoute =
       segs[0] === 'applications' && segs.length >= 4
         ? deps.find(
-            (d: any) =>
+            (d: Deployment) =>
               d.metadata.name === segs[3] &&
               d.metadata.namespace === segs[2] &&
               String(d._envId) === String(segs[1]),
@@ -118,7 +118,7 @@ export function AssistantPanel({
         : null
     if (isHealthQ) {
       const targetDep =
-        deps.find((d: any) =>
+        deps.find((d: Deployment) =>
           lowerText.includes(d.metadata.name.toLowerCase()),
         ) || fromRoute
       if (targetDep) {
@@ -192,7 +192,7 @@ ${deployInstructions}`
         }),
       })
       if (!response.ok) {
-        let eb: any = {}
+        let eb: { error?: string | { message?: string } } = {}
         try {
           eb = await response.json()
         } catch {
@@ -270,14 +270,13 @@ ${deployInstructions}`
         ...historyRef.current,
         { role: 'assistant', content: fullText },
       ]
-    } catch (e: any) {
+    } catch (e) {
       setRows((r) =>
         r.map((row) =>
           row.id === assistantId
             ? {
                 ...row,
-                text:
-                  'Sorry, I ran into an error: ' + (e?.message || 'Unknown'),
+                text: 'Sorry, I ran into an error: ' + errMessage(e),
               }
             : row,
         ),

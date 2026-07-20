@@ -3,15 +3,14 @@ import { useMemo } from 'react'
 import { Alert } from '@ds/v3-components/Alert/Alert'
 
 import { useAppStore } from '../../store/useAppStore.js'
+import type { Deployment } from '../../types/k8s'
 import { VibeEditTab } from './VibeEditTab'
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 /**
  * Read GitOps annotations from a Deployment object.
  * Returns null if this deployment was not created via GitOps.
  */
-function readGitOpsAnnotations(deployment: any) {
+function readGitOpsAnnotations(deployment: Deployment) {
   const ann = deployment?.metadata?.annotations || {}
   const gitTargetId = ann['portainer-run/git-target-id']
   const gitBranch = ann['portainer-run/git-branch']
@@ -37,7 +36,7 @@ export function ServiceDetailEditTab({
   name,
   onSaved,
 }: {
-  d: any
+  d: Deployment
   envId: string
   namespace: string
   name: string

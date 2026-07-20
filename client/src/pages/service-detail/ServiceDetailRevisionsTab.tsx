@@ -8,9 +8,9 @@ import { kubeFetch } from '../../lib/api.js'
 import { inflightDedupe } from '../../lib/inflightDedupe.js'
 import { useAppStore } from '../../store/useAppStore.js'
 import { age } from '../../lib/utils.js'
+import { errMessage } from '../../lib/errors'
+import type { OwnerReference, ReplicaSet } from '../../types/k8s'
 import { MONO_FONT } from './detailUi'
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 export function ServiceDetailRevisionsTab({
   envId,
@@ -25,7 +25,7 @@ export function ServiceDetailRevisionsTab({
 }) {
   const token = useAppStore((s) => s.token)
   const pushToast = useAppStore((s) => s.pushToast)
-  const [rows, setRows] = useState<any[] | null>(null)
+  const [rows, setRows] = useState<ReplicaSet[] | null>(null)
   const [err, setErr] = useState('')
   const [rolling, setRolling] = useState<string | null>(null)
 
@@ -43,13 +43,13 @@ export function ServiceDetailRevisionsTab({
         )
         if (!r.ok) throw new Error('HTTP ' + r.status)
         const data = await r.json()
-        return (data.items || [])
-          .filter((rs: any) =>
+        return ((data.items || []) as ReplicaSet[])
+          .filter((rs) =>
             rs.metadata.ownerReferences?.some(
-              (o: any) => o.kind === 'Deployment' && o.name === name,
+              (o: OwnerReference) => o.kind === 'Deployment' && o.name === name,
             ),
           )
-          .sort((a: any, b: any) => {
+          .sort((a, b) => {
             const ra = parseInt(
               a.metadata.annotations?.['deployment.kubernetes.io/revision'] ||
                 '0',
@@ -73,8 +73,8 @@ export function ServiceDetailRevisionsTab({
     try {
       const items = await fetchReplicaSetHistory()
       setRows(items)
-    } catch (e: any) {
-      setErr(e?.message || 'Failed to load revision history')
+    } catch (e) {
+      setErr(errMessage(e) || 'Failed to load revision history')
       setRows([])
     }
   }, [token, envId, namespace, name, fetchReplicaSetHistory])
@@ -92,7 +92,7 @@ export function ServiceDetailRevisionsTab({
         // Match `kubectl rollout undo`: set deployment spec.template to the target ReplicaSet's.
         const history = await fetchReplicaSetHistory()
         const targetRs = history.find(
-          (rs: any) =>
+          (rs: ReplicaSet) =>
             String(
               rs.metadata.annotations?.['deployment.kubernetes.io/revision'] ||
                 '',
@@ -135,8 +135,8 @@ export function ServiceDetailRevisionsTab({
         pushToast(`Rollback to revision ${rev} initiated`, 'ok')
         if (onAfterRollback) await onAfterRollback()
         setTimeout(() => void load(), 1500)
-      } catch (e: any) {
-        pushToast('Rollback failed: ' + (e?.message || String(e)), 'err')
+      } catch (e) {
+        pushToast('Rollback failed: ' + errMessage(e), 'err')
       } finally {
         setRolling(null)
       }

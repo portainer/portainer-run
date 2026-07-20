@@ -14,9 +14,9 @@ import { getAssistantModel } from '../../lib/assistant/aiModel.js'
 import { AssistantMarkdown } from '../../components/AssistantMarkdown.jsx'
 import { readTriageSseStream } from '../../lib/assistant/parseStream.js'
 import { gatherServiceDiagnostics } from '../../lib/assistant/diagnostics.js'
+import { errMessage, isAbortError } from '../../lib/errors'
+import type { Pod } from '../../types/k8s'
 import { MONO_FONT } from './detailUi'
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 interface LogLine {
   text: string
@@ -159,15 +159,15 @@ export function ServiceDetailLogsTab({
           setLoadErr('No instances found for this app label.')
           return
         }
-        const list = items.map((p: any) => ({
+        const list = (items as Pod[]).map((p) => ({
           name: p.metadata.name,
-          containers: (p.spec?.containers || []).map((c: any) => c.name),
+          containers: (p.spec?.containers || []).map((c) => c.name),
         }))
         setPods(list)
         setPod(list[0].name)
         setContainer(list[0].containers[0] || '')
-      } catch (e: any) {
-        if (!cancelled) setLoadErr(e?.message || 'Failed to list pods')
+      } catch (e) {
+        if (!cancelled) setLoadErr(errMessage(e) || 'Failed to list pods')
       }
     })()
 
@@ -233,7 +233,7 @@ Analyse this data and follow the instructions in your system prompt.`
         }),
       })
       if (!response.ok) {
-        let eb: any = {}
+        let eb: { error?: string | { message?: string } } = {}
         try {
           eb = await response.json()
         } catch {
@@ -292,8 +292,8 @@ Analyse this data and follow the instructions in your system prompt.`
         .filter(Boolean)
         .map((t: string) => ({ text: t, cls: lineClass(t) }))
       setLogLines(arr)
-    } catch (e: any) {
-      setOutputErr(e?.message || 'Failed')
+    } catch (e) {
+      setOutputErr(errMessage(e) || 'Failed')
     } finally {
       setBusy('')
     }
@@ -341,9 +341,9 @@ Analyse this data and follow the instructions in your system prompt.`
         }
         renderVisible(logLinesRef.current)
       }
-    } catch (e: any) {
-      if (e?.name !== 'AbortError') {
-        setOutputErr('Stream ended: ' + (e?.message || String(e)))
+    } catch (e) {
+      if (!isAbortError(e)) {
+        setOutputErr('Stream ended: ' + errMessage(e))
       }
     } finally {
       stopStream()

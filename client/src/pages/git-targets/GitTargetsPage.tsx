@@ -19,20 +19,20 @@ import {
   getGitTarget,
 } from '../../lib/gitTargets.js'
 import { useAppStore } from '../../store/useAppStore.js'
+import { errMessage } from '../../lib/errors'
+import type { GitTarget } from '../../types/gitTarget'
 import { MONO_FONT } from '../service-detail/detailUi'
 import { GitTargetForm } from './GitTargetForm'
 import { EmptyRepoWarning } from './EmptyRepoWarning'
 import { TestResultAlert, type GitTestResult } from './TestResultAlert'
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 export function GitTargetsPage() {
   const isAdmin = useAppStore((s) => s.isAdmin)
   const pushToast = useAppStore((s) => s.pushToast)
-  const [connections, setConnections] = useState<any[]>([])
+  const [connections, setConnections] = useState<GitTarget[]>([])
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
-  const [editing, setEditing] = useState<any | null>(null)
+  const [editing, setEditing] = useState<GitTarget | null>(null)
   const [testResults, setTestResults] = useState<Record<string, GitTestResult>>(
     {},
   )
@@ -51,7 +51,7 @@ export function GitTargetsPage() {
     setLoading(true)
     try {
       const r = await listGitTargets()
-      setConnections((r.connections || []) as any[])
+      setConnections((r.connections || []) as GitTarget[])
     } catch {
       /* silent */
     } finally {
@@ -65,11 +65,11 @@ export function GitTargetsPage() {
     void load()
   }
 
-  async function handleEdit(conn: any) {
+  async function handleEdit(conn: GitTarget) {
     // Fetch full payload (list endpoint strips token for security — edit needs it)
     try {
       const r = await getGitTarget(conn.id)
-      setEditing(r.connection)
+      setEditing(r.connection as GitTarget)
     } catch {
       // Fall back to list payload — user will re-enter token
       setEditing(conn)
@@ -83,8 +83,8 @@ export function GitTargetsPage() {
       await deleteGitTarget(pendingDelete.id)
       setPendingDelete(null)
       void load()
-    } catch (e: any) {
-      pushToast('Delete failed: ' + (e?.message || String(e)), 'err')
+    } catch (e) {
+      pushToast('Delete failed: ' + errMessage(e), 'err')
     } finally {
       setDeleting(false)
     }
@@ -103,10 +103,10 @@ export function GitTargetsPage() {
           details: r.details || [],
         },
       }))
-    } catch (e: any) {
+    } catch (e) {
       setTestResults((t) => ({
         ...t,
-        [id]: { ok: false, message: e.message || 'Test failed' },
+        [id]: { ok: false, message: errMessage(e) || 'Test failed' },
       }))
     } finally {
       setTesting((t) => ({ ...t, [id]: false }))

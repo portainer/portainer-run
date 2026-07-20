@@ -13,6 +13,8 @@ import { useAppStore } from '../../store/useAppStore.js'
 import { serverFetch } from '../../lib/api.js'
 import { restartDeployment } from '../../lib/restartDeployment.js'
 import { refreshCache } from '../../services/refreshDeployments.js'
+import { errMessage } from '../../lib/errors'
+import type { Deployment } from '../../types/k8s'
 import {
   readDropEvent,
   readFileList,
@@ -20,8 +22,6 @@ import {
   type UploadedFile,
 } from '../../lib/fileIntake'
 import { MONO_FONT, SECRET_PATTERN, Section } from './detailUi'
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 const ERROR_TEXT: React.CSSProperties = {
   color: 'var(--status-danger, #f04438)',
@@ -43,7 +43,7 @@ export function VibeEditTab({
   gitOpsInfo,
   onSaved,
 }: {
-  d: any
+  d: Deployment
   envId: string
   namespace: string
   name: string
@@ -89,14 +89,24 @@ export function VibeEditTab({
       `/api/vibe/manifest-exposure?gitTargetId=${gitOpsInfo.gitTargetId}&branch=${encodeURIComponent(gitOpsInfo.gitBranch)}&gitPath=${encodeURIComponent(gitPath)}`,
     )
       .then((r: Response) => (r.ok ? r.json() : null))
-      .then((data: any) => {
-        if (!data) return
-        if (data.exposeType) setExposeType(data.exposeType)
-        if (data.port) setSvcPort(data.port)
-        if (data.ingHost) setIngHost(data.ingHost)
-        if (data.ingPath) setIngPath(data.ingPath)
-        if (data.ingClass) setIngClass(data.ingClass)
-      })
+      .then(
+        (
+          data: {
+            exposeType?: string
+            port?: number
+            ingHost?: string
+            ingPath?: string
+            ingClass?: string
+          } | null,
+        ) => {
+          if (!data) return
+          if (data.exposeType) setExposeType(data.exposeType)
+          if (data.port) setSvcPort(data.port)
+          if (data.ingHost) setIngHost(data.ingHost)
+          if (data.ingPath) setIngPath(data.ingPath)
+          if (data.ingClass) setIngClass(data.ingClass)
+        },
+      )
       .catch(() => {})
   }, [gitOpsInfo?.gitTargetId, gitOpsInfo?.gitBranch, gitPath])
 
@@ -107,7 +117,7 @@ export function VibeEditTab({
       `/api/vibe/manifest-env?gitTargetId=${gitOpsInfo.gitTargetId}&branch=${encodeURIComponent(gitOpsInfo.gitBranch)}&gitPath=${encodeURIComponent(gitPath)}`,
     )
       .then((r: Response) => (r.ok ? r.json() : null))
-      .then((data: any) => {
+      .then((data: { env?: { key: string; value: string }[] } | null) => {
         if (data && Array.isArray(data.env)) {
           setEnvVars(
             data.env.map((e: { key: string; value: string }) => ({
@@ -155,8 +165,8 @@ export function VibeEditTab({
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
       pushToast('Exposure updated — Portainer will reconcile shortly', 'ok')
       setExposureError('')
-    } catch (e: any) {
-      setExposureError(e?.message || 'Update failed')
+    } catch (e) {
+      setExposureError(errMessage(e) || 'Update failed')
     } finally {
       setSavingExposure(false)
     }
@@ -188,8 +198,8 @@ export function VibeEditTab({
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
       pushToast('Settings updated — Portainer will reconcile shortly', 'ok')
       setEnvError('')
-    } catch (e: any) {
-      setEnvError(e?.message || 'Update failed')
+    } catch (e) {
+      setEnvError(errMessage(e) || 'Update failed')
     } finally {
       setSavingEnv(false)
     }
@@ -197,8 +207,7 @@ export function VibeEditTab({
 
   // Read current runtime from live deployment
   const containers = d?.spec?.template?.spec?.containers || []
-  const mainContainer =
-    containers.find((c: any) => c.name === name) || containers[0]
+  const mainContainer = containers.find((c) => c.name === name) || containers[0]
   const currentImage = mainContainer?.image || '—'
   const currentCmd = mainContainer?.command
     ? mainContainer.command.join(' ')
@@ -275,8 +284,8 @@ export function VibeEditTab({
       setFiles([])
       await refreshCache(false)
       onSaved?.()
-    } catch (e: any) {
-      setError(e?.message || 'Update failed')
+    } catch (e) {
+      setError(errMessage(e) || 'Update failed')
     } finally {
       setDeploying(false)
     }

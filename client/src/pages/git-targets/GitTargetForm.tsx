@@ -13,14 +13,14 @@ import {
   testGitTargetPayload,
 } from '../../lib/gitTargets.js'
 import { useAppStore } from '../../store/useAppStore.js'
+import { errMessage } from '../../lib/errors'
+import type { GitTarget, GitTargetPayload } from '../../types/gitTarget'
 import { MONO_FONT } from '../service-detail/detailUi'
 import { TestResultAlert, type GitTestResult } from './TestResultAlert'
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 const PROVIDERS = ['github', 'gitlab', 'gitea', 'other']
 
-function defaultPayload() {
+function defaultPayload(): GitTargetPayload {
   return {
     provider: 'github',
     authType: 'pat',
@@ -39,11 +39,12 @@ function defaultPayload() {
 // identifier or URL where surrounding whitespace is always a mistake.
 const UNTRIMMED_FIELDS = new Set(['sshKey', 'sshPassphrase'])
 
-function trimmedPayload(p: any) {
-  const out: any = { ...p }
+function trimmedPayload(p: GitTargetPayload): GitTargetPayload {
+  const out: GitTargetPayload = { ...p }
   for (const key of Object.keys(out)) {
-    if (typeof out[key] === 'string' && !UNTRIMMED_FIELDS.has(key)) {
-      out[key] = out[key].trim()
+    const val = out[key]
+    if (typeof val === 'string' && !UNTRIMMED_FIELDS.has(key)) {
+      out[key] = val.trim()
     }
   }
   return out
@@ -58,13 +59,13 @@ export function GitTargetForm({
   onCancel,
 }: {
   /** null for create */
-  initial: any | null
-  onSaved: (conn: any) => void
+  initial: GitTarget | null
+  onSaved: (conn: GitTarget) => void
   onCancel: () => void
 }) {
   const isAdmin = useAppStore((s) => s.isAdmin)
   const [name, setName] = useState(initial?.name || '')
-  const [payload, setPayload] = useState<any>(
+  const [payload, setPayload] = useState<GitTargetPayload>(
     initial?.payload || defaultPayload(),
   )
   const [shared, setShared] = useState(initial?.shared || false)
@@ -74,11 +75,11 @@ export function GitTargetForm({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  function set(key: string, value: any) {
+  function set(key: string, value: string | boolean) {
     // Clearing the custom server URL falls back to the public host — a stale
     // skip-verify flag would otherwise silently disable TLS verification there too.
     const extra = key === 'url' && !value ? { tlsSkipVerify: false } : {}
-    setPayload((p: any) => ({ ...p, [key]: value, ...extra }))
+    setPayload((p) => ({ ...p, [key]: value, ...extra }))
     setTestResult(null)
   }
 
@@ -96,8 +97,8 @@ export function GitTargetForm({
         details: r.details || [],
         isEmpty: r.isEmpty,
       })
-    } catch (e: any) {
-      setTestResult({ ok: false, message: e.message || 'Test failed' })
+    } catch (e) {
+      setTestResult({ ok: false, message: errMessage(e) || 'Test failed' })
     } finally {
       setTesting(false)
     }
@@ -124,7 +125,7 @@ export function GitTargetForm({
       const trimmed = trimmedPayload(payload)
       setPayload(trimmed)
       // The JSDoc types in gitTargets.js omit `shared`, but the API accepts it.
-      const body = { name: name.trim(), payload: trimmed, shared } as any
+      const body = { name: name.trim(), payload: trimmed, shared }
       let result
       if (initial?.id) {
         result = await updateGitTarget(initial.id, body)
@@ -133,8 +134,8 @@ export function GitTargetForm({
       }
       setSavedId(result?.connection?.id || initial?.id)
       onSaved(result.connection)
-    } catch (e: any) {
-      setError(e.message || 'Save failed')
+    } catch (e) {
+      setError(errMessage(e) || 'Save failed')
     } finally {
       setSaving(false)
     }

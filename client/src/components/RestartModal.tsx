@@ -11,9 +11,8 @@ import {
 import { useAppStore } from '../store/useAppStore.js'
 import { restartDeployment } from '../lib/restartDeployment.js'
 import { refreshCache } from '../services/refreshDeployments.js'
+import { errMessage } from '../lib/errors'
 import { MONO_FONT } from '../pages/service-detail/detailUi'
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 export function RestartModal() {
   const restartTarget = useAppStore((s) => s.restartTarget)
@@ -36,8 +35,8 @@ export function RestartModal() {
       )
       setRestartTarget(null)
       void refreshCache(false)
-    } catch (err: any) {
-      pushToast('Restart failed: ' + (err?.message || String(err)), 'err')
+    } catch (err) {
+      pushToast('Restart failed: ' + errMessage(err), 'err')
     } finally {
       setRestarting(false)
     }
