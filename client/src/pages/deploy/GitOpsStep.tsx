@@ -74,7 +74,9 @@ export function useGitOpsSelection() {
         setBranches(list)
         const target = targets.find((t) => t.id === selectedTargetId)
         const defaultBranch = target?.payload?.defaultBranch || 'main'
-        setBranch(list.find((b: string) => b === defaultBranch) || list[0] || '')
+        setBranch(
+          list.find((b: string) => b === defaultBranch) || list[0] || '',
+        )
       } catch {
         /* silent */
       } finally {
@@ -97,7 +99,12 @@ export function useGitOpsSelection() {
       return null
     }
     setError('')
-    return { gitTargetId: selectedTargetId, branch: resolvedBranch, pathPrefix, pollInterval }
+    return {
+      gitTargetId: selectedTargetId,
+      branch: resolvedBranch,
+      pathPrefix,
+      pollInterval,
+    }
   }
 
   return {
@@ -142,7 +149,9 @@ export function GitOpsStepFields({
   sectionTitle?: string
 }) {
   const s = state
-  const resolvedPath = [s.pathPrefix, ns, `${appName}.yaml`].filter(Boolean).join('/')
+  const resolvedPath = [s.pathPrefix, ns, `${appName}.yaml`]
+    .filter(Boolean)
+    .join('/')
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -163,9 +172,13 @@ export function GitOpsStepFields({
           lineHeight: 1.8,
         }}
       >
-        <span style={{ color: 'var(--text)' }}>Manifest will be committed to: </span>
+        <span style={{ color: 'var(--text)' }}>
+          Manifest will be committed to:{' '}
+        </span>
         {s.selectedTargetId ? (
-          <span style={{ color: 'var(--accent, #2e90fa)' }}>{resolvedPath}</span>
+          <span style={{ color: 'var(--accent, #2e90fa)' }}>
+            {resolvedPath}
+          </span>
         ) : (
           <span>select a target to preview path</span>
         )}
@@ -188,7 +201,10 @@ export function GitOpsStepFields({
               }}
             >
               No git targets configured.{' '}
-              <Link to={ROUTES.gitTargets} style={{ color: 'var(--accent, #2e90fa)' }}>
+              <Link
+                to={ROUTES.gitTargets}
+                style={{ color: 'var(--accent, #2e90fa)' }}
+              >
                 Add one in Git Targets
               </Link>{' '}
               before deploying.
@@ -212,7 +228,10 @@ export function GitOpsStepFields({
         </FormControl>
         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
           Manage targets in{' '}
-          <Link to={ROUTES.gitTargets} style={{ color: 'var(--accent, #2e90fa)' }}>
+          <Link
+            to={ROUTES.gitTargets}
+            style={{ color: 'var(--accent, #2e90fa)' }}
+          >
             Git Targets
           </Link>
           .
@@ -280,7 +299,10 @@ export function GitOpsStepFields({
           </div>
 
           <div style={{ flex: 1 }}>
-            <FormControl label="GitOps poll interval" hint="How often Portainer polls git for changes.">
+            <FormControl
+              label="GitOps poll interval"
+              hint="How often Portainer polls git for changes."
+            >
               <Select
                 value={s.pollInterval}
                 onChange={(e) => s.setPollInterval(e.target.value)}
@@ -292,7 +314,9 @@ export function GitOpsStepFields({
       )}
 
       {s.error && (
-        <div style={{ color: 'var(--status-danger, #f04438)', fontSize: 13 }}>{s.error}</div>
+        <div style={{ color: 'var(--status-danger, #f04438)', fontSize: 13 }}>
+          {s.error}
+        </div>
       )}
     </div>
   )

@@ -13,7 +13,11 @@ function textFromSseDataLine(line) {
   } catch {
     return ''
   }
-  if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta' && evt.delta.text) {
+  if (
+    evt.type === 'content_block_delta' &&
+    evt.delta?.type === 'text_delta' &&
+    evt.delta.text
+  ) {
     return evt.delta.text
   }
   return ''

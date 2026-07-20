@@ -10,10 +10,18 @@ import {
   deleteDirectory,
   deletePaths,
 } from '../proxy/git.js'
-import { buildManifests, serializeManifests, buildManifestPath } from '../lib/manifestSerialize.js'
+import {
+  buildManifests,
+  serializeManifests,
+  buildManifestPath,
+} from '../lib/manifestSerialize.js'
 import yaml from 'js-yaml'
 import { resolvePortainerTarget } from '../resolve-portainer.js'
-import { resolveCallerIdentity, extractToken, portainerAuthHeaders } from '../lib/identity.js'
+import {
+  resolveCallerIdentity,
+  extractToken,
+  portainerAuthHeaders,
+} from '../lib/identity.js'
 import https from 'node:https'
 import http from 'node:http'
 
@@ -104,7 +112,11 @@ function json(res, status, body) {
 
 function parseJson(buf) {
   if (!buf) return null
-  try { return JSON.parse(buf.toString('utf8')) } catch { return null }
+  try {
+    return JSON.parse(buf.toString('utf8'))
+  } catch {
+    return null
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -127,7 +139,10 @@ function getRuntimeEnv(runtime, workDir) {
     case 'python':
       return [
         { name: 'PYTHONPATH', value: `${workDir}/.pydeps` },
-        { name: 'PATH', value: `${workDir}/.pydeps/bin:/usr/local/bin:/usr/bin:/bin` },
+        {
+          name: 'PATH',
+          value: `${workDir}/.pydeps/bin:/usr/local/bin:/usr/bin:/bin`,
+        },
       ]
     case 'ruby':
       return [
@@ -135,7 +150,10 @@ function getRuntimeEnv(runtime, workDir) {
         { name: 'BUNDLE_GEMFILE', value: `${workDir}/Gemfile` },
         { name: 'GEM_HOME', value: `${workDir}/.bundle` },
         { name: 'GEM_PATH', value: `${workDir}/.bundle` },
-        { name: 'PATH', value: `${workDir}/.bundle/bin:/usr/local/bundle/bin:/usr/local/bin:/usr/bin:/bin` },
+        {
+          name: 'PATH',
+          value: `${workDir}/.bundle/bin:/usr/local/bundle/bin:/usr/local/bin:/usr/bin:/bin`,
+        },
       ]
     default:
       return []
@@ -340,11 +358,13 @@ function buildVibeManifests({
   // For git source deployments, there are no source files in the manifests repo
   // to clean up on delete — so the source path annotation is omitted.
   const annotations = {
-    'portainer-run/deploy-type':      'vibe',
-    'portainer-run/git-target-id':    gitopsAnnotations.gitTargetId,
-    'portainer-run/git-branch':       gitopsAnnotations.gitBranch,
-    'portainer-run/git-path':         gitopsAnnotations.gitPath,
-    ...(gitSourcePath ? { 'portainer-run/vibe-source-path': gitSourcePath } : {}),
+    'portainer-run/deploy-type': 'vibe',
+    'portainer-run/git-target-id': gitopsAnnotations.gitTargetId,
+    'portainer-run/git-branch': gitopsAnnotations.gitBranch,
+    'portainer-run/git-path': gitopsAnnotations.gitPath,
+    ...(gitSourcePath
+      ? { 'portainer-run/vibe-source-path': gitSourcePath }
+      : {}),
   }
 
   // PVC
@@ -361,7 +381,8 @@ function buildVibeManifests({
   // Split env into plaintext (safe to commit) and sensitive (stored in a Secret).
   // Sensitive values are referenced via secretKeyRef so they never appear in the
   // committed manifest. See issue #38.
-  const { plain: plainEnv, sensitive: sensitiveEnv } = splitSensitiveEnv(envVars)
+  const { plain: plainEnv, sensitive: sensitiveEnv } =
+    splitSensitiveEnv(envVars)
   const hasSecrets = sensitiveEnv.length > 0
   const secretForApp = appSecretName(safeApp)
 
@@ -397,7 +418,8 @@ function buildVibeManifests({
     ? `https://${gitRepoUrl.replace(/^https?:\/\//, '')}`
     : gitRepoUrl
   const cloneCmd = [
-    'sh', '-c',
+    'sh',
+    '-c',
     [
       'git config --global http.sslVerify false',
       gitToken
@@ -420,8 +442,14 @@ function buildVibeManifests({
   }
   if (gitToken) {
     vibeSync.env = [
-      { name: 'GIT_USERNAME', valueFrom: { secretKeyRef: { name: secretName, key: 'username' } } },
-      { name: 'GIT_TOKEN',    valueFrom: { secretKeyRef: { name: secretName, key: 'token' } } },
+      {
+        name: 'GIT_USERNAME',
+        valueFrom: { secretKeyRef: { name: secretName, key: 'username' } },
+      },
+      {
+        name: 'GIT_TOKEN',
+        valueFrom: { secretKeyRef: { name: secretName, key: 'token' } },
+      },
     ]
   }
   initContainers.push(vibeSync)
@@ -451,7 +479,11 @@ function buildVibeManifests({
     initContainers.push({
       name: 'vibe-env',
       image: 'busybox:1.36',
-      command: ['sh', '-c', `printf '%s' '${escapedContent}' > ${workDirSafe}/.env`],
+      command: [
+        'sh',
+        '-c',
+        `printf '%s' '${escapedContent}' > ${workDirSafe}/.env`,
+      ],
       resources: INIT_ENV_RESOURCES,
       volumeMounts: [{ name: 'app-data', mountPath: workDirSafe }],
     })
@@ -496,7 +528,12 @@ function buildVibeManifests({
           automountServiceAccountToken: false,
           initContainers,
           containers: [mainContainer],
-          volumes: [{ name: 'app-data', persistentVolumeClaim: { claimName: `${safeApp}-data` } }],
+          volumes: [
+            {
+              name: 'app-data',
+              persistentVolumeClaim: { claimName: `${safeApp}-data` },
+            },
+          ],
         },
       },
     },
@@ -509,9 +546,12 @@ function buildVibeManifests({
 
   // Service
   if (exposeType !== 'none') {
-    const svcType = exposeType === 'LoadBalancer' ? 'LoadBalancer'
-      : exposeType === 'NodePort' ? 'NodePort'
-      : 'ClusterIP'
+    const svcType =
+      exposeType === 'LoadBalancer'
+        ? 'LoadBalancer'
+        : exposeType === 'NodePort'
+          ? 'NodePort'
+          : 'ClusterIP'
     const svc = {
       apiVersion: 'v1',
       kind: 'Service',
@@ -530,25 +570,38 @@ function buildVibeManifests({
         apiVersion: 'networking.k8s.io/v1',
         kind: 'Ingress',
         metadata: {
-          name: safeApp, namespace: ns, labels,
+          name: safeApp,
+          namespace: ns,
+          labels,
           annotations: ingress.ingressClass
-            ? { ...annotations, 'kubernetes.io/ingress.class': ingress.ingressClass }
+            ? {
+                ...annotations,
+                'kubernetes.io/ingress.class': ingress.ingressClass,
+              }
             : annotations,
         },
         spec: {
           // Set spec.ingressClassName (the canonical field; the matching
           // annotation above is kept for legacy controllers).
-          ...(ingress.ingressClass ? { ingressClassName: ingress.ingressClass } : {}),
-          rules: [{
-            host: ingress.host,
-            http: {
-              paths: [{
-                path: ingress.path || '/',
-                pathType: 'Prefix',
-                backend: { service: { name: safeApp, port: { number: port } } },
-              }],
+          ...(ingress.ingressClass
+            ? { ingressClassName: ingress.ingressClass }
+            : {}),
+          rules: [
+            {
+              host: ingress.host,
+              http: {
+                paths: [
+                  {
+                    path: ingress.path || '/',
+                    pathType: 'Prefix',
+                    backend: {
+                      service: { name: safeApp, port: { number: port } },
+                    },
+                  },
+                ],
+              },
             },
-          }],
+          ],
         },
       }
       manifests.push(ing)
@@ -567,27 +620,49 @@ async function handleVibeDeploy(req, res) {
   const data = parseJson(body)
   if (!data) return json(res, 400, { error: 'Invalid request body' })
 
-  const { gitTargetId, branch, pathPrefix, pollInterval, envId, envName, deployParams, vibeParams } = data
+  const {
+    gitTargetId,
+    branch,
+    pathPrefix,
+    pollInterval,
+    envId,
+    envName,
+    deployParams,
+    vibeParams,
+  } = data
 
   if (!gitTargetId || !branch || !envId || !deployParams || !vibeParams) {
-    return json(res, 400, { error: 'gitTargetId, branch, envId, deployParams, and vibeParams are required' })
+    return json(res, 400, {
+      error:
+        'gitTargetId, branch, envId, deployParams, and vibeParams are required',
+    })
   }
 
-  const { appName, ns, instances, exposeType, servicePorts, ingress } = deployParams
+  const { appName, ns, instances, exposeType, servicePorts, ingress } =
+    deployParams
 
   if (!appName || !ns) {
-    return json(res, 400, { error: 'deployParams.appName and deployParams.ns are required' })
+    return json(res, 400, {
+      error: 'deployParams.appName and deployParams.ns are required',
+    })
   }
 
   const { sourceFiles, sourceType, gitSource } = vibeParams
   const isGitSource = sourceType === 'git' && gitSource?.gitTargetId
 
   // Validate source
-  if (!isGitSource && (!Array.isArray(sourceFiles) || sourceFiles.length === 0)) {
-    return json(res, 400, { error: 'vibeParams.sourceFiles must be a non-empty array' })
+  if (
+    !isGitSource &&
+    (!Array.isArray(sourceFiles) || sourceFiles.length === 0)
+  ) {
+    return json(res, 400, {
+      error: 'vibeParams.sourceFiles must be a non-empty array',
+    })
   }
   if (isGitSource && (!gitSource.gitTargetId || !gitSource.branch)) {
-    return json(res, 400, { error: 'gitSource.gitTargetId and gitSource.branch are required' })
+    return json(res, 400, {
+      error: 'gitSource.gitTargetId and gitSource.branch are required',
+    })
   }
 
   const conn = getConnectionById(gitTargetId)
@@ -602,19 +677,31 @@ async function handleVibeDeploy(req, res) {
   }
 
   // For git source, load the source connection and verify access separately
-  const sourceConn = isGitSource ? getConnectionById(gitSource.gitTargetId) : conn
-  if (!sourceConn) return json(res, 404, { error: 'Source git target not found' })
-  if (isGitSource && !callerIsAdmin && sourceConn.owner_id !== callerId && !sourceConn.shared) {
-    return json(res, 403, { error: 'Forbidden — source git target not accessible' })
+  const sourceConn = isGitSource
+    ? getConnectionById(gitSource.gitTargetId)
+    : conn
+  if (!sourceConn)
+    return json(res, 404, { error: 'Source git target not found' })
+  if (
+    isGitSource &&
+    !callerIsAdmin &&
+    sourceConn.owner_id !== callerId &&
+    !sourceConn.shared
+  ) {
+    return json(res, 403, {
+      error: 'Forbidden — source git target not accessible',
+    })
   }
 
   const safeApp = sanitizeStackName(appName)
-  const safePrefix = sanitizeGitPath(pathPrefix || conn.payload.pathPrefix || '')
+  const safePrefix = sanitizeGitPath(
+    pathPrefix || conn.payload.pathPrefix || '',
+  )
   const safeEnvName = sanitizeGitPath(
     (envName || String(envId))
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
+      .replace(/^-+|-+$/g, ''),
   )
   const gitToken = conn.payload.token || ''
   const gitUsername = conn.payload.username || ''
@@ -624,8 +711,12 @@ async function handleVibeDeploy(req, res) {
 
   // Paths: <prefix>/<envName>/<ns>/<appName>.yaml and <prefix>/<envName>/<ns>/<appName>/src/
   const envPrefix = [safePrefix, safeEnvName].filter(Boolean).join('/')
-  const sourcePath = sanitizeGitPath([envPrefix, ns, safeApp, 'src'].filter(Boolean).join('/'))
-  const manifestPath = sanitizeGitPath(buildManifestPath({ pathPrefix: envPrefix, ns, appName: safeApp }))
+  const sourcePath = sanitizeGitPath(
+    [envPrefix, ns, safeApp, 'src'].filter(Boolean).join('/'),
+  )
+  const manifestPath = sanitizeGitPath(
+    buildManifestPath({ pathPrefix: envPrefix, ns, appName: safeApp }),
+  )
 
   try {
     // 1. Ensure branch exists
@@ -634,7 +725,11 @@ async function handleVibeDeploy(req, res) {
     const repoUrl = isGitSource
       ? buildRepoHttpsUrl(sourceConn.payload)
       : buildRepoHttpsUrl(conn.payload)
-    const gitopsAnnotations = { gitTargetId, gitBranch: branch, gitPath: manifestPath }
+    const gitopsAnnotations = {
+      gitTargetId,
+      gitBranch: branch,
+      gitPath: manifestPath,
+    }
 
     // 2. Prepare source file commits (upload mode only).
     //    Git source mode: files stay in their own repo — no commit needed here.
@@ -657,13 +752,17 @@ async function handleVibeDeploy(req, res) {
 
       // For nginx, rename single non-index HTML file to index.html
       if (runtime === 'nginx') {
-        const hasIndex = sourceCommits.some((f) => f.path.endsWith('/index.html'))
+        const hasIndex = sourceCommits.some((f) =>
+          f.path.endsWith('/index.html'),
+        )
         if (!hasIndex) {
-          const htmlFiles = sourceCommits.filter((f) => f.path.match(/\.html?$/i))
+          const htmlFiles = sourceCommits.filter((f) =>
+            f.path.match(/\.html?$/i),
+          )
           if (htmlFiles.length === 1) {
             const dir = htmlFiles[0].path.replace(/\/[^/]+$/, '')
             sourceCommits = sourceCommits.map((f) =>
-              f === htmlFiles[0] ? { ...f, path: `${dir}/index.html` } : f
+              f === htmlFiles[0] ? { ...f, path: `${dir}/index.html` } : f,
             )
           }
         }
@@ -678,7 +777,9 @@ async function handleVibeDeploy(req, res) {
       : buildRepoHttpsUrl(conn.payload)
     const initBranch = isGitSource ? gitSource.branch : branch
     const initSourcePath = isGitSource
-      ? (gitSource.path ? sanitizeGitPath(gitSource.path) : '')
+      ? gitSource.path
+        ? sanitizeGitPath(gitSource.path)
+        : ''
       : sourcePath
     const initCredToken = isGitSource ? sourceGitToken : gitToken
     const initCredUsername = isGitSource ? sourceGitUsername : gitUsername
@@ -730,13 +831,17 @@ async function handleVibeDeploy(req, res) {
     // 5b. Create the app-secrets Secret for any sensitive env vars (issue #38).
     //     These values are referenced by the Deployment via secretKeyRef and are
     //     never written into the committed manifest.
-    const { sensitive: sensitiveEnv } = splitSensitiveEnv(vibeParams.envVars || [])
+    const { sensitive: sensitiveEnv } = splitSensitiveEnv(
+      vibeParams.envVars || [],
+    )
     if (sensitiveEnv.length > 0) {
       await createKubernetesSecret(req, {
         envId,
         ns,
         name: `${safeApp}-app-secrets`,
-        data: Object.fromEntries(sensitiveEnv.map((v) => [v.key, String(v.value ?? '')])),
+        data: Object.fromEntries(
+          sensitiveEnv.map((v) => [v.key, String(v.value ?? '')]),
+        ),
       })
     }
 
@@ -811,7 +916,9 @@ async function createKubernetesSecret(req, { envId, ns, name, data }) {
   // Try create first; if it already exists (409), use replace
   try {
     await portainerRequest(
-      target, userToken, 'POST',
+      target,
+      userToken,
+      'POST',
       `/api/endpoints/${envId}/kubernetes/api/v1/namespaces/${ns}/secrets`,
       body,
     )
@@ -819,7 +926,9 @@ async function createKubernetesSecret(req, { envId, ns, name, data }) {
     if (e.message && e.message.includes('409')) {
       // Already exists — replace it
       await portainerRequest(
-        target, userToken, 'PUT',
+        target,
+        userToken,
+        'PUT',
         `/api/endpoints/${envId}/kubernetes/api/v1/namespaces/${ns}/secrets/${name}`,
         body,
       )
@@ -833,10 +942,21 @@ async function createKubernetesSecret(req, { envId, ns, name, data }) {
 // Portainer stack creation (mirrors gitops.js)
 // ---------------------------------------------------------------------------
 
-async function createPortainerGitOpsStack(req, {
-  envId, appName, ns, repoUrl, branch, filePath,
-  username, token, authType, pollInterval,
-}) {
+async function createPortainerGitOpsStack(
+  req,
+  {
+    envId,
+    appName,
+    ns,
+    repoUrl,
+    branch,
+    filePath,
+    username,
+    token,
+    authType,
+    pollInterval,
+  },
+) {
   const target = resolvePortainerTarget()
   if (!target) throw new Error('Cannot resolve Portainer target')
 
@@ -855,14 +975,16 @@ async function createPortainerGitOpsStack(req, {
       ForceUpdate: false,
       ForcePullImage: false,
     },
-    ...(authType === 'pat' && token ? {
-      RepositoryAuthentication: true,
-      RepositoryAuthorizationType: 0,
-      RepositoryUsername: username || 'oauth2',
-      RepositoryPassword: token,
-    } : {
-      RepositoryAuthentication: false,
-    }),
+    ...(authType === 'pat' && token
+      ? {
+          RepositoryAuthentication: true,
+          RepositoryAuthorizationType: 0,
+          RepositoryUsername: username || 'oauth2',
+          RepositoryPassword: token,
+        }
+      : {
+          RepositoryAuthentication: false,
+        }),
   }
 
   const bodyStr = JSON.stringify(stackBody)
@@ -875,7 +997,14 @@ async function createPortainerGitOpsStack(req, {
   )
 }
 
-function portainerRequest(target, userToken, method, path, body, contentType = 'application/json') {
+function portainerRequest(
+  target,
+  userToken,
+  method,
+  path,
+  body,
+  contentType = 'application/json',
+) {
   return new Promise((resolve, reject) => {
     const transport = target.isHttps ? https : http
     const headers = { 'Content-Type': contentType, Accept: 'application/json' }
@@ -903,7 +1032,9 @@ function portainerRequest(target, userToken, method, path, body, contentType = '
           try {
             const parsed = JSON.parse(text)
             detail = parsed?.message || parsed?.details || ''
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
           const err = new Error(
             `Portainer ${method} ${path.split('?')[0]} → HTTP ${upRes.statusCode}` +
               (detail ? `: ${detail}` : ''),
@@ -913,7 +1044,11 @@ function portainerRequest(target, userToken, method, path, body, contentType = '
           err.url = path.split('?')[0]
           return reject(err)
         }
-        try { resolve(JSON.parse(text)) } catch { resolve(text) }
+        try {
+          resolve(JSON.parse(text))
+        } catch {
+          resolve(text)
+        }
       })
     })
 
@@ -946,7 +1081,9 @@ async function handleVibeUpdate(req, res) {
   const { gitTargetId, branch, sourcePath, sourceFiles } = data
 
   if (!gitTargetId || !branch || !sourcePath) {
-    return json(res, 400, { error: 'gitTargetId, branch, and sourcePath are required' })
+    return json(res, 400, {
+      error: 'gitTargetId, branch, and sourcePath are required',
+    })
   }
 
   if (!Array.isArray(sourceFiles) || sourceFiles.length === 0) {
@@ -956,7 +1093,11 @@ async function handleVibeUpdate(req, res) {
   const conn = getConnectionById(gitTargetId)
   if (!conn) return json(res, 404, { error: 'Git target not found' })
   const viCaller1 = await resolveCallerIdentity(req)
-  if (!viCaller1?.isAdmin && conn.owner_id !== (viCaller1?.userId || '_unknown') && !conn.shared) {
+  if (
+    !viCaller1?.isAdmin &&
+    conn.owner_id !== (viCaller1?.userId || '_unknown') &&
+    !conn.shared
+  ) {
     return json(res, 403, { error: 'Forbidden — git target not accessible' })
   }
 
@@ -983,7 +1124,11 @@ async function handleVibeUpdate(req, res) {
       commits,
     )
 
-    return json(res, 200, { ok: true, sha: result.sha, fileCount: commits.length })
+    return json(res, 200, {
+      ok: true,
+      sha: result.sha,
+      fileCount: commits.length,
+    })
   } catch (err) {
     console.error('[vibe update error]', err.message || err)
     return json(res, 500, { error: err.message || 'Update failed' })
@@ -1012,25 +1157,44 @@ async function handleVibeUpdateExposure(req, res) {
   const data = parseJson(body)
   if (!data) return json(res, 400, { error: 'Invalid request body' })
 
-  const { gitTargetId, branch, gitPath, appName, ns, exposeType, port, ingress } = data
+  const {
+    gitTargetId,
+    branch,
+    gitPath,
+    appName,
+    ns,
+    exposeType,
+    port,
+    ingress,
+  } = data
   if (!gitTargetId || !branch || !gitPath || !appName || !ns) {
-    return json(res, 400, { error: 'gitTargetId, branch, gitPath, appName and ns are required' })
+    return json(res, 400, {
+      error: 'gitTargetId, branch, gitPath, appName and ns are required',
+    })
   }
 
   const conn = getConnectionById(gitTargetId)
   if (!conn) return json(res, 404, { error: 'Git target not found' })
   const viCaller2 = await resolveCallerIdentity(req)
-  if (!viCaller2?.isAdmin && conn.owner_id !== (viCaller2?.userId || '_unknown') && !conn.shared) {
+  if (
+    !viCaller2?.isAdmin &&
+    conn.owner_id !== (viCaller2?.userId || '_unknown') &&
+    !conn.shared
+  ) {
     return json(res, 403, { error: 'Forbidden — git target not accessible' })
   }
 
   try {
     // Fetch current manifest
     const current = await fetchFile(conn.payload, branch, gitPath)
-    if (!current) return json(res, 404, { error: 'Manifest file not found in git' })
+    if (!current)
+      return json(res, 404, { error: 'Manifest file not found in git' })
 
     // Split multi-document YAML, strip Service and Ingress docs, keep the rest
-    const docs = current.split(/^---\s*$/m).map((d) => d.trim()).filter(Boolean)
+    const docs = current
+      .split(/^---\s*$/m)
+      .map((d) => d.trim())
+      .filter(Boolean)
     const kept = docs.filter((d) => {
       const kindMatch = d.match(/^kind:\s*(\S+)/m)
       const kind = kindMatch ? kindMatch[1] : ''
@@ -1045,9 +1209,12 @@ async function handleVibeUpdateExposure(req, res) {
     const newDocs = [...kept]
 
     if (exposeType !== 'none') {
-      const svcType = exposeType === 'LoadBalancer' ? 'LoadBalancer'
-        : exposeType === 'NodePort' ? 'NodePort'
-        : 'ClusterIP'
+      const svcType =
+        exposeType === 'LoadBalancer'
+          ? 'LoadBalancer'
+          : exposeType === 'NodePort'
+            ? 'NodePort'
+            : 'ClusterIP'
 
       const svc = {
         apiVersion: 'v1',
@@ -1069,16 +1236,36 @@ async function handleVibeUpdateExposure(req, res) {
             name: safeApp,
             namespace: ns,
             labels,
-            ...(ingress.ingressClass ? { annotations: { 'kubernetes.io/ingress.class': ingress.ingressClass } } : {}),
+            ...(ingress.ingressClass
+              ? {
+                  annotations: {
+                    'kubernetes.io/ingress.class': ingress.ingressClass,
+                  },
+                }
+              : {}),
           },
           spec: {
             // Set spec.ingressClassName (the canonical field; the matching
             // annotation above is kept for legacy controllers).
-            ...(ingress.ingressClass ? { ingressClassName: ingress.ingressClass } : {}),
-            rules: [{
-              host: ingress.host,
-              http: { paths: [{ path: ingress.path || '/', pathType: 'Prefix', backend: { service: { name: safeApp, port: { number: svcPort } } } }] },
-            }],
+            ...(ingress.ingressClass
+              ? { ingressClassName: ingress.ingressClass }
+              : {}),
+            rules: [
+              {
+                host: ingress.host,
+                http: {
+                  paths: [
+                    {
+                      path: ingress.path || '/',
+                      pathType: 'Prefix',
+                      backend: {
+                        service: { name: safeApp, port: { number: svcPort } },
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
           },
         }
         newDocs.push(serializeManifests([ing]).trim())
@@ -1087,9 +1274,12 @@ async function handleVibeUpdateExposure(req, res) {
 
     const updatedYaml = newDocs.join('\n---\n') + '\n'
 
-    await commitFiles(conn.payload, branch, `vibe: update exposure for ${safeApp}`, [
-      { path: gitPath, content: updatedYaml },
-    ])
+    await commitFiles(
+      conn.payload,
+      branch,
+      `vibe: update exposure for ${safeApp}`,
+      [{ path: gitPath, content: updatedYaml }],
+    )
 
     return json(res, 200, { ok: true })
   } catch (err) {
@@ -1115,13 +1305,19 @@ async function handleVibeManifestExposure(req, res) {
   const gitPath = url.searchParams.get('gitPath')
 
   if (!gitTargetId || !branch || !gitPath) {
-    return json(res, 400, { error: 'gitTargetId, branch and gitPath are required' })
+    return json(res, 400, {
+      error: 'gitTargetId, branch and gitPath are required',
+    })
   }
 
   const conn = getConnectionById(gitTargetId)
   if (!conn) return json(res, 404, { error: 'Git target not found' })
   const viCaller3 = await resolveCallerIdentity(req)
-  if (!viCaller3?.isAdmin && conn.owner_id !== (viCaller3?.userId || '_unknown') && !conn.shared) {
+  if (
+    !viCaller3?.isAdmin &&
+    conn.owner_id !== (viCaller3?.userId || '_unknown') &&
+    !conn.shared
+  ) {
     return json(res, 403, { error: 'Forbidden — git target not accessible' })
   }
 
@@ -1130,7 +1326,10 @@ async function handleVibeManifestExposure(req, res) {
     if (!content) return json(res, 404, { error: 'Manifest not found' })
 
     // Find the Service document
-    const docs = content.split(/^---\s*$/m).map((d) => d.trim()).filter(Boolean)
+    const docs = content
+      .split(/^---\s*$/m)
+      .map((d) => d.trim())
+      .filter(Boolean)
     const svcDoc = docs.find((d) => /^kind:\s*Service/m.test(d))
     const ingDoc = docs.find((d) => /^kind:\s*Ingress/m.test(d))
 
@@ -1154,8 +1353,9 @@ async function handleVibeManifestExposure(req, res) {
       const pathMatch = ingDoc.match(/^\s+path:\s*(\S+)/m)
       // Prefer spec.ingressClassName; fall back to the legacy annotation for
       // manifests written before the switch.
-      const classMatch = ingDoc.match(/^\s+ingressClassName:\s*(\S+)/m)
-        || ingDoc.match(/kubernetes\.io\/ingress\.class:\s*(\S+)/m)
+      const classMatch =
+        ingDoc.match(/^\s+ingressClassName:\s*(\S+)/m) ||
+        ingDoc.match(/kubernetes\.io\/ingress\.class:\s*(\S+)/m)
       if (hostMatch) result.ingHost = hostMatch[1]
       if (pathMatch) result.ingPath = pathMatch[1]
       if (classMatch) result.ingClass = classMatch[1]
@@ -1179,7 +1379,8 @@ function findDeploymentContainer(docs) {
   const podSpec = deployment.spec?.template?.spec || {}
   const containers = podSpec.containers || []
   const appName = deployment.metadata?.name
-  const container = containers.find((c) => c.name === appName) || containers[0] || null
+  const container =
+    containers.find((c) => c.name === appName) || containers[0] || null
   return { deployment, container, podSpec }
 }
 
@@ -1197,13 +1398,19 @@ async function handleVibeManifestEnv(req, res) {
   const gitPath = url.searchParams.get('gitPath')
 
   if (!gitTargetId || !branch || !gitPath) {
-    return json(res, 400, { error: 'gitTargetId, branch and gitPath are required' })
+    return json(res, 400, {
+      error: 'gitTargetId, branch and gitPath are required',
+    })
   }
 
   const conn = getConnectionById(gitTargetId)
   if (!conn) return json(res, 404, { error: 'Git target not found' })
   const caller = await resolveCallerIdentity(req)
-  if (!caller?.isAdmin && conn.owner_id !== (caller?.userId || '_unknown') && !conn.shared) {
+  if (
+    !caller?.isAdmin &&
+    conn.owner_id !== (caller?.userId || '_unknown') &&
+    !conn.shared
+  ) {
     return json(res, 403, { error: 'Forbidden — git target not accessible' })
   }
 
@@ -1239,27 +1446,38 @@ async function handleVibeUpdateEnv(req, res) {
 
   const { gitTargetId, branch, gitPath, envVars, envId, ns } = data
   if (!gitTargetId || !branch || !gitPath) {
-    return json(res, 400, { error: 'gitTargetId, branch and gitPath are required' })
+    return json(res, 400, {
+      error: 'gitTargetId, branch and gitPath are required',
+    })
   }
   if (!Array.isArray(envVars)) {
-    return json(res, 400, { error: 'envVars must be an array of { key, value }' })
+    return json(res, 400, {
+      error: 'envVars must be an array of { key, value }',
+    })
   }
 
   const conn = getConnectionById(gitTargetId)
   if (!conn) return json(res, 404, { error: 'Git target not found' })
   const caller = await resolveCallerIdentity(req)
-  if (!caller?.isAdmin && conn.owner_id !== (caller?.userId || '_unknown') && !conn.shared) {
+  if (
+    !caller?.isAdmin &&
+    conn.owner_id !== (caller?.userId || '_unknown') &&
+    !conn.shared
+  ) {
     return json(res, 403, { error: 'Forbidden — git target not accessible' })
   }
 
   try {
     const content = await fetchFile(conn.payload, branch, gitPath)
-    if (!content) return json(res, 404, { error: 'Manifest file not found in git' })
+    if (!content)
+      return json(res, 404, { error: 'Manifest file not found in git' })
 
     const docs = yaml.loadAll(content)
     const { deployment, container, podSpec } = findDeploymentContainer(docs)
     if (!deployment || !container) {
-      return json(res, 404, { error: 'No Deployment container found in manifest' })
+      return json(res, 404, {
+        error: 'No Deployment container found in manifest',
+      })
     }
 
     // Normalise the incoming variables (drop blank keys, coerce values to string).
@@ -1268,7 +1486,8 @@ async function handleVibeUpdateEnv(req, res) {
       .map((v) => ({ key: v.key.trim(), value: String(v.value ?? '') }))
 
     // Split into plaintext (committed) and sensitive (Secret-backed). See #38.
-    const { plain: plainEnv, sensitive: sensitiveEnv } = splitSensitiveEnv(cleaned)
+    const { plain: plainEnv, sensitive: sensitiveEnv } =
+      splitSensitiveEnv(cleaned)
     const safeApp = sanitizeStackName(deployment.metadata?.name || 'app')
     const secretForApp = `${safeApp}-app-secrets`
 
@@ -1277,10 +1496,16 @@ async function handleVibeUpdateEnv(req, res) {
     //    already present on the container, so an env edit does not strip the
     //    interpreter's ability to find PV-installed dependencies.
     const RUNTIME_ENV_NAMES = new Set([
-      'PYTHONPATH', 'PATH', 'BUNDLE_PATH', 'BUNDLE_GEMFILE', 'GEM_HOME', 'GEM_PATH',
+      'PYTHONPATH',
+      'PATH',
+      'BUNDLE_PATH',
+      'BUNDLE_GEMFILE',
+      'GEM_HOME',
+      'GEM_PATH',
     ])
-    const preservedRuntimeEnv = (Array.isArray(container.env) ? container.env : [])
-      .filter((e) => e && RUNTIME_ENV_NAMES.has(e.name) && e.value !== undefined)
+    const preservedRuntimeEnv = (
+      Array.isArray(container.env) ? container.env : []
+    ).filter((e) => e && RUNTIME_ENV_NAMES.has(e.name) && e.value !== undefined)
 
     const userNextEnv = [
       ...plainEnv.map((v) => ({ name: v.key, value: v.value })),
@@ -1303,19 +1528,23 @@ async function handleVibeUpdateEnv(req, res) {
     // 2. vibe-env init container — writes ONLY the plaintext vars into .env.
     //    Sensitive values arrive via secretKeyRef and never touch the manifest.
     const workDir = container.workingDir || '/app'
-    podSpec.initContainers = (podSpec.initContainers || []).filter((c) => c.name !== 'vibe-env')
+    podSpec.initContainers = (podSpec.initContainers || []).filter(
+      (c) => c.name !== 'vibe-env',
+    )
     if (plainEnv.length > 0) {
       const envFileContent = plainEnv
         .map((v) => `${v.key}=${v.value.replace(/\n/g, '\\n')}`)
         .join('\n')
       const escaped = envFileContent.replace(/'/g, "'\\''")
-      podSpec.initContainers.push(harden({
-        name: 'vibe-env',
-        image: 'busybox:1.36',
-        command: ['sh', '-c', `printf '%s' '${escaped}' > ${workDir}/.env`],
-        resources: INIT_ENV_RESOURCES,
-        volumeMounts: [{ name: 'app-data', mountPath: workDir }],
-      }))
+      podSpec.initContainers.push(
+        harden({
+          name: 'vibe-env',
+          image: 'busybox:1.36',
+          command: ['sh', '-c', `printf '%s' '${escaped}' > ${workDir}/.env`],
+          resources: INIT_ENV_RESOURCES,
+          volumeMounts: [{ name: 'app-data', mountPath: workDir }],
+        }),
+      )
     }
     if (podSpec.initContainers.length === 0) delete podSpec.initContainers
 
@@ -1329,7 +1558,9 @@ async function handleVibeUpdateEnv(req, res) {
           envId,
           ns,
           name: secretForApp,
-          data: Object.fromEntries(sensitiveEnv.map((v) => [v.key, String(v.value ?? '')])),
+          data: Object.fromEntries(
+            sensitiveEnv.map((v) => [v.key, String(v.value ?? '')]),
+          ),
         })
       } else {
         secretWarning =
@@ -1341,11 +1572,17 @@ async function handleVibeUpdateEnv(req, res) {
 
     const updatedYaml = serializeManifests(docs)
 
-    await commitFiles(conn.payload, branch, `vibe: update environment variables for ${safeApp}`, [
-      { path: gitPath, content: updatedYaml },
-    ])
+    await commitFiles(
+      conn.payload,
+      branch,
+      `vibe: update environment variables for ${safeApp}`,
+      [{ path: gitPath, content: updatedYaml }],
+    )
 
-    return json(res, 200, { ok: true, ...(secretWarning ? { warning: secretWarning } : {}) })
+    return json(res, 200, {
+      ok: true,
+      ...(secretWarning ? { warning: secretWarning } : {}),
+    })
   } catch (err) {
     console.error('[vibe update-env error]', err.message || err)
     return json(res, 500, { error: err.message || 'Update failed' })
@@ -1378,21 +1615,33 @@ async function handleVibeDeleteManifest(req, res) {
   const gitPath = sanitizeGitPath(data.gitPath)
 
   if (!gitTargetId || !branch || (!rawPaths && !gitPath)) {
-    return json(res, 400, { error: 'gitTargetId, branch and (paths or gitPath) are required' })
+    return json(res, 400, {
+      error: 'gitTargetId, branch and (paths or gitPath) are required',
+    })
   }
 
   const conn = getConnectionById(gitTargetId)
   if (!conn) return json(res, 404, { error: 'Git target not found' })
   const caller = await resolveCallerIdentity(req)
-  if (!caller?.isAdmin && conn.owner_id !== (caller?.userId || '_unknown') && !conn.shared) {
+  if (
+    !caller?.isAdmin &&
+    conn.owner_id !== (caller?.userId || '_unknown') &&
+    !conn.shared
+  ) {
     return json(res, 403, { error: 'Forbidden — git target not accessible' })
   }
 
   try {
     if (rawPaths) {
       const paths = rawPaths.map((p) => sanitizeGitPath(p)).filter(Boolean)
-      if (paths.length === 0) return json(res, 400, { error: 'No valid paths provided' })
-      await deletePaths(conn.payload, branch, paths, `remove: ${appName || paths.join(', ')}`)
+      if (paths.length === 0)
+        return json(res, 400, { error: 'No valid paths provided' })
+      await deletePaths(
+        conn.payload,
+        branch,
+        paths,
+        `remove: ${appName || paths.join(', ')}`,
+      )
       return json(res, 200, { ok: true })
     }
 
@@ -1401,9 +1650,19 @@ async function handleVibeDeleteManifest(req, res) {
     // extension (.yaml/.yml) are manifest files.
     const isDirectory = !gitPath.match(/\.[a-zA-Z0-9]+$/)
     if (isDirectory) {
-      await deleteDirectory(conn.payload, branch, gitPath, `remove: ${appName || gitPath}`)
+      await deleteDirectory(
+        conn.payload,
+        branch,
+        gitPath,
+        `remove: ${appName || gitPath}`,
+      )
     } else {
-      await deleteFile(conn.payload, branch, gitPath, `remove: ${appName || gitPath}`)
+      await deleteFile(
+        conn.payload,
+        branch,
+        gitPath,
+        `remove: ${appName || gitPath}`,
+      )
     }
     return json(res, 200, { ok: true })
   } catch (err) {

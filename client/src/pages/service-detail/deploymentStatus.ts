@@ -18,7 +18,11 @@ export function headerStatusFromDeployment(d: Deployment | null): {
     (c: { type: string }) => c.type === 'Progressing',
   )
   if (desired === 0) {
-    return { status: 'stopped', statusLabel: 'Switched off', statusTone: 'neutral' }
+    return {
+      status: 'stopped',
+      statusLabel: 'Switched off',
+      statusTone: 'neutral',
+    }
   }
   if (ready >= desired) {
     return { status: 'running', statusLabel: 'Running', statusTone: 'success' }
@@ -36,12 +40,17 @@ export function headerStatusFromDeployment(d: Deployment | null): {
 export function friendlyStatus(d: Deployment, reason: string | undefined) {
   const { status, statusLabel } = headerStatusFromDeployment(d)
   const base =
-    status === 'running' ? 'Your app is live and running.'
-      : status === 'stopped' ? 'Your app is switched off.'
-      : status === 'pending' ? 'Your app is starting up.'
-      : status === 'partial' ? 'Your app is running, but not fully healthy.'
-      : status === 'error' ? "Your app isn't running right now."
-      : statusLabel
+    status === 'running'
+      ? 'Your app is live and running.'
+      : status === 'stopped'
+        ? 'Your app is switched off.'
+        : status === 'pending'
+          ? 'Your app is starting up.'
+          : status === 'partial'
+            ? 'Your app is running, but not fully healthy.'
+            : status === 'error'
+              ? "Your app isn't running right now."
+              : statusLabel
   return { status, base, reason: reason || '' }
 }
 

@@ -7,7 +7,10 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 // the addon gateway strips the base path in production).
 const BACKEND_ROUTES = ['api', 'ai', 'config', 'cache', 'env-status', 'mcp']
 
-type RequestHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>
+type RequestHandler = (
+  req: IncomingMessage,
+  res: ServerResponse,
+) => Promise<void>
 
 /**
  * Runs the Portainer Run backend inside the Vite dev server process (same

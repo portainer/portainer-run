@@ -30,7 +30,10 @@ export function RestartModal() {
     setRestarting(true)
     try {
       await restartDeployment(token, String(envId), ns, name)
-      pushToast(`"${name}" is restarting — pods will be replaced one by one`, 'ok')
+      pushToast(
+        `"${name}" is restarting — pods will be replaced one by one`,
+        'ok',
+      )
       setRestartTarget(null)
       void refreshCache(false)
     } catch (err: any) {
@@ -54,10 +57,15 @@ export function RestartModal() {
             Restart <strong>{name}</strong> in <strong>{ns}</strong>?
           </div>
           <div
-            style={{ fontSize: 12, color: 'var(--muted)', fontFamily: MONO_FONT, lineHeight: 1.5 }}
+            style={{
+              fontSize: 12,
+              color: 'var(--muted)',
+              fontFamily: MONO_FONT,
+              lineHeight: 1.5,
+            }}
           >
-            A rolling restart will terminate and replace pods one by one. Running instances
-            will be briefly interrupted.
+            A rolling restart will terminate and replace pods one by one.
+            Running instances will be briefly interrupted.
           </div>
         </div>
       </DialogBody>
@@ -65,7 +73,11 @@ export function RestartModal() {
         <Button variant="ghost" onClick={handleCancel} disabled={restarting}>
           Cancel
         </Button>
-        <Button color="warning" onClick={() => void confirm()} disabled={restarting}>
+        <Button
+          color="warning"
+          onClick={() => void confirm()}
+          disabled={restarting}
+        >
           {restarting ? 'Restarting…' : 'Restart'}
         </Button>
       </DialogFooter>

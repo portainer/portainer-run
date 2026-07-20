@@ -11,38 +11,38 @@ export { GPU_RESOURCE_KEYS } from './deployFormModel.js'
  */
 export async function fetchNamespaceOptions(token, envId) {
   return inflightDedupe(`k8s:ns-options:${envId}`, async () => {
-  const r = await apiFetch(token, `/kubernetes/${envId}/namespaces`)
-  if (r.status === 403 || r.status === 401) {
+    const r = await apiFetch(token, `/kubernetes/${envId}/namespaces`)
+    if (r.status === 403 || r.status === 401) {
+      return {
+        ok: true,
+        manual: true,
+        namespaces: [],
+        message: 'Token is namespace-scoped — enter your namespace below.',
+      }
+    }
+    if (!r.ok) {
+      return {
+        ok: false,
+        error: 'Could not fetch namespaces: HTTP ' + r.status,
+        manual: true,
+      }
+    }
+    const list = await r.json().catch(() => [])
+    const accessible = (Array.isArray(list) ? list : []).map((n) => n.Name)
+    if (!accessible.length) {
+      return {
+        ok: true,
+        manual: true,
+        namespaces: [],
+        message: 'No accessible namespaces found — enter manually below.',
+      }
+    }
     return {
       ok: true,
-      manual: true,
-      namespaces: [],
-      message: 'Token is namespace-scoped — enter your namespace below.',
+      manual: false,
+      namespaces: accessible,
+      message: accessible.length + ' accessible namespace(s)',
     }
-  }
-  if (!r.ok) {
-    return {
-      ok: false,
-      error: 'Could not fetch namespaces: HTTP ' + r.status,
-      manual: true,
-    }
-  }
-  const list = await r.json().catch(() => [])
-  const accessible = (Array.isArray(list) ? list : []).map((n) => n.Name)
-  if (!accessible.length) {
-    return {
-      ok: true,
-      manual: true,
-      namespaces: [],
-      message: 'No accessible namespaces found — enter manually below.',
-    }
-  }
-  return {
-    ok: true,
-    manual: false,
-    namespaces: accessible,
-    message: accessible.length + ' accessible namespace(s)',
-  }
   })
 }
 
@@ -52,7 +52,11 @@ export async function fetchNamespaceOptions(token, envId) {
  */
 export async function fetchStorageClasses(token, envId) {
   return inflightDedupe(`k8s:storage-classes:${envId}`, async () => {
-    const r = await kubeFetch(token, envId, '/apis/storage.k8s.io/v1/storageclasses')
+    const r = await kubeFetch(
+      token,
+      envId,
+      '/apis/storage.k8s.io/v1/storageclasses',
+    )
     if (!r.ok) throw new Error('HTTP ' + r.status)
     return (await r.json()).items || []
   })
@@ -85,37 +89,37 @@ const MANAGED_BY_LABEL = 'managed-by=portainer-run'
 export async function fetchSecretUsageFromManagedDeployments(token, envId, ns) {
   if (!ns) return {}
   return inflightDedupe(`k8s:secret-usage:${envId}:${ns}`, async () => {
-  const r = await kubeFetch(
-    token,
-    envId,
-    `/apis/apps/v1/namespaces/${ns}/deployments?labelSelector=${encodeURIComponent(MANAGED_BY_LABEL)}`,
-  )
-  if (!r.ok) return {}
-  const deps = (await r.json()).items || []
-  /** @type {Record<string, string[]>} */
-  const usage = {}
-  for (const dep of deps) {
-    const dname = dep.metadata?.name
-    if (!dname) continue
-    const containers = dep.spec?.template?.spec?.containers || []
-    for (const ct of containers) {
-      for (const env of ct.env || []) {
-        if (env.valueFrom?.secretKeyRef?.name) {
-          const sn = env.valueFrom.secretKeyRef.name
-          if (!usage[sn]) usage[sn] = []
-          if (!usage[sn].includes(dname)) usage[sn].push(dname)
+    const r = await kubeFetch(
+      token,
+      envId,
+      `/apis/apps/v1/namespaces/${ns}/deployments?labelSelector=${encodeURIComponent(MANAGED_BY_LABEL)}`,
+    )
+    if (!r.ok) return {}
+    const deps = (await r.json()).items || []
+    /** @type {Record<string, string[]>} */
+    const usage = {}
+    for (const dep of deps) {
+      const dname = dep.metadata?.name
+      if (!dname) continue
+      const containers = dep.spec?.template?.spec?.containers || []
+      for (const ct of containers) {
+        for (const env of ct.env || []) {
+          if (env.valueFrom?.secretKeyRef?.name) {
+            const sn = env.valueFrom.secretKeyRef.name
+            if (!usage[sn]) usage[sn] = []
+            if (!usage[sn].includes(dname)) usage[sn].push(dname)
+          }
         }
-      }
-      for (const envFrom of ct.envFrom || []) {
-        if (envFrom.secretRef?.name) {
-          const sn = envFrom.secretRef.name
-          if (!usage[sn]) usage[sn] = []
-          if (!usage[sn].includes(dname)) usage[sn].push(dname)
+        for (const envFrom of ct.envFrom || []) {
+          if (envFrom.secretRef?.name) {
+            const sn = envFrom.secretRef.name
+            if (!usage[sn]) usage[sn] = []
+            if (!usage[sn].includes(dname)) usage[sn].push(dname)
+          }
         }
       }
     }
-  }
-  return usage
+    return usage
   })
 }
 
@@ -134,7 +138,13 @@ export function secretValueToK8sDataB64(value) {
  * @param {string} name
  * @param {Record<string, string>} dataPlain key → raw value (not base64)
  */
-export async function createOpaquePortainerSecret(token, envId, ns, name, dataPlain) {
+export async function createOpaquePortainerSecret(
+  token,
+  envId,
+  ns,
+  name,
+  dataPlain,
+) {
   const data = {}
   for (const [k, v] of Object.entries(dataPlain)) {
     data[k] = secretValueToK8sDataB64(v)
@@ -172,7 +182,9 @@ export async function createOpaquePortainerSecret(token, envId, ns, name, dataPl
  * @returns {Promise<Response>}
  */
 export function deleteNamespacedSecret(token, envId, ns, name) {
-  return kubeFetch(token, envId, `/api/v1/namespaces/${ns}/secrets/${name}`, { method: 'DELETE' })
+  return kubeFetch(token, envId, `/api/v1/namespaces/${ns}/secrets/${name}`, {
+    method: 'DELETE',
+  })
 }
 
 /**
@@ -181,7 +193,8 @@ export function deleteNamespacedSecret(token, envId, ns, name) {
  * @returns {Promise<{ key: string, label: string, warn?: 'amber' | 'green' }>}
  */
 export async function detectClusterGpuType(token, envId) {
-  if (!envId) return { key: 'nvidia.com/gpu', label: 'Select an environment first' }
+  if (!envId)
+    return { key: 'nvidia.com/gpu', label: 'Select an environment first' }
   return inflightDedupe(`k8s:gpu-type:${envId}`, async () => {
     const r = await kubeFetch(token, envId, '/api/v1/nodes')
     if (!r.ok) {
@@ -237,13 +250,20 @@ export async function ensureVolumePvcs(token, envId, ns, appName, volumeDefs) {
         ...(storageClass ? { storageClassName: storageClass } : {}),
       },
     }
-    const pr = await kubeFetch(token, envId, `/api/v1/namespaces/${ns}/persistentvolumeclaims`, {
-      method: 'POST',
-      body: JSON.stringify(pvcManifest),
-    })
+    const pr = await kubeFetch(
+      token,
+      envId,
+      `/api/v1/namespaces/${ns}/persistentvolumeclaims`,
+      {
+        method: 'POST',
+        body: JSON.stringify(pvcManifest),
+      },
+    )
     if (!pr.ok && pr.status !== 409) {
       const j = await pr.json().catch(() => ({}))
-      throw new Error(`Volume "${volName}" failed: ` + (j?.message || 'HTTP ' + pr.status))
+      throw new Error(
+        `Volume "${volName}" failed: ` + (j?.message || 'HTTP ' + pr.status),
+      )
     }
   }
 }
@@ -278,13 +298,21 @@ export async function createExposureForApp(
         })),
       },
     }
-    const sr = await kubeFetch(token, envId, `/api/v1/namespaces/${ns}/services`, {
-      method: 'POST',
-      body: JSON.stringify(svcManifest),
-    })
+    const sr = await kubeFetch(
+      token,
+      envId,
+      `/api/v1/namespaces/${ns}/services`,
+      {
+        method: 'POST',
+        body: JSON.stringify(svcManifest),
+      },
+    )
     if (!sr.ok && sr.status !== 409) {
       const j = await sr.json().catch(() => ({}))
-      throw new Error('Deployment created but Service failed: ' + (j?.message || 'HTTP ' + sr.status))
+      throw new Error(
+        'Deployment created but Service failed: ' +
+          (j?.message || 'HTTP ' + sr.status),
+      )
     }
     return
   }
@@ -305,13 +333,21 @@ export async function createExposureForApp(
         ports: [{ port: iPort, targetPort: iPort, protocol: 'TCP' }],
       },
     }
-    const s0 = await kubeFetch(token, envId, `/api/v1/namespaces/${ns}/services`, {
-      method: 'POST',
-      body: JSON.stringify(clusterSvc),
-    })
+    const s0 = await kubeFetch(
+      token,
+      envId,
+      `/api/v1/namespaces/${ns}/services`,
+      {
+        method: 'POST',
+        body: JSON.stringify(clusterSvc),
+      },
+    )
     if (!s0.ok && s0.status !== 409) {
       const j = await s0.json().catch(() => ({}))
-      throw new Error('Deployment created but Service failed: ' + (j?.message || 'HTTP ' + s0.status))
+      throw new Error(
+        'Deployment created but Service failed: ' +
+          (j?.message || 'HTTP ' + s0.status),
+      )
     }
 
     const ingressMeta = {
@@ -356,7 +392,10 @@ export async function createExposureForApp(
     )
     if (!ir.ok && ir.status !== 409) {
       const j = await ir.json().catch(() => ({}))
-      throw new Error('Deployment created but Ingress failed: ' + (j?.message || 'HTTP ' + ir.status))
+      throw new Error(
+        'Deployment created but Ingress failed: ' +
+          (j?.message || 'HTTP ' + ir.status),
+      )
     }
   }
 }
@@ -390,7 +429,9 @@ export async function executeDeploy(
     containerRowIds,
   },
 ) {
-  const idToSpec = new Map(containerRowIds.map((id, i) => [id, containerSpecs[i]]))
+  const idToSpec = new Map(
+    containerRowIds.map((id, i) => [id, containerSpecs[i]]),
+  )
   for (const v of volumeDefs) {
     const spec = idToSpec.get(v.containerId)
     if (spec) {
@@ -426,19 +467,33 @@ export async function executeDeploy(
     },
   }
 
-  const r = await kubeFetch(token, envId, `/apis/apps/v1/namespaces/${ns}/deployments`, {
-    method: 'POST',
-    body: JSON.stringify(depManifest),
-  })
+  const r = await kubeFetch(
+    token,
+    envId,
+    `/apis/apps/v1/namespaces/${ns}/deployments`,
+    {
+      method: 'POST',
+      body: JSON.stringify(depManifest),
+    },
+  )
   if (r.status === 409) {
-    throw new Error('A deployment with this name already exists in namespace "' + ns + '".')
+    throw new Error(
+      'A deployment with this name already exists in namespace "' + ns + '".',
+    )
   }
   if (!r.ok) {
     const j = await r.json().catch(() => ({}))
     throw new Error(j?.message || 'HTTP ' + r.status)
   }
 
-  await createExposureForApp(token, { envId, ns, appName, exposeType, servicePorts, ingress })
+  await createExposureForApp(token, {
+    envId,
+    ns,
+    appName,
+    exposeType,
+    servicePorts,
+    ingress,
+  })
 }
 
 /**
@@ -476,7 +531,12 @@ export function buildK8sContainer(c) {
     const key = row.key?.trim()
     if (!key) continue
     if (row.mode === 'secret' && row.secretName && row.secretKey) {
-      env.push({ name: key, valueFrom: { secretKeyRef: { name: row.secretName, key: row.secretKey } } })
+      env.push({
+        name: key,
+        valueFrom: {
+          secretKeyRef: { name: row.secretName, key: row.secretKey },
+        },
+      })
     } else {
       env.push({ name: key, value: String(row.value ?? '') })
     }
@@ -550,7 +610,9 @@ export async function applyDeploymentFormUpdate(
     ingress,
   },
 ) {
-  const idToSpec = new Map(containerRowIds.map((id, i) => [id, containerSpecs[i]]))
+  const idToSpec = new Map(
+    containerRowIds.map((id, i) => [id, containerSpecs[i]]),
+  )
   for (const v of volumeDefs) {
     const spec = idToSpec.get(v.containerId)
     if (spec) {
@@ -576,7 +638,11 @@ export async function applyDeploymentFormUpdate(
   }
   const current = await getR.json()
   const tplMeta = current.spec?.template?.metadata || {}
-  const labels = { ...(tplMeta.labels || {}), app: appName, 'managed-by': 'portainer-run' }
+  const labels = {
+    ...(tplMeta.labels || {}),
+    app: appName,
+    'managed-by': 'portainer-run',
+  }
   const mergedTplMeta = { ...tplMeta, labels }
   const oldPod = current.spec?.template?.spec || {}
   const nextPod = { ...oldPod, containers: containerSpecs }
@@ -627,7 +693,11 @@ export async function applyDeploymentFormUpdate(
  */
 export async function fetchNamespaceQuota(token, envId, ns) {
   try {
-    const r = await kubeFetch(token, envId, `/api/v1/namespaces/${ns}/resourcequotas`)
+    const r = await kubeFetch(
+      token,
+      envId,
+      `/api/v1/namespaces/${ns}/resourcequotas`,
+    )
     if (!r.ok) return { requiresLimits: false, requiresRequests: false }
     const data = await r.json()
     const quotas = data.items || []
@@ -636,7 +706,8 @@ export async function fetchNamespaceQuota(token, envId, ns) {
     for (const q of quotas) {
       const hard = q.spec?.hard || {}
       if (hard['limits.cpu'] || hard['limits.memory']) requiresLimits = true
-      if (hard['requests.cpu'] || hard['requests.memory']) requiresRequests = true
+      if (hard['requests.cpu'] || hard['requests.memory'])
+        requiresRequests = true
     }
     return { requiresLimits, requiresRequests }
   } catch {
@@ -647,20 +718,17 @@ export async function fetchNamespaceQuota(token, envId, ns) {
 /**
  * Fetch ConfigMaps in a namespace.
  */
-const SYSTEM_CONFIGMAP_PATTERNS = [
-  /^kube-/,
-  /^system:/,
-  /^istio/,
-  /^coredns/,
-]
-const SYSTEM_CONFIGMAP_NAMES = new Set([
-  'kube-root-ca.crt',
-])
+const SYSTEM_CONFIGMAP_PATTERNS = [/^kube-/, /^system:/, /^istio/, /^coredns/]
+const SYSTEM_CONFIGMAP_NAMES = new Set(['kube-root-ca.crt'])
 
 export async function fetchConfigMapsInNamespace(token, envId, ns) {
   if (!ns) return []
   return inflightDedupe(`k8s:configmaps:${envId}:${ns}`, async () => {
-    const r = await kubeFetch(token, envId, `/api/v1/namespaces/${ns}/configmaps`)
+    const r = await kubeFetch(
+      token,
+      envId,
+      `/api/v1/namespaces/${ns}/configmaps`,
+    )
     if (!r.ok) return []
     const items = (await r.json()).items || []
     return items
@@ -685,10 +753,7 @@ const SYSTEM_SECRET_TYPES = new Set([
   'bootstrap.kubernetes.io/token',
   'kubernetes.io/tls',
 ])
-const SYSTEM_SECRET_PATTERNS = [
-  /^default-token-/,
-  /^kube-/,
-]
+const SYSTEM_SECRET_PATTERNS = [/^default-token-/, /^kube-/]
 
 function isSystemSecret(s) {
   if (SYSTEM_SECRET_TYPES.has(s.type)) return true
@@ -704,7 +769,12 @@ export async function fetchImagePullSecrets(token, envId, ns) {
     if (!r.ok) return []
     const items = (await r.json()).items || []
     return items
-      .filter((s) => !isSystemSecret(s) && (s.type === 'kubernetes.io/dockerconfigjson' || s.type === 'kubernetes.io/dockercfg'))
+      .filter(
+        (s) =>
+          !isSystemSecret(s) &&
+          (s.type === 'kubernetes.io/dockerconfigjson' ||
+            s.type === 'kubernetes.io/dockercfg'),
+      )
       .map((s) => s.metadata.name)
   })
 }

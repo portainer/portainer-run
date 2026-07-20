@@ -37,8 +37,14 @@ db.exec(`
 `)
 
 // Safe migrations for existing databases that pre-date owner_id / shared columns
-for (const [col, def] of [['owner_id', "TEXT NOT NULL DEFAULT '_system'"], ['shared', 'INTEGER NOT NULL DEFAULT 0']]) {
-  const exists = db.prepare(`PRAGMA table_info(connections)`).all().some((r) => r.name === col)
+for (const [col, def] of [
+  ['owner_id', "TEXT NOT NULL DEFAULT '_system'"],
+  ['shared', 'INTEGER NOT NULL DEFAULT 0'],
+]) {
+  const exists = db
+    .prepare(`PRAGMA table_info(connections)`)
+    .all()
+    .some((r) => r.name === col)
   if (!exists) db.exec(`ALTER TABLE connections ADD COLUMN ${col} ${def}`)
 }
 

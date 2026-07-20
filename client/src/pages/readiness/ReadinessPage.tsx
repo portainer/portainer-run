@@ -12,7 +12,10 @@ import { PageTitle } from '@ds/v3-templates/PageTitle/PageTitle'
 import { useAppStore, isEnvDisabled } from '../../store/useAppStore.js'
 import { saveDisabledEnvs } from '../../services/disabledEnvs.js'
 import { ROUTES } from '../../lib/routes.js'
-import { overallEnvStatus, runReadinessForEnv } from '../../lib/readinessChecks.js'
+import {
+  overallEnvStatus,
+  runReadinessForEnv,
+} from '../../lib/readinessChecks.js'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -92,7 +95,9 @@ function CheckCell({
         <StatusDot tone={tone} />
         {r.label}
       </div>
-      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{r.detail || ''}</div>
+      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+        {r.detail || ''}
+      </div>
     </div>
   )
 }
@@ -159,7 +164,8 @@ export function ReadinessPage() {
         await saveDisabledEnvs(token, useAppStore.getState().environments, next)
       } catch (e) {
         pushToast(
-          'Could not save environment state: ' + (e instanceof Error ? e.message : String(e)),
+          'Could not save environment state: ' +
+            (e instanceof Error ? e.message : String(e)),
           'err',
         )
       }
@@ -191,16 +197,24 @@ export function ReadinessPage() {
       />
 
       {!environments.length ? (
-        <p style={{ color: 'var(--muted)' }}>No Kubernetes environments are connected.</p>
+        <p style={{ color: 'var(--muted)' }}>
+          No Kubernetes environments are connected.
+        </p>
       ) : !showGrid ? (
-        <div style={{ textAlign: 'center', padding: '56px 20px', color: 'var(--muted)' }}>
+        <div
+          style={{
+            textAlign: 'center',
+            padding: '56px 20px',
+            color: 'var(--muted)',
+          }}
+        >
           <ShieldCheck size={32} style={{ marginBottom: 12 }} />
           <h3 style={{ margin: '0 0 8px', fontSize: 15, color: 'var(--text)' }}>
             Run checks to verify all environments
           </h3>
           <p style={{ margin: 0, fontSize: 13 }}>
-            Checks ingress controller, load balancer, storage type, node health, and GPU
-            capacity across every connected environment.
+            Checks ingress controller, load balancer, storage type, node health,
+            and GPU capacity across every connected environment.
           </p>
         </div>
       ) : (
@@ -230,7 +244,13 @@ export function ReadinessPage() {
                       marginBottom: 12,
                     }}
                   >
-                    <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)' }}>
+                    <span
+                      style={{
+                        fontWeight: 600,
+                        fontSize: 14,
+                        color: 'var(--text)',
+                      }}
+                    >
                       {env.Name}
                     </span>
                     <Badge tone={tone} size="sm">
@@ -247,7 +267,12 @@ export function ReadinessPage() {
                     </span>
                   </div>
                   {row?.phase === 'error' ? (
-                    <div style={{ color: 'var(--status-danger, #f04438)', fontSize: 12 }}>
+                    <div
+                      style={{
+                        color: 'var(--status-danger, #f04438)',
+                        fontSize: 12,
+                      }}
+                    >
                       {row.err || 'Checks failed.'}
                     </div>
                   ) : (

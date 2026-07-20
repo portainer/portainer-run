@@ -69,7 +69,10 @@ export function isFavorite(f: Favorite): boolean {
 
 export function addFavorite(f: Favorite) {
   if (isFavorite(f)) return
-  write([...cache, { envId: String(f.envId), namespace: f.namespace, name: f.name }])
+  write([
+    ...cache,
+    { envId: String(f.envId), namespace: f.namespace, name: f.name },
+  ])
 }
 
 export function removeFavorite(f: Favorite) {
@@ -101,10 +104,12 @@ function subscribe(cb: () => void): () => void {
       emit()
     }
   }
-  if (typeof window !== 'undefined') window.addEventListener('storage', onStorage)
+  if (typeof window !== 'undefined')
+    window.addEventListener('storage', onStorage)
   return () => {
     listeners.delete(cb)
-    if (typeof window !== 'undefined') window.removeEventListener('storage', onStorage)
+    if (typeof window !== 'undefined')
+      window.removeEventListener('storage', onStorage)
   }
 }
 

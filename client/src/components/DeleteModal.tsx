@@ -28,7 +28,8 @@ export function DeleteModal() {
 
   if (!deleteTarget) return null
 
-  const { ns, name, gitTargetId, gitBranch, gitPath, vibeSourcePath } = deleteTarget
+  const { ns, name, gitTargetId, gitBranch, gitPath, vibeSourcePath } =
+    deleteTarget
   const isVibeDeploy = Boolean(vibeSourcePath)
   const isGitOps = Boolean(gitTargetId && gitBranch && gitPath)
 
@@ -39,7 +40,8 @@ export function DeleteModal() {
     const target = deleteTarget
     const alsoManifest = deleteManifest
     const wasOnDetail =
-      loc.pathname.startsWith(`${ROUTES.services}/`) && loc.pathname !== ROUTES.services
+      loc.pathname.startsWith(`${ROUTES.services}/`) &&
+      loc.pathname !== ROUTES.services
 
     setDeleting(true)
     const ok = await deleteApp(target, { deleteManifest: alsoManifest })
@@ -68,18 +70,26 @@ export function DeleteModal() {
       <DialogBody>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {deleting ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '8px 0',
+              }}
+            >
               <Loader2 size={16} className="animate-spin" aria-hidden="true" />
               <div>
                 Deleting <strong>{name}</strong>
-                {deleteManifest && isGitOps ? ' and cleaning up Git' : ''}… please wait.
+                {deleteManifest && isGitOps ? ' and cleaning up Git' : ''}…
+                please wait.
               </div>
             </div>
           ) : (
             <>
               <div>
-                Delete <strong>{name}</strong> in <strong>{ns}</strong>? Pods will be
-                terminated. This cannot be undone.
+                Delete <strong>{name}</strong> in <strong>{ns}</strong>? Pods
+                will be terminated. This cannot be undone.
               </div>
 
               <FormControl label="Type delete to confirm">
@@ -105,7 +115,13 @@ export function DeleteModal() {
                     gap: 10,
                   }}
                 >
-                  <div style={{ fontSize: 12, color: 'var(--muted)', fontFamily: MONO_FONT }}>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: 'var(--muted)',
+                      fontFamily: MONO_FONT,
+                    }}
+                  >
                     This application was deployed via GitOps.
                   </div>
 
@@ -133,7 +149,12 @@ export function DeleteModal() {
                           }}
                         >
                           {gitPath} on {gitBranch}
-                          {isVibeDeploy && <span style={{ opacity: 0.7 }}> + source files</span>}
+                          {isVibeDeploy && (
+                            <span style={{ opacity: 0.7 }}>
+                              {' '}
+                              + source files
+                            </span>
+                          )}
                         </span>
                       </span>
                     }

@@ -20,10 +20,12 @@ import { parseScaleAction } from '../lib/assistant/deployPreview.js'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const PLACEHOLDER = 'Ask about your services, or describe what you want to deploy...'
+const PLACEHOLDER =
+  'Ask about your services, or describe what you want to deploy...'
 
 function newMsgId() {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
+  if (typeof crypto !== 'undefined' && crypto.randomUUID)
+    return crypto.randomUUID()
   return 'm-' + Date.now() + '-' + Math.random().toString(16).slice(2)
 }
 
@@ -43,16 +45,23 @@ interface ChatRow {
   actions?: ChatAction[]
 }
 
-export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function AssistantPanel({
+  open,
+  onClose,
+}: {
+  open: boolean
+  onClose: () => void
+}) {
   const location = useLocation()
   const navigate = useNavigate()
   const token = useAppStore((s) => s.token)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [rows, setRows] = useState<ChatRow[]>([])
-  const [thinking, setThinking] = useState<null | { phase: 'fetch' | 'analyse'; name?: string }>(
-    null,
-  )
+  const [thinking, setThinking] = useState<null | {
+    phase: 'fetch' | 'analyse'
+    name?: string
+  }>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const historyRef = useRef<Array<{ role: string; content: string }>>([])
   const sendingRef = useRef(false)
@@ -78,12 +87,17 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
     setInput('')
 
     addUser(text, text)
-    historyRef.current = [...historyRef.current, { role: 'user', content: text }]
+    historyRef.current = [
+      ...historyRef.current,
+      { role: 'user', content: text },
+    ]
 
     setThinking({ phase: 'analyse' })
     const ctx = buildAssistantContext(location.pathname)
     const lowerText = text.toLowerCase()
-    const isScaleQ = /scale\s+[\w-]+\s+(?:(?:down|up)\s+to|to)\s+\d+/i.test(lowerText)
+    const isScaleQ = /scale\s+[\w-]+\s+(?:(?:down|up)\s+to|to)\s+\d+/i.test(
+      lowerText,
+    )
     const isHealthQ =
       !isScaleQ &&
       /(health|status|slow|broken|error|crash|fail|issue|problem|check|investigat|triage|log|metric|event)/i.test(
@@ -104,7 +118,9 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
         : null
     if (isHealthQ) {
       const targetDep =
-        deps.find((d: any) => lowerText.includes(d.metadata.name.toLowerCase())) || fromRoute
+        deps.find((d: any) =>
+          lowerText.includes(d.metadata.name.toLowerCase()),
+        ) || fromRoute
       if (targetDep) {
         setThinking({ phase: 'fetch', name: targetDep.metadata.name })
         try {
@@ -153,7 +169,13 @@ ${deployInstructions}`
     const assistantId = newMsgId()
     setRows((r) => [
       ...r,
-      { id: assistantId, role: 'assistant', text: '', stream: true, isMd: true },
+      {
+        id: assistantId,
+        role: 'assistant',
+        text: '',
+        stream: true,
+        isMd: true,
+      },
     ])
     setThinking(null)
 
@@ -177,17 +199,25 @@ ${deployInstructions}`
           /* */
         }
         const err = eb?.error
-        const emsg = typeof err === 'string' ? err : err?.message || 'HTTP ' + response.status
+        const emsg =
+          typeof err === 'string'
+            ? err
+            : err?.message || 'HTTP ' + response.status
         throw new Error(emsg)
       }
 
-      const fullText = await readTriageSseStream(response.body, (acc: string) => {
-        setRows((r) =>
-          r.map((row) =>
-            row.id === assistantId ? { ...row, text: acc, isMd: true, stream: true } : row,
-          ),
-        )
-      })
+      const fullText = await readTriageSseStream(
+        response.body,
+        (acc: string) => {
+          setRows((r) =>
+            r.map((row) =>
+              row.id === assistantId
+                ? { ...row, text: acc, isMd: true, stream: true }
+                : row,
+            ),
+          )
+        },
+      )
 
       {
         const scale = parseScaleAction(fullText)
@@ -212,7 +242,11 @@ ${deployInstructions}`
                                 scale.serviceName,
                                 'edit',
                               ),
-                              { state: { assistantPrefillInstances: scale.instances } },
+                              {
+                                state: {
+                                  assistantPrefillInstances: scale.instances,
+                                },
+                              },
                             )
                             setRows((x) => [
                               ...x,
@@ -232,12 +266,19 @@ ${deployInstructions}`
           ),
         )
       }
-      historyRef.current = [...historyRef.current, { role: 'assistant', content: fullText }]
+      historyRef.current = [
+        ...historyRef.current,
+        { role: 'assistant', content: fullText },
+      ]
     } catch (e: any) {
       setRows((r) =>
         r.map((row) =>
           row.id === assistantId
-            ? { ...row, text: 'Sorry, I ran into an error: ' + (e?.message || 'Unknown') }
+            ? {
+                ...row,
+                text:
+                  'Sorry, I ran into an error: ' + (e?.message || 'Unknown'),
+              }
             : row,
         ),
       )
@@ -281,7 +322,9 @@ ${deployInstructions}`
           flexShrink: 0,
         }}
       >
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Assistant</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+          Assistant
+        </span>
         <div style={{ flex: 1 }} />
         <Button variant="ghost" onClick={onClose} title="Close panel">
           Close
@@ -310,7 +353,11 @@ ${deployInstructions}`
                 )
               }
               return (
-                <MessageBubble key={row.id} role="assistant" streaming={row.stream}>
+                <MessageBubble
+                  key={row.id}
+                  role="assistant"
+                  streaming={row.stream}
+                >
                   {row.isMd ? (
                     <div style={{ minHeight: 8 }}>
                       <AssistantMarkdown>
@@ -322,7 +369,12 @@ ${deployInstructions}`
                   )}
                   {row.actions && row.actions.length > 0 ? (
                     <div
-                      style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}
+                      style={{
+                        display: 'flex',
+                        gap: 8,
+                        flexWrap: 'wrap',
+                        marginTop: 10,
+                      }}
                     >
                       {row.actions.map((a) => (
                         <Button
@@ -355,7 +407,13 @@ ${deployInstructions}`
                   }
                 />
                 {thinking.phase === 'fetch' && (
-                  <span style={{ fontSize: 11, color: 'var(--muted)', paddingLeft: 2 }}>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--muted)',
+                      paddingLeft: 2,
+                    }}
+                  >
                     Fetching diagnostics for {thinking.name || 'application'}…
                   </span>
                 )}

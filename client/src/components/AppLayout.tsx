@@ -11,7 +11,11 @@ import type { CommandSectionDef } from '@ds/v3-components/Command/Command'
 import { Button } from '@ds/v3-components/Button/Button'
 
 import { useAppStore } from '../store/useAppStore.js'
-import { ROUTES, serviceDetailPath, serviceDetailRootPath } from '../lib/routes.js'
+import {
+  ROUTES,
+  serviceDetailPath,
+  serviceDetailRootPath,
+} from '../lib/routes.js'
 import { getBreadcrumbItems } from '../lib/breadcrumbs.js'
 import { navSections } from '../nav/sections'
 import {
@@ -94,9 +98,10 @@ export function AppLayout() {
   const setChatOpen = useAppStore((s) => s.setChatOpen)
   const environments = useAppStore((s) => s.environments) as EnvLike[]
   const disabledEnvs = useAppStore((s) => s.disabledEnvs) as
-    | Record<string, boolean>
-    | undefined
-  const deployments = useAppStore((s) => s.cache.deployments) as DeploymentLike[]
+    Record<string, boolean> | undefined
+  const deployments = useAppStore(
+    (s) => s.cache.deployments,
+  ) as DeploymentLike[]
   const cacheStatus = useAppStore((s) => s.cacheStatus) as string
 
   const sections = useMemo(() => navSections(isAdmin), [isAdmin])
@@ -213,7 +218,12 @@ export function AppLayout() {
   return (
     <div
       className={currentApp ? undefined : 'pr-hide-fav-star'}
-      style={{ display: 'flex', width: '100%', height: '100vh', overflow: 'hidden' }}
+      style={{
+        display: 'flex',
+        width: '100%',
+        height: '100vh',
+        overflow: 'hidden',
+      }}
     >
       {/* Only app detail pages can be favorited. The design-system header always
           renders its star button, so hide it everywhere else via its stable

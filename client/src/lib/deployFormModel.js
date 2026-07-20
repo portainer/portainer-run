@@ -7,7 +7,8 @@ export const GPU_RESOURCE_KEYS = [
 ]
 
 export function newId() {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
+  if (typeof crypto !== 'undefined' && crypto.randomUUID)
+    return crypto.randomUUID()
   return 'c-' + Date.now() + '-' + Math.random().toString(16).slice(2)
 }
 
@@ -51,7 +52,11 @@ export function withDefaultCnames(containers) {
 export function parseQuantityString(q) {
   const s = String(q || '').trim()
   const m = s.match(/^(\d+(?:\.\d+)?)(Mi|Gi|Ti)$/i)
-  if (m) return { num: m[1], unit: m[2].charAt(0).toUpperCase() + m[2].slice(1).toLowerCase() }
+  if (m)
+    return {
+      num: m[1],
+      unit: m[2].charAt(0).toUpperCase() + m[2].slice(1).toLowerCase(),
+    }
   if (/^\d+$/i.test(s)) return { num: s, unit: 'Gi' }
   return { num: '1', unit: 'Gi' }
 }
@@ -149,7 +154,10 @@ export function k8sContainerToFormRow(c, { isPrimary, id, volume }) {
  * @param {object} templatePodSpec deployment.spec.template.spec
  * @param {Map<string, object>} pvcByClaimName parsed PVC json by claim name
  */
-export function formContainersFromDeploymentSpec(templatePodSpec, pvcByClaimName) {
+export function formContainersFromDeploymentSpec(
+  templatePodSpec,
+  pvcByClaimName,
+) {
   const vols = templatePodSpec.volumes || []
   const cts = templatePodSpec.containers || []
   return cts.map((c, i) => {
@@ -173,6 +181,10 @@ export function formContainersFromDeploymentSpec(templatePodSpec, pvcByClaimName
         break
       }
     }
-    return k8sContainerToFormRow(c, { isPrimary, id: newId(), volume: volPatch || undefined })
+    return k8sContainerToFormRow(c, {
+      isPrimary,
+      id: newId(),
+      volume: volPatch || undefined,
+    })
   })
 }

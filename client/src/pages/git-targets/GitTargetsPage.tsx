@@ -33,7 +33,9 @@ export function GitTargetsPage() {
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<any | null>(null)
-  const [testResults, setTestResults] = useState<Record<string, GitTestResult>>({})
+  const [testResults, setTestResults] = useState<Record<string, GitTestResult>>(
+    {},
+  )
   const [testing, setTesting] = useState<Record<string, boolean>>({})
   const [pendingDelete, setPendingDelete] = useState<{
     id: string
@@ -102,7 +104,10 @@ export function GitTargetsPage() {
         },
       }))
     } catch (e: any) {
-      setTestResults((t) => ({ ...t, [id]: { ok: false, message: e.message || 'Test failed' } }))
+      setTestResults((t) => ({
+        ...t,
+        [id]: { ok: false, message: e.message || 'Test failed' },
+      }))
     } finally {
       setTesting((t) => ({ ...t, [id]: false }))
     }
@@ -138,27 +143,49 @@ export function GitTargetsPage() {
       <PageTitle
         title="Git Targets"
         description="Repositories where Portainer-Run commits Kubernetes manifests for GitOps deployment. Credentials are stored encrypted. Add a target here before deploying."
-        actions={<Button onClick={() => setAdding(true)}>+ Add Git Target</Button>}
+        actions={
+          <Button onClick={() => setAdding(true)}>+ Add Git Target</Button>
+        }
       />
 
       {loading ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 720 }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+            maxWidth: 720,
+          }}
+        >
           <Skeleton height={84} radius={8} />
           <Skeleton height={84} radius={8} />
         </div>
       ) : connections.length === 0 ? (
         <div style={{ marginTop: 48, textAlign: 'center' }}>
-          <div style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 12 }}>
+          <div
+            style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 12 }}
+          >
             No git targets configured yet.
           </div>
-          <div style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 20 }}>
-            Add a target to enable GitOps deployments. Each deployment can use its own
-            repository.
+          <div
+            style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 20 }}
+          >
+            Add a target to enable GitOps deployments. Each deployment can use
+            its own repository.
           </div>
-          <Button onClick={() => setAdding(true)}>Add your first Git Target</Button>
+          <Button onClick={() => setAdding(true)}>
+            Add your first Git Target
+          </Button>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 720 }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+            maxWidth: 720,
+          }}
+        >
           {connections.map((conn) => (
             <Card key={conn.id}>
               <div
@@ -171,9 +198,20 @@ export function GitTargetsPage() {
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      marginBottom: 3,
+                    }}
                   >
-                    <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)' }}>
+                    <span
+                      style={{
+                        fontWeight: 600,
+                        fontSize: 14,
+                        color: 'var(--text)',
+                      }}
+                    >
                       {conn.name}
                     </span>
                     {conn.shared && (
@@ -192,11 +230,20 @@ export function GitTargetsPage() {
                   >
                     {conn.summary}
                   </div>
-                  <div style={{ fontFamily: MONO_FONT, fontSize: 11, color: 'var(--muted)' }}>
+                  <div
+                    style={{
+                      fontFamily: MONO_FONT,
+                      fontSize: 11,
+                      color: 'var(--muted)',
+                    }}
+                  >
                     {[
-                      conn.payload?.defaultBranch && `branch: ${conn.payload.defaultBranch}`,
-                      conn.payload?.pathPrefix && `prefix: ${conn.payload.pathPrefix}`,
-                      conn.payload?.authType && `auth: ${conn.payload.authType}`,
+                      conn.payload?.defaultBranch &&
+                        `branch: ${conn.payload.defaultBranch}`,
+                      conn.payload?.pathPrefix &&
+                        `prefix: ${conn.payload.pathPrefix}`,
+                      conn.payload?.authType &&
+                        `auth: ${conn.payload.authType}`,
                     ]
                       .filter(Boolean)
                       .join(' · ')}
@@ -206,21 +253,29 @@ export function GitTargetsPage() {
                       <TestResultAlert result={testResults[conn.id]} />
                     </div>
                   )}
-                  {testResults[conn.id]?.ok && testResults[conn.id]?.isEmpty && (
-                    <div style={{ marginTop: 8 }}>
-                      <EmptyRepoWarning
-                        id={conn.id}
-                        onInitialized={() =>
-                          setTestResults((t) => ({
-                            ...t,
-                            [conn.id]: { ...t[conn.id], isEmpty: false },
-                          }))
-                        }
-                      />
-                    </div>
-                  )}
+                  {testResults[conn.id]?.ok &&
+                    testResults[conn.id]?.isEmpty && (
+                      <div style={{ marginTop: 8 }}>
+                        <EmptyRepoWarning
+                          id={conn.id}
+                          onInitialized={() =>
+                            setTestResults((t) => ({
+                              ...t,
+                              [conn.id]: { ...t[conn.id], isEmpty: false },
+                            }))
+                          }
+                        />
+                      </div>
+                    )}
                 </div>
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 6,
+                    flexShrink: 0,
+                    alignItems: 'center',
+                  }}
+                >
                   <Button
                     variant="ghost"
                     onClick={() => void handleTest(conn.id)}
@@ -230,7 +285,10 @@ export function GitTargetsPage() {
                   </Button>
                   {(!conn.shared || isAdmin) && (
                     <>
-                      <Button variant="ghost" onClick={() => void handleEdit(conn)}>
+                      <Button
+                        variant="ghost"
+                        onClick={() => void handleEdit(conn)}
+                      >
                         Edit
                       </Button>
                       <Button
@@ -266,8 +324,9 @@ export function GitTargetsPage() {
         />
         <DialogBody>
           <div>
-            Delete git target <strong>{pendingDelete?.name}</strong>? Deployments
-            that reference it will no longer be able to sync. This cannot be undone.
+            Delete git target <strong>{pendingDelete?.name}</strong>?
+            Deployments that reference it will no longer be able to sync. This
+            cannot be undone.
           </div>
         </DialogBody>
         <DialogFooter>

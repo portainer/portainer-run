@@ -4,11 +4,19 @@ import { FileText, Lock, Upload, X } from 'lucide-react'
 import { Badge } from '@ds/v3-components/Badge/Badge'
 import { Button } from '@ds/v3-components/Button/Button'
 
-import { readDropEvent, readFileList, type UploadedFile } from '../../lib/fileIntake'
+import {
+  readDropEvent,
+  readFileList,
+  type UploadedFile,
+} from '../../lib/fileIntake'
 import { MONO_FONT } from '../service-detail/detailUi'
 
 /** Drag-and-drop / browse target for uploading a project folder or files. */
-export function DropZone({ onFiles }: { onFiles: (files: UploadedFile[]) => void }) {
+export function DropZone({
+  onFiles,
+}: {
+  onFiles: (files: UploadedFile[]) => void
+}) {
   const [dragging, setDragging] = useState(false)
   const [hover, setHover] = useState(false)
   const folderRef = useRef<HTMLInputElement>(null)
@@ -66,7 +74,8 @@ export function DropZone({ onFiles }: { onFiles: (files: UploadedFile[]) => void
         multiple
         style={{ display: 'none' }}
         onChange={(e) => {
-          if (e.target.files?.length) void readFileList(e.target.files).then(onFiles)
+          if (e.target.files?.length)
+            void readFileList(e.target.files).then(onFiles)
         }}
       />
       <input
@@ -75,7 +84,8 @@ export function DropZone({ onFiles }: { onFiles: (files: UploadedFile[]) => void
         multiple
         style={{ display: 'none' }}
         onChange={(e) => {
-          if (e.target.files?.length) void readFileList(e.target.files).then(onFiles)
+          if (e.target.files?.length)
+            void readFileList(e.target.files).then(onFiles)
         }}
       />
       <div
@@ -95,7 +105,14 @@ export function DropZone({ onFiles }: { onFiles: (files: UploadedFile[]) => void
       >
         <Upload size={22} />
       </div>
-      <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>
+      <div
+        style={{
+          fontSize: 15,
+          fontWeight: 600,
+          color: 'var(--text)',
+          marginBottom: 4,
+        }}
+      >
         {dragging ? 'Drop to upload' : 'Drop your project folder here'}
       </div>
       <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 18 }}>
@@ -136,7 +153,8 @@ export function FileRow({
   onRemove: () => void
 }) {
   const sizeKb = (file.size / 1024).toFixed(1)
-  const isEnvFile = file.name === '.env.example' || file.name.endsWith('.env.example')
+  const isEnvFile =
+    file.name === '.env.example' || file.name.endsWith('.env.example')
   return (
     <div
       style={{
@@ -152,7 +170,9 @@ export function FileRow({
       <FileText
         size={12}
         style={{
-          color: isEnvFile ? 'var(--status-warning, #f79009)' : 'var(--accent, #2e90fa)',
+          color: isEnvFile
+            ? 'var(--status-warning, #f79009)'
+            : 'var(--accent, #2e90fa)',
           flexShrink: 0,
         }}
       />
@@ -172,7 +192,12 @@ export function FileRow({
           : file.name}
       </span>
       <span
-        style={{ fontFamily: MONO_FONT, fontSize: 10, color: 'var(--muted)', flexShrink: 0 }}
+        style={{
+          fontFamily: MONO_FONT,
+          fontSize: 10,
+          color: 'var(--muted)',
+          flexShrink: 0,
+        }}
       >
         {sizeKb} KB
       </span>
@@ -227,7 +252,14 @@ export function LockedValue({ children }: { children: React.ReactNode }) {
 /** Bold heading shown at the top of a wizard step body. */
 export function StepHeading({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 16 }}>
+    <div
+      style={{
+        fontSize: 14,
+        fontWeight: 600,
+        color: 'var(--text)',
+        marginBottom: 16,
+      }}
+    >
       {children}
     </div>
   )

@@ -13,19 +13,58 @@ import { kubeFetch } from './api.js'
  * @returns {Promise<{ canDeploy: boolean, canEdit: boolean, canDelete: boolean, canRestart: boolean, canViewLogs: boolean, canCreatePvc: boolean, canCreateSecret: boolean, canDeleteSecret: boolean }>}
  */
 export async function checkEnvPermissions(token, envId, namespace) {
-  const defaults = { canDeploy: true, canEdit: true, canDelete: true, canRestart: true, canViewLogs: true, canCreatePvc: true, canCreateSecret: true, canDeleteSecret: true }
+  const defaults = {
+    canDeploy: true,
+    canEdit: true,
+    canDelete: true,
+    canRestart: true,
+    canViewLogs: true,
+    canCreatePvc: true,
+    canCreateSecret: true,
+    canDeleteSecret: true,
+  }
   if (!token || !envId || !namespace) return defaults
 
   try {
     const checks = [
-      { key: 'canDeploy',       verb: 'create', resource: 'deployments',             group: 'apps' },
-      { key: 'canEdit',         verb: 'update', resource: 'deployments',             group: 'apps' },
-      { key: 'canDelete',       verb: 'delete', resource: 'deployments',             group: 'apps' },
-      { key: 'canRestart',      verb: 'create', resource: 'pods/exec',               group: '' },
-      { key: 'canViewLogs',     verb: 'get',    resource: 'pods/log',                group: '' },
-      { key: 'canCreatePvc',    verb: 'create', resource: 'persistentvolumeclaims',  group: '' },
-      { key: 'canCreateSecret', verb: 'create', resource: 'secrets',                 group: '' },
-      { key: 'canDeleteSecret', verb: 'delete', resource: 'secrets',                 group: '' },
+      {
+        key: 'canDeploy',
+        verb: 'create',
+        resource: 'deployments',
+        group: 'apps',
+      },
+      {
+        key: 'canEdit',
+        verb: 'update',
+        resource: 'deployments',
+        group: 'apps',
+      },
+      {
+        key: 'canDelete',
+        verb: 'delete',
+        resource: 'deployments',
+        group: 'apps',
+      },
+      { key: 'canRestart', verb: 'create', resource: 'pods/exec', group: '' },
+      { key: 'canViewLogs', verb: 'get', resource: 'pods/log', group: '' },
+      {
+        key: 'canCreatePvc',
+        verb: 'create',
+        resource: 'persistentvolumeclaims',
+        group: '',
+      },
+      {
+        key: 'canCreateSecret',
+        verb: 'create',
+        resource: 'secrets',
+        group: '',
+      },
+      {
+        key: 'canDeleteSecret',
+        verb: 'delete',
+        resource: 'secrets',
+        group: '',
+      },
     ]
 
     const results = await Promise.all(
@@ -38,9 +77,15 @@ export async function checkEnvPermissions(token, envId, namespace) {
               resourceAttributes: { verb, resource, group, namespace },
             },
           })
-          const r = await kubeFetch(token, envId,
+          const r = await kubeFetch(
+            token,
+            envId,
             '/apis/authorization.k8s.io/v1/selfsubjectaccessreviews',
-            { method: 'POST', body, headers: { 'Content-Type': 'application/json' } }
+            {
+              method: 'POST',
+              body,
+              headers: { 'Content-Type': 'application/json' },
+            },
           )
           if (!r.ok) return { key, allowed: true }
           const data = await r.json()
@@ -48,7 +93,7 @@ export async function checkEnvPermissions(token, envId, namespace) {
         } catch {
           return { key, allowed: true }
         }
-      })
+      }),
     )
 
     const perms = { ...defaults }

@@ -95,7 +95,11 @@ export function FilesStep({
             ) : (
               <>
                 <div
-                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
                 >
                   <span style={HINT_STYLE}>
                     {files.length} file{files.length !== 1 ? 's' : ''} selected
@@ -104,7 +108,9 @@ export function FilesStep({
                     Remove all
                   </Button>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div
+                  style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
+                >
                   {files.map((f, i) => (
                     <FileRow
                       key={f.webkitRelativePath || f.name}
@@ -115,7 +121,8 @@ export function FilesStep({
                         f.name === 'Gemfile' ||
                         f.name === 'server.js'
                           ? 'runtime'
-                          : f.name === '.env.example' || f.name.endsWith('.env.example')
+                          : f.name === '.env.example' ||
+                              f.name.endsWith('.env.example')
                             ? 'env'
                             : null
                       }
@@ -148,13 +155,17 @@ export function FilesStep({
                   />
                   <Button
                     variant="ghost"
-                    onClick={() => document.getElementById('vibe-add-folder')?.click()}
+                    onClick={() =>
+                      document.getElementById('vibe-add-folder')?.click()
+                    }
                   >
                     + Add folder
                   </Button>
                   <Button
                     variant="ghost"
-                    onClick={() => document.getElementById('vibe-add-files')?.click()}
+                    onClick={() =>
+                      document.getElementById('vibe-add-files')?.click()
+                    }
                   >
                     + Add files
                   </Button>
@@ -191,7 +202,10 @@ export function FilesStep({
                 <Select
                   value={gitSourceBranch}
                   onChange={(e) => setGitSourceBranch(e.target.value)}
-                  options={gitSourceBranches.map((b) => ({ value: b, label: b }))}
+                  options={gitSourceBranches.map((b) => ({
+                    value: b,
+                    label: b,
+                  }))}
                 />
               ) : (
                 <Input
@@ -204,13 +218,15 @@ export function FilesStep({
             </FormControl>
 
             {!gitSourceTargetId || !gitSourceBranch.trim() ? (
-              <div style={HINT_STYLE}>Choose a target and branch to browse the repository.</div>
+              <div style={HINT_STYLE}>
+                Choose a target and branch to browse the repository.
+              </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={HINT_STYLE}>
-                  Expand folders to browse the repository and select the single folder that
-                  contains your app. We&rsquo;ll deploy that folder and detect its runtime
-                  automatically.
+                  Expand folders to browse the repository and select the single
+                  folder that contains your app. We&rsquo;ll deploy that folder
+                  and detect its runtime automatically.
                 </div>
                 <GitFolderTree
                   key={`${gitSourceTargetId}:${gitSourceBranch}`}
@@ -238,7 +254,9 @@ export function FilesStep({
                 }}
               >
                 ✓ Deploying{' '}
-                <span style={{ color: 'var(--text)' }}>{gitSourcePath || 'repository root'}</span>
+                <span style={{ color: 'var(--text)' }}>
+                  {gitSourcePath || 'repository root'}
+                </span>
                 {detectedRuntime ? ` as ${detectedRuntime.label}` : ''}
               </div>
             )}

@@ -113,7 +113,8 @@ function FolderRow({
   const isSelected = isFolder && selectedPath === node.id
   // Children are lazily loaded: `children` is undefined until the folder's
   // listing arrives. Show a spinner row while an expanded folder is fetching.
-  const childrenLoading = isFolder && isExpanded && !node.children && loadingPaths.has(node.id)
+  const childrenLoading =
+    isFolder && isExpanded && !node.children && loadingPaths.has(node.id)
 
   return (
     <>
@@ -179,12 +180,24 @@ function FolderRow({
 
         {isFolder ? (
           isExpanded ? (
-            <FolderOpen size={15} color="var(--accent, #2e90fa)" style={{ flexShrink: 0 }} />
+            <FolderOpen
+              size={15}
+              color="var(--accent, #2e90fa)"
+              style={{ flexShrink: 0 }}
+            />
           ) : (
-            <Folder size={15} color="var(--muted, #667085)" style={{ flexShrink: 0 }} />
+            <Folder
+              size={15}
+              color="var(--muted, #667085)"
+              style={{ flexShrink: 0 }}
+            />
           )
         ) : (
-          <File size={14} color="var(--muted, #98a2b3)" style={{ flexShrink: 0 }} />
+          <File
+            size={14}
+            color="var(--muted, #98a2b3)"
+            style={{ flexShrink: 0 }}
+          />
         )}
 
         <span
@@ -246,7 +259,9 @@ export function GitFolderTree({
   maxHeight?: number | string
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
-  const [childrenByPath, setChildrenByPath] = useState<Map<string, FileNode[]>>(() => new Map())
+  const [childrenByPath, setChildrenByPath] = useState<Map<string, FileNode[]>>(
+    () => new Map(),
+  )
   const [loadingPaths, setLoadingPaths] = useState<Set<string>>(() => new Set())
   const [rootError, setRootError] = useState('')
 
@@ -275,7 +290,9 @@ export function GitFolderTree({
           // Allow a retry on the next expand.
           requestedRef.current.delete(path)
           if (path === ROOT_ID) {
-            setRootError(e instanceof Error ? e.message : 'Failed to load repository')
+            setRootError(
+              e instanceof Error ? e.message : 'Failed to load repository',
+            )
           }
         })
         .finally(() => {
@@ -314,7 +331,9 @@ export function GitFolderTree({
       const kids = childrenByPath.get(path)
       if (!kids) return undefined
       return kids.map((node) =>
-        node.type === 'folder' ? { ...node, children: buildNodes(node.id) } : node,
+        node.type === 'folder'
+          ? { ...node, children: buildNodes(node.id) }
+          : node,
       )
     },
     [childrenByPath],
@@ -387,7 +406,11 @@ export function GitFolderTree({
             >
               <span style={{ width: 16, flexShrink: 0 }} />
               <Radio checked={rootSelected} />
-              <Folder size={15} color="var(--muted, #667085)" style={{ flexShrink: 0 }} />
+              <Folder
+                size={15}
+                color="var(--muted, #667085)"
+                style={{ flexShrink: 0 }}
+              />
               <span
                 style={{
                   fontSize: 13,

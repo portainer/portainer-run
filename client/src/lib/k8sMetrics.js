@@ -10,7 +10,15 @@ export function parseCpuToMilli(raw) {
 export function parseMemToBytes(raw) {
   if (!raw) return 0
   const s = String(raw)
-  const units = { Ki: 1024, Mi: 1024 ** 2, Gi: 1024 ** 3, Ti: 1024 ** 4, K: 1000, M: 1000 ** 2, G: 1000 ** 3 }
+  const units = {
+    Ki: 1024,
+    Mi: 1024 ** 2,
+    Gi: 1024 ** 3,
+    Ti: 1024 ** 4,
+    K: 1000,
+    M: 1000 ** 2,
+    G: 1000 ** 3,
+  }
   for (const [suffix, mult] of Object.entries(units)) {
     if (s.endsWith(suffix)) return Math.round(parseFloat(s) * mult)
   }

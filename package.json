@@ -11,12 +11,13 @@
     "docker:run": "bash scripts/docker-run.sh",
     "lint": "bun run --cwd client lint",
     "typecheck": "bun run --cwd client typecheck",
-    "format": "bun run --cwd client format",
-    "format:check": "bun run --cwd client format:check",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "prepare": "husky install"
   },
   "devDependencies": {
     "husky": "^8.0.3",
-    "lint-staged": "^17.0.7"
+    "lint-staged": "^17.0.7",
+    "prettier": "^3.4.2"
   }
 }

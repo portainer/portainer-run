@@ -198,7 +198,13 @@ export function ServiceDetailMetricsTab({
         {polling ? (
           <>
             <StatusDot tone="success" animation="pulse" />
-            <span style={{ fontSize: 12, color: 'var(--muted)', fontFamily: MONO_FONT }}>
+            <span
+              style={{
+                fontSize: 12,
+                color: 'var(--muted)',
+                fontFamily: MONO_FONT,
+              }}
+            >
               Polling (15s)
             </span>
             <Button variant="ghost" onClick={stopPolling}>
@@ -206,9 +212,7 @@ export function ServiceDetailMetricsTab({
             </Button>
           </>
         ) : (
-          <Button onClick={startPolling}>
-            Start
-          </Button>
+          <Button onClick={startPolling}>Start</Button>
         )}
       </div>
 
@@ -355,7 +359,9 @@ function MetricsContainerCard({
         >
           {isPrimary ? 'primary' : 'sidecar'}
         </span>
-        <span style={{ fontFamily: MONO_FONT, fontSize: 11, color: 'var(--muted)' }}>
+        <span
+          style={{ fontFamily: MONO_FONT, fontSize: 11, color: 'var(--muted)' }}
+        >
           {cpuPts.length} samples
         </span>
       </div>

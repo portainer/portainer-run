@@ -21,8 +21,10 @@ function withTlsContext(payload, fn) {
 export async function commitFiles(payload, branch, message, files) {
   return withTlsContext(payload, () => {
     const { provider } = payload
-    if (provider === 'github') return commitGitHub(payload, branch, message, files)
-    if (provider === 'gitlab') return commitGitLab(payload, branch, message, files)
+    if (provider === 'github')
+      return commitGitHub(payload, branch, message, files)
+    if (provider === 'gitlab')
+      return commitGitLab(payload, branch, message, files)
     return commitGitea(payload, branch, message, files)
   })
 }
@@ -39,17 +41,29 @@ export async function getBranches(payload) {
 
     if (provider === 'github') {
       const base = githubApiBase(payload)
-      const data = await request('GET', `${base}/repos/${repo}/branches`, headers)
+      const data = await request(
+        'GET',
+        `${base}/repos/${repo}/branches`,
+        headers,
+      )
       return data.map((b) => b.name)
     }
     if (provider === 'gitlab') {
       const base = gitlabApiBase(payload)
       const encoded = encodeURIComponent(repo)
-      const data = await request('GET', `${base}/api/v4/projects/${encoded}/repository/branches`, headers)
+      const data = await request(
+        'GET',
+        `${base}/api/v4/projects/${encoded}/repository/branches`,
+        headers,
+      )
       return data.map((b) => b.name)
     }
     const base = baseUrl || ''
-    const data = await request('GET', `${base}/api/v1/repos/${repo}/branches`, headers)
+    const data = await request(
+      'GET',
+      `${base}/api/v1/repos/${repo}/branches`,
+      headers,
+    )
     return data.map((b) => b.name)
   })
 }
@@ -70,7 +84,11 @@ export async function ensureBranch(payload, branch) {
       const base = githubApiBase(payload)
       const repoData = await request('GET', `${base}/repos/${repo}`, headers)
       const defaultBranch = repoData.default_branch
-      const refData = await request('GET', `${base}/repos/${repo}/git/ref/heads/${defaultBranch}`, headers)
+      const refData = await request(
+        'GET',
+        `${base}/repos/${repo}/git/ref/heads/${defaultBranch}`,
+        headers,
+      )
       const sha = refData.object.sha
       if (branch === defaultBranch) return { ok: true, created: false }
       await request('POST', `${base}/repos/${repo}/git/refs`, headers, {
@@ -83,17 +101,30 @@ export async function ensureBranch(payload, branch) {
     if (provider === 'gitlab') {
       const base = gitlabApiBase(payload)
       const encoded = encodeURIComponent(repo)
-      const projData = await request('GET', `${base}/api/v4/projects/${encoded}`, headers)
-      await request('POST', `${base}/api/v4/projects/${encoded}/repository/branches`, headers, {
-        branch,
-        ref: projData.default_branch,
-      })
+      const projData = await request(
+        'GET',
+        `${base}/api/v4/projects/${encoded}`,
+        headers,
+      )
+      await request(
+        'POST',
+        `${base}/api/v4/projects/${encoded}/repository/branches`,
+        headers,
+        {
+          branch,
+          ref: projData.default_branch,
+        },
+      )
       return { ok: true, created: true }
     }
 
     // Gitea
     const base = baseUrl || ''
-    const repoData = await request('GET', `${base}/api/v1/repos/${repo}`, headers)
+    const repoData = await request(
+      'GET',
+      `${base}/api/v1/repos/${repo}`,
+      headers,
+    )
     await request('POST', `${base}/api/v1/repos/${repo}/branches`, headers, {
       new_branch_name: branch,
       old_branch_name: repoData.default_branch,
@@ -115,9 +146,17 @@ async function commitGitHub(payload, branch, message, files) {
   let parents = []
 
   try {
-    const refData = await request('GET', `${base}/repos/${repo}/git/ref/heads/${branch}`, headers)
+    const refData = await request(
+      'GET',
+      `${base}/repos/${repo}/git/ref/heads/${branch}`,
+      headers,
+    )
     baseSha = refData.object.sha
-    const commitData = await request('GET', `${base}/repos/${repo}/git/commits/${baseSha}`, headers)
+    const commitData = await request(
+      'GET',
+      `${base}/repos/${repo}/git/commits/${baseSha}`,
+      headers,
+    )
     baseTree = commitData.tree.sha
     parents = [baseSha]
   } catch (e) {
@@ -125,16 +164,22 @@ async function commitGitHub(payload, branch, message, files) {
     // Re-throw everything else (rate limits, auth failures, network errors)
     // so a transient GET failure cannot silently replace the entire branch tree.
     const msg = (e?.message || '').toLowerCase()
-    if (!msg.includes('not found') && !msg.includes('git repository is empty')) throw e
+    if (!msg.includes('not found') && !msg.includes('git repository is empty'))
+      throw e
   }
 
   // Create blobs
   const treeItems = await Promise.all(
     files.map(async (f) => {
-      const blobData = await request('POST', `${base}/repos/${repo}/git/blobs`, headers, {
-        content: Buffer.from(f.content).toString('base64'),
-        encoding: 'base64',
-      })
+      const blobData = await request(
+        'POST',
+        `${base}/repos/${repo}/git/blobs`,
+        headers,
+        {
+          content: Buffer.from(f.content).toString('base64'),
+          encoding: 'base64',
+        },
+      )
       return { path: f.path, mode: '100644', type: 'blob', sha: blobData.sha }
     }),
   )
@@ -143,21 +188,36 @@ async function commitGitHub(payload, branch, message, files) {
   const treeBody = baseTree
     ? { base_tree: baseTree, tree: treeItems }
     : { tree: treeItems }
-  const newTree = await request('POST', `${base}/repos/${repo}/git/trees`, headers, treeBody)
+  const newTree = await request(
+    'POST',
+    `${base}/repos/${repo}/git/trees`,
+    headers,
+    treeBody,
+  )
 
   // Create commit
-  const newCommit = await request('POST', `${base}/repos/${repo}/git/commits`, headers, {
-    message,
-    tree: newTree.sha,
-    parents,
-  })
+  const newCommit = await request(
+    'POST',
+    `${base}/repos/${repo}/git/commits`,
+    headers,
+    {
+      message,
+      tree: newTree.sha,
+      parents,
+    },
+  )
 
   // Update or create ref
   try {
-    await request('PATCH', `${base}/repos/${repo}/git/refs/heads/${branch}`, headers, {
-      sha: newCommit.sha,
-      force: true,
-    })
+    await request(
+      'PATCH',
+      `${base}/repos/${repo}/git/refs/heads/${branch}`,
+      headers,
+      {
+        sha: newCommit.sha,
+        force: true,
+      },
+    )
   } catch {
     await request('POST', `${base}/repos/${repo}/git/refs`, headers, {
       ref: `refs/heads/${branch}`,
@@ -259,7 +319,10 @@ function gitlabApiBase(payload) {
 
 function buildHeaders(payload) {
   if (payload.provider === 'github') {
-    const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'portainer-run' }
+    const headers = {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'portainer-run',
+    }
     if (payload.token) headers['Authorization'] = `token ${payload.token}`
     return headers
   }
@@ -312,7 +375,11 @@ function request(method, urlStr, headers, body) {
           // into the message. Only the pathname is logged — never headers/query,
           // which can carry credentials.
           let detail = ''
-          try { detail = JSON.parse(text)?.message || '' } catch { /* ignore */ }
+          try {
+            detail = JSON.parse(text)?.message || ''
+          } catch {
+            /* ignore */
+          }
           const err = new Error(
             `git ${method} ${u.host}${u.pathname} → HTTP ${res.statusCode}` +
               (detail ? `: ${detail}` : ''),
@@ -336,7 +403,6 @@ function request(method, urlStr, headers, body) {
   })
 }
 
-
 /**
  * Delete a single file from the repo.
  * @param {object} payload  decrypted connection payload
@@ -347,8 +413,10 @@ function request(method, urlStr, headers, body) {
 export async function deleteFile(payload, branch, filePath, message) {
   return withTlsContext(payload, () => {
     const { provider } = payload
-    if (provider === 'github') return deleteFileGitHub(payload, branch, filePath, message)
-    if (provider === 'gitlab') return deleteFileGitLab(payload, branch, filePath, message)
+    if (provider === 'github')
+      return deleteFileGitHub(payload, branch, filePath, message)
+    if (provider === 'gitlab')
+      return deleteFileGitLab(payload, branch, filePath, message)
     return deleteFileGitea(payload, branch, filePath, message)
   })
 }
@@ -359,15 +427,24 @@ async function deleteFileGitHub(payload, branch, filePath, message) {
   const base = githubApiBase(payload)
 
   // Get current file SHA — required by GitHub delete API
-  const fileData = await request('GET', `${base}/repos/${repo}/contents/${filePath}?ref=${branch}`, headers)
+  const fileData = await request(
+    'GET',
+    `${base}/repos/${repo}/contents/${filePath}?ref=${branch}`,
+    headers,
+  )
   const sha = fileData.sha
   if (!sha) throw new Error('Could not retrieve file SHA for deletion')
 
-  await request('DELETE', `${base}/repos/${repo}/contents/${filePath}`, headers, {
-    message,
-    sha,
-    branch,
-  })
+  await request(
+    'DELETE',
+    `${base}/repos/${repo}/contents/${filePath}`,
+    headers,
+    {
+      message,
+      sha,
+      branch,
+    },
+  )
   return { ok: true }
 }
 
@@ -393,15 +470,24 @@ async function deleteFileGitea(payload, branch, filePath, message) {
   const headers = buildHeaders(payload)
 
   // Get current file SHA
-  const fileData = await request('GET', `${base}/api/v1/repos/${repo}/contents/${filePath}?ref=${branch}`, headers)
+  const fileData = await request(
+    'GET',
+    `${base}/api/v1/repos/${repo}/contents/${filePath}?ref=${branch}`,
+    headers,
+  )
   const sha = fileData.sha
   if (!sha) throw new Error('Could not retrieve file SHA for deletion')
 
-  await request('DELETE', `${base}/api/v1/repos/${repo}/contents/${filePath}`, headers, {
-    message,
-    sha,
-    branch,
-  })
+  await request(
+    'DELETE',
+    `${base}/api/v1/repos/${repo}/contents/${filePath}`,
+    headers,
+    {
+      message,
+      sha,
+      branch,
+    },
+  )
   return { ok: true }
 }
 
@@ -416,8 +502,10 @@ async function deleteFileGitea(payload, branch, filePath, message) {
 export async function deleteDirectory(payload, branch, dirPath, message) {
   return withTlsContext(payload, () => {
     const { provider } = payload
-    if (provider === 'github') return deleteDirectoryGitHub(payload, branch, dirPath, message)
-    if (provider === 'gitlab') return deleteDirectoryGitLab(payload, branch, dirPath, message)
+    if (provider === 'github')
+      return deleteDirectoryGitHub(payload, branch, dirPath, message)
+    if (provider === 'gitlab')
+      return deleteDirectoryGitLab(payload, branch, dirPath, message)
     return deleteDirectoryGitea(payload, branch, dirPath, message)
   })
 }
@@ -436,12 +524,16 @@ export async function deleteDirectory(payload, branch, dirPath, message) {
  * @param {string} message
  */
 export async function deletePaths(payload, branch, paths, message) {
-  const clean = (paths || []).map((p) => String(p || '').replace(/\/+$/, '')).filter(Boolean)
+  const clean = (paths || [])
+    .map((p) => String(p || '').replace(/\/+$/, ''))
+    .filter(Boolean)
   if (clean.length === 0) return { ok: true, deleted: 0 }
   return withTlsContext(payload, () => {
     const { provider } = payload
-    if (provider === 'github') return deletePathsGitHub(payload, branch, clean, message)
-    if (provider === 'gitlab') return deletePathsGitLab(payload, branch, clean, message)
+    if (provider === 'github')
+      return deletePathsGitHub(payload, branch, clean, message)
+    if (provider === 'gitlab')
+      return deletePathsGitLab(payload, branch, clean, message)
     return deletePathsGitea(payload, branch, clean, message)
   })
 }
@@ -464,28 +556,62 @@ async function deletePathsGitHub(payload, branch, paths, message) {
   const headers = buildHeaders(payload)
   const base = githubApiBase(payload)
 
-  const refData = await request('GET', `${base}/repos/${repo}/git/ref/heads/${branch}`, headers)
+  const refData = await request(
+    'GET',
+    `${base}/repos/${repo}/git/ref/heads/${branch}`,
+    headers,
+  )
   const commitSha = refData.object.sha
-  const commitData = await request('GET', `${base}/repos/${repo}/git/commits/${commitSha}`, headers)
+  const commitData = await request(
+    'GET',
+    `${base}/repos/${repo}/git/commits/${commitSha}`,
+    headers,
+  )
   const treeSha = commitData.tree.sha
-  const treeData = await request('GET', `${base}/repos/${repo}/git/trees/${treeSha}?recursive=1`, headers)
+  const treeData = await request(
+    'GET',
+    `${base}/repos/${repo}/git/trees/${treeSha}?recursive=1`,
+    headers,
+  )
 
   const allBlobs = treeData.tree.filter((e) => e.type === 'blob')
-  const remaining = allBlobs.filter((entry) => !matchesAnyPath(entry.path, paths))
+  const remaining = allBlobs.filter(
+    (entry) => !matchesAnyPath(entry.path, paths),
+  )
   if (remaining.length === allBlobs.length) return { ok: true, deleted: 0 }
 
-  const newTree = await request('POST', `${base}/repos/${repo}/git/trees`, headers, {
-    tree: remaining.map((e) => ({ path: e.path, mode: e.mode, type: e.type, sha: e.sha })),
-  })
-  const newCommit = await request('POST', `${base}/repos/${repo}/git/commits`, headers, {
-    message,
-    tree: newTree.sha,
-    parents: [commitSha],
-  })
-  await request('PATCH', `${base}/repos/${repo}/git/refs/heads/${branch}`, headers, {
-    sha: newCommit.sha,
-    force: false,
-  })
+  const newTree = await request(
+    'POST',
+    `${base}/repos/${repo}/git/trees`,
+    headers,
+    {
+      tree: remaining.map((e) => ({
+        path: e.path,
+        mode: e.mode,
+        type: e.type,
+        sha: e.sha,
+      })),
+    },
+  )
+  const newCommit = await request(
+    'POST',
+    `${base}/repos/${repo}/git/commits`,
+    headers,
+    {
+      message,
+      tree: newTree.sha,
+      parents: [commitSha],
+    },
+  )
+  await request(
+    'PATCH',
+    `${base}/repos/${repo}/git/refs/heads/${branch}`,
+    headers,
+    {
+      sha: newCommit.sha,
+      force: false,
+    },
+  )
   return { ok: true, deleted: allBlobs.length - remaining.length }
 }
 
@@ -505,11 +631,17 @@ async function deletePathsGitLab(payload, branch, paths, message) {
     // Try to list p as a directory; if it yields blobs, those are the targets.
     let listed = []
     try {
-      listed = await request('GET',
+      listed = await request(
+        'GET',
         `${base}/api/v4/projects/${encoded}/repository/tree?path=${encodeURIComponent(p)}&ref=${branch}&recursive=true&per_page=100`,
-        headers)
-    } catch { listed = [] }
-    const blobs = (Array.isArray(listed) ? listed : []).filter((i) => i.type === 'blob')
+        headers,
+      )
+    } catch {
+      listed = []
+    }
+    const blobs = (Array.isArray(listed) ? listed : []).filter(
+      (i) => i.type === 'blob',
+    )
     if (blobs.length > 0) {
       for (const b of blobs) fileSet.add(b.path)
     } else {
@@ -519,11 +651,19 @@ async function deletePathsGitLab(payload, branch, paths, message) {
   }
   if (fileSet.size === 0) return { ok: true, deleted: 0 }
 
-  await request('POST', `${base}/api/v4/projects/${encoded}/repository/commits`, headers, {
-    branch,
-    commit_message: message,
-    actions: [...fileSet].map((file_path) => ({ action: 'delete', file_path })),
-  })
+  await request(
+    'POST',
+    `${base}/api/v4/projects/${encoded}/repository/commits`,
+    headers,
+    {
+      branch,
+      commit_message: message,
+      actions: [...fileSet].map((file_path) => ({
+        action: 'delete',
+        file_path,
+      })),
+    },
+  )
   return { ok: true, deleted: fileSet.size }
 }
 
@@ -535,28 +675,62 @@ async function deletePathsGitea(payload, branch, paths, message) {
   const base = baseUrl || ''
   const headers = buildHeaders(payload)
 
-  const refData = await request('GET', `${base}/api/v1/repos/${repo}/branches/${branch}`, headers)
+  const refData = await request(
+    'GET',
+    `${base}/api/v1/repos/${repo}/branches/${branch}`,
+    headers,
+  )
   const commitSha = refData.commit.id
-  const commitData = await request('GET', `${base}/api/v1/repos/${repo}/git/commits/${commitSha}`, headers)
+  const commitData = await request(
+    'GET',
+    `${base}/api/v1/repos/${repo}/git/commits/${commitSha}`,
+    headers,
+  )
   const treeSha = commitData.tree?.sha || commitData.commit?.tree?.sha
-  const treeData = await request('GET', `${base}/api/v1/repos/${repo}/git/trees/${treeSha}?recursive=true`, headers)
+  const treeData = await request(
+    'GET',
+    `${base}/api/v1/repos/${repo}/git/trees/${treeSha}?recursive=true`,
+    headers,
+  )
 
   const allBlobs = (treeData.tree || []).filter((e) => e.type === 'blob')
-  const remaining = allBlobs.filter((entry) => !matchesAnyPath(entry.path, paths))
+  const remaining = allBlobs.filter(
+    (entry) => !matchesAnyPath(entry.path, paths),
+  )
   if (remaining.length === allBlobs.length) return { ok: true, deleted: 0 }
 
-  const newTree = await request('POST', `${base}/api/v1/repos/${repo}/git/trees`, headers, {
-    tree: remaining.map((e) => ({ path: e.path, mode: e.mode, type: e.type, sha: e.sha })),
-  })
-  const newCommit = await request('POST', `${base}/api/v1/repos/${repo}/git/commits`, headers, {
-    message,
-    tree: newTree.sha,
-    parents: [commitSha],
-  })
-  await request('PATCH', `${base}/api/v1/repos/${repo}/git/refs/heads/${branch}`, headers, {
-    sha: newCommit.sha,
-    force: false,
-  })
+  const newTree = await request(
+    'POST',
+    `${base}/api/v1/repos/${repo}/git/trees`,
+    headers,
+    {
+      tree: remaining.map((e) => ({
+        path: e.path,
+        mode: e.mode,
+        type: e.type,
+        sha: e.sha,
+      })),
+    },
+  )
+  const newCommit = await request(
+    'POST',
+    `${base}/api/v1/repos/${repo}/git/commits`,
+    headers,
+    {
+      message,
+      tree: newTree.sha,
+      parents: [commitSha],
+    },
+  )
+  await request(
+    'PATCH',
+    `${base}/api/v1/repos/${repo}/git/refs/heads/${branch}`,
+    headers,
+    {
+      sha: newCommit.sha,
+      force: false,
+    },
+  )
   return { ok: true, deleted: allBlobs.length - remaining.length }
 }
 
@@ -573,15 +747,27 @@ async function deleteDirectoryGitHub(payload, branch, dirPath, message) {
   const prefix = dirPath.replace(/\/$/, '') + '/'
 
   // 1. Get current branch commit SHA
-  const refData = await request('GET', `${base}/repos/${repo}/git/ref/heads/${branch}`, headers)
+  const refData = await request(
+    'GET',
+    `${base}/repos/${repo}/git/ref/heads/${branch}`,
+    headers,
+  )
   const commitSha = refData.object.sha
 
   // 2. Get the current commit to find the tree SHA and parent
-  const commitData = await request('GET', `${base}/repos/${repo}/git/commits/${commitSha}`, headers)
+  const commitData = await request(
+    'GET',
+    `${base}/repos/${repo}/git/commits/${commitSha}`,
+    headers,
+  )
   const treeSha = commitData.tree.sha
 
   // 3. Get the full recursive tree
-  const treeData = await request('GET', `${base}/repos/${repo}/git/trees/${treeSha}?recursive=1`, headers)
+  const treeData = await request(
+    'GET',
+    `${base}/repos/${repo}/git/trees/${treeSha}?recursive=1`,
+    headers,
+  )
 
   // Only keep blob (file) entries — Git reconstructs tree (directory) objects automatically.
   // Keeping stale tree-type entries would pass old tree SHAs that still contain the deleted files.
@@ -591,22 +777,42 @@ async function deleteDirectoryGitHub(payload, branch, dirPath, message) {
   if (remaining.length === allBlobs.length) return { ok: true, deleted: 0 } // nothing to delete
 
   // 4. Create a new tree with only the remaining blob entries
-  const newTree = await request('POST', `${base}/repos/${repo}/git/trees`, headers, {
-    tree: remaining.map((e) => ({ path: e.path, mode: e.mode, type: e.type, sha: e.sha })),
-  })
+  const newTree = await request(
+    'POST',
+    `${base}/repos/${repo}/git/trees`,
+    headers,
+    {
+      tree: remaining.map((e) => ({
+        path: e.path,
+        mode: e.mode,
+        type: e.type,
+        sha: e.sha,
+      })),
+    },
+  )
 
   // 5. Create a new commit
-  const newCommit = await request('POST', `${base}/repos/${repo}/git/commits`, headers, {
-    message,
-    tree: newTree.sha,
-    parents: [commitSha],
-  })
+  const newCommit = await request(
+    'POST',
+    `${base}/repos/${repo}/git/commits`,
+    headers,
+    {
+      message,
+      tree: newTree.sha,
+      parents: [commitSha],
+    },
+  )
 
   // 6. Update the branch ref
-  await request('PATCH', `${base}/repos/${repo}/git/refs/heads/${branch}`, headers, {
-    sha: newCommit.sha,
-    force: false,
-  })
+  await request(
+    'PATCH',
+    `${base}/repos/${repo}/git/refs/heads/${branch}`,
+    headers,
+    {
+      sha: newCommit.sha,
+      force: false,
+    },
+  )
 
   return { ok: true, deleted: treeData.tree.length - remaining.length }
 }
@@ -622,18 +828,25 @@ async function deleteDirectoryGitLab(payload, branch, dirPath, message) {
   const headers = buildHeaders(payload)
 
   // List all files under the directory
-  const items = await request('GET',
+  const items = await request(
+    'GET',
     `${base}/api/v4/projects/${encoded}/repository/tree?path=${encodeURIComponent(dirPath)}&ref=${branch}&recursive=true&per_page=100`,
-    headers)
+    headers,
+  )
   const files = items.filter((i) => i.type === 'blob')
   if (!files.length) return { ok: true, deleted: 0 }
 
   // Single commit with all delete actions
-  await request('POST', `${base}/api/v4/projects/${encoded}/repository/commits`, headers, {
-    branch,
-    commit_message: message,
-    actions: files.map((f) => ({ action: 'delete', file_path: f.path })),
-  })
+  await request(
+    'POST',
+    `${base}/api/v4/projects/${encoded}/repository/commits`,
+    headers,
+    {
+      branch,
+      commit_message: message,
+      actions: files.map((f) => ({ action: 'delete', file_path: f.path })),
+    },
+  )
 
   return { ok: true, deleted: files.length }
 }
@@ -649,33 +862,65 @@ async function deleteDirectoryGitea(payload, branch, dirPath, message) {
   const prefix = dirPath.replace(/\/$/, '') + '/'
 
   // 1. Get current branch commit SHA
-  const refData = await request('GET', `${base}/api/v1/repos/${repo}/branches/${branch}`, headers)
+  const refData = await request(
+    'GET',
+    `${base}/api/v1/repos/${repo}/branches/${branch}`,
+    headers,
+  )
   const commitSha = refData.commit.id
 
   // 2. Get the tree SHA from the commit
-  const commitData = await request('GET', `${base}/api/v1/repos/${repo}/git/commits/${commitSha}`, headers)
+  const commitData = await request(
+    'GET',
+    `${base}/api/v1/repos/${repo}/git/commits/${commitSha}`,
+    headers,
+  )
   const treeSha = commitData.tree?.sha || commitData.commit?.tree?.sha
 
   // 3. Get the full recursive tree
-  const treeData = await request('GET', `${base}/api/v1/repos/${repo}/git/trees/${treeSha}?recursive=true`, headers)
+  const treeData = await request(
+    'GET',
+    `${base}/api/v1/repos/${repo}/git/trees/${treeSha}?recursive=true`,
+    headers,
+  )
   const allBlobs = (treeData.tree || []).filter((e) => e.type === 'blob')
   const remaining = allBlobs.filter((entry) => !entry.path.startsWith(prefix))
 
   if (remaining.length === allBlobs.length) return { ok: true, deleted: 0 }
 
   // 4-6. Create new tree, commit, update ref
-  const newTree = await request('POST', `${base}/api/v1/repos/${repo}/git/trees`, headers, {
-    tree: remaining.map((e) => ({ path: e.path, mode: e.mode, type: e.type, sha: e.sha })),
-  })
-  const newCommit = await request('POST', `${base}/api/v1/repos/${repo}/git/commits`, headers, {
-    message,
-    tree: newTree.sha,
-    parents: [commitSha],
-  })
-  await request('PATCH', `${base}/api/v1/repos/${repo}/git/refs/heads/${branch}`, headers, {
-    sha: newCommit.sha,
-    force: false,
-  })
+  const newTree = await request(
+    'POST',
+    `${base}/api/v1/repos/${repo}/git/trees`,
+    headers,
+    {
+      tree: remaining.map((e) => ({
+        path: e.path,
+        mode: e.mode,
+        type: e.type,
+        sha: e.sha,
+      })),
+    },
+  )
+  const newCommit = await request(
+    'POST',
+    `${base}/api/v1/repos/${repo}/git/commits`,
+    headers,
+    {
+      message,
+      tree: newTree.sha,
+      parents: [commitSha],
+    },
+  )
+  await request(
+    'PATCH',
+    `${base}/api/v1/repos/${repo}/git/refs/heads/${branch}`,
+    headers,
+    {
+      sha: newCommit.sha,
+      force: false,
+    },
+  )
 
   return { ok: true, deleted: (treeData.tree || []).length - remaining.length }
 }
@@ -688,7 +933,10 @@ async function deleteDirectoryGitea(payload, branch, dirPath, message) {
 export function buildRepoHttpsUrl(payload) {
   const { provider, repo, url: baseUrl } = payload
   if (provider === 'github') {
-    const host = (baseUrl || '').trim().replace(/\/+$/, '').replace(/\/api\/v3$/, '')
+    const host = (baseUrl || '')
+      .trim()
+      .replace(/\/+$/, '')
+      .replace(/\/api\/v3$/, '')
     return host ? `${host}/${repo}` : `https://github.com/${repo}`
   }
   if (provider === 'gitlab') {
@@ -727,7 +975,11 @@ async function testGitConnectionImpl(payload) {
       const userRes = await request('GET', `${base}/user`, headers)
       const username = userRes.login
       if (username) {
-        const collabRes = await request('GET', `${base}/repos/${repo}/collaborators/${username}/permission`, headers)
+        const collabRes = await request(
+          'GET',
+          `${base}/repos/${repo}/collaborators/${username}/permission`,
+          headers,
+        )
         const level = collabRes.permission // 'admin' | 'write' | 'read' | 'none'
         canWrite = level === 'write' || level === 'admin'
         canAdmin = level === 'admin'
@@ -758,7 +1010,11 @@ async function testGitConnectionImpl(payload) {
         `Write (push): ${canWrite ? 'yes' : 'no'}`,
         `Admin: ${canAdmin ? 'yes' : 'no'}`,
         `Permission check: ${permMethod}`,
-        ...(!canWrite ? ['⚠ This token cannot push to the repository — deployments will fail'] : []),
+        ...(!canWrite
+          ? [
+              '⚠ This token cannot push to the repository — deployments will fail',
+            ]
+          : []),
       ],
     }
   }
@@ -766,15 +1022,31 @@ async function testGitConnectionImpl(payload) {
   if (provider === 'gitlab') {
     const base = gitlabApiBase(payload)
     const encoded = encodeURIComponent(repo)
-    const data = await request('GET', `${base}/api/v4/projects/${encoded}`, headers)
+    const data = await request(
+      'GET',
+      `${base}/api/v4/projects/${encoded}`,
+      headers,
+    )
     // access_level: 50=owner, 40=maintainer, 30=developer(push), 20=reporter(read), 10=guest
-    const level = data.permissions?.project_access?.access_level
-      ?? data.permissions?.group_access?.access_level
-      ?? 0
-    const canRead  = level >= 20
+    const level =
+      data.permissions?.project_access?.access_level ??
+      data.permissions?.group_access?.access_level ??
+      0
+    const canRead = level >= 20
     const canWrite = level >= 30
     const canAdmin = level >= 40
-    const levelLabel = level >= 50 ? 'Owner' : level >= 40 ? 'Maintainer' : level >= 30 ? 'Developer' : level >= 20 ? 'Reporter' : level >= 10 ? 'Guest' : 'None'
+    const levelLabel =
+      level >= 50
+        ? 'Owner'
+        : level >= 40
+          ? 'Maintainer'
+          : level >= 30
+            ? 'Developer'
+            : level >= 20
+              ? 'Reporter'
+              : level >= 10
+                ? 'Guest'
+                : 'None'
     const branches = await getBranches(payload).catch(() => [])
     return {
       ok: true,
@@ -785,7 +1057,11 @@ async function testGitConnectionImpl(payload) {
         `Access level: ${levelLabel} (${level})`,
         `Read: ${canRead ? 'yes' : 'no'}`,
         `Write (push): ${canWrite ? 'yes' : 'no'}`,
-        ...(!canWrite ? ['⚠ This token cannot push to the repository — deployments will fail'] : []),
+        ...(!canWrite
+          ? [
+              '⚠ This token cannot push to the repository — deployments will fail',
+            ]
+          : []),
       ],
     }
   }
@@ -794,7 +1070,7 @@ async function testGitConnectionImpl(payload) {
   const base = baseUrl || ''
   const data = await request('GET', `${base}/api/v1/repos/${repo}`, headers)
   const p = data.permissions || {}
-  const canRead  = true
+  const canRead = true
   const canWrite = Boolean(p.push || p.admin)
   const canAdmin = Boolean(p.admin)
   const branches = await getBranches(payload).catch(() => [])
@@ -807,7 +1083,9 @@ async function testGitConnectionImpl(payload) {
       `Read: ${canRead ? 'yes' : 'no'}`,
       `Write (push): ${canWrite ? 'yes' : 'no'}`,
       `Admin: ${canAdmin ? 'yes' : 'no'}`,
-      ...(!canWrite ? ['⚠ This token cannot push to the repository — deployments will fail'] : []),
+      ...(!canWrite
+        ? ['⚠ This token cannot push to the repository — deployments will fail']
+        : []),
     ],
   }
 }
@@ -832,8 +1110,13 @@ async function fetchFileGitHub(payload, branch, filePath) {
   const { repo } = payload
   const headers = buildHeaders(payload)
   const base = githubApiBase(payload)
-  const data = await request('GET', `${base}/repos/${repo}/contents/${filePath}?ref=${branch}`, headers)
-  if (!data.content) throw new Error('File content not found in GitHub response')
+  const data = await request(
+    'GET',
+    `${base}/repos/${repo}/contents/${filePath}?ref=${branch}`,
+    headers,
+  )
+  if (!data.content)
+    throw new Error('File content not found in GitHub response')
   return Buffer.from(data.content.replace(/\n/g, ''), 'base64').toString('utf8')
 }
 
@@ -843,8 +1126,13 @@ async function fetchFileGitLab(payload, branch, filePath) {
   const encoded = encodeURIComponent(repo)
   const encodedPath = encodeURIComponent(filePath)
   const headers = buildHeaders(payload)
-  const data = await request('GET', `${base}/api/v4/projects/${encoded}/repository/files/${encodedPath}?ref=${branch}`, headers)
-  if (!data.content) throw new Error('File content not found in GitLab response')
+  const data = await request(
+    'GET',
+    `${base}/api/v4/projects/${encoded}/repository/files/${encodedPath}?ref=${branch}`,
+    headers,
+  )
+  if (!data.content)
+    throw new Error('File content not found in GitLab response')
   return Buffer.from(data.content, 'base64').toString('utf8')
 }
 
@@ -852,7 +1140,11 @@ async function fetchFileGitea(payload, branch, filePath) {
   const { repo, url: baseUrl } = payload
   const base = baseUrl || ''
   const headers = buildHeaders(payload)
-  const data = await request('GET', `${base}/api/v1/repos/${repo}/contents/${filePath}?ref=${branch}`, headers)
+  const data = await request(
+    'GET',
+    `${base}/api/v1/repos/${repo}/contents/${filePath}?ref=${branch}`,
+    headers,
+  )
   if (!data.content) throw new Error('File content not found in Gitea response')
   return Buffer.from(data.content.replace(/\n/g, ''), 'base64').toString('utf8')
 }
@@ -872,8 +1164,10 @@ async function fetchFileGitea(payload, branch, filePath) {
 export async function listFiles(payload, branch, dirPath = '') {
   return withTlsContext(payload, () => {
     const { provider } = payload
-    if (provider === 'github') return listFilesGitHubFlat(payload, branch, dirPath)
-    if (provider === 'gitlab') return listFilesGitLabFlat(payload, branch, dirPath)
+    if (provider === 'github')
+      return listFilesGitHubFlat(payload, branch, dirPath)
+    if (provider === 'gitlab')
+      return listFilesGitLabFlat(payload, branch, dirPath)
     return listFilesGiteaFlat(payload, branch, dirPath)
   })
 }
@@ -884,9 +1178,16 @@ async function listFilesGitHubFlat(payload, branch, dirPath) {
   const base = githubApiBase(payload)
   const pathSeg = dirPath ? `/${dirPath.replace(/^\/|\/$/g, '')}` : ''
   try {
-    const data = await request('GET', `${base}/repos/${repo}/contents${pathSeg}?ref=${branch}`, headers)
+    const data = await request(
+      'GET',
+      `${base}/repos/${repo}/contents${pathSeg}?ref=${branch}`,
+      headers,
+    )
     if (!Array.isArray(data)) return []
-    return data.map((e) => ({ path: e.name, type: e.type === 'dir' ? 'dir' : 'file' }))
+    return data.map((e) => ({
+      path: e.name,
+      type: e.type === 'dir' ? 'dir' : 'file',
+    }))
   } catch {
     return []
   }
@@ -897,11 +1198,20 @@ async function listFilesGitLabFlat(payload, branch, dirPath) {
   const base = gitlabApiBase(payload)
   const encoded = encodeURIComponent(repo)
   const headers = buildHeaders(payload)
-  const pathParam = dirPath ? `&path=${encodeURIComponent(dirPath.replace(/^\/|\/$/g, ''))}` : ''
+  const pathParam = dirPath
+    ? `&path=${encodeURIComponent(dirPath.replace(/^\/|\/$/g, ''))}`
+    : ''
   try {
-    const items = await request('GET', `${base}/api/v4/projects/${encoded}/repository/tree?ref=${branch}${pathParam}&per_page=100`, headers)
+    const items = await request(
+      'GET',
+      `${base}/api/v4/projects/${encoded}/repository/tree?ref=${branch}${pathParam}&per_page=100`,
+      headers,
+    )
     if (!Array.isArray(items)) return []
-    return items.map((e) => ({ path: e.name, type: e.type === 'tree' ? 'dir' : 'file' }))
+    return items.map((e) => ({
+      path: e.name,
+      type: e.type === 'tree' ? 'dir' : 'file',
+    }))
   } catch {
     return []
   }
@@ -913,11 +1223,17 @@ async function listFilesGiteaFlat(payload, branch, dirPath) {
   const headers = buildHeaders(payload)
   const pathSeg = dirPath ? `/${dirPath.replace(/^\/|\/$/g, '')}` : ''
   try {
-    const data = await request('GET', `${base}/api/v1/repos/${repo}/contents${pathSeg}?ref=${branch}`, headers)
+    const data = await request(
+      'GET',
+      `${base}/api/v1/repos/${repo}/contents${pathSeg}?ref=${branch}`,
+      headers,
+    )
     if (!Array.isArray(data)) return []
-    return data.map((e) => ({ path: e.name, type: e.type === 'dir' ? 'dir' : 'file' }))
+    return data.map((e) => ({
+      path: e.name,
+      type: e.type === 'dir' ? 'dir' : 'file',
+    }))
   } catch {
     return []
   }
 }
-

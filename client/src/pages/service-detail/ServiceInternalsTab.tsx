@@ -145,7 +145,8 @@ export function ServiceInternalsTab({
                     style={{
                       fontFamily: MONO_FONT,
                       fontSize: 10,
-                      color: i === 0 ? 'var(--accent, #2e90fa)' : 'var(--muted)',
+                      color:
+                        i === 0 ? 'var(--accent, #2e90fa)' : 'var(--muted)',
                     }}
                   >
                     {i === 0 ? 'primary' : 'sidecar'}

@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { Card } from '@ds/v3-components/Card/Card'
 
 export const MONO_FONT =
-  "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+  'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
 
 /**
  * Env keys whose values look sensitive and are masked in the UI. Mirrors
@@ -36,7 +36,11 @@ export function Kv({ pairs }: { pairs: [string, ReactNode][] }) {
             {k}
           </div>
           <div
-            style={{ fontSize: 13, color: 'var(--text)', whiteSpace: 'pre-wrap' }}
+            style={{
+              fontSize: 13,
+              color: 'var(--text)',
+              whiteSpace: 'pre-wrap',
+            }}
           >
             {v == null ? '—' : typeof v === 'object' ? v : String(v)}
           </div>

@@ -62,7 +62,9 @@ export function MigrateDialog({
   const [migrateEnvId, setMigrateEnvId] = useState(String(envId || ''))
   const [migrateNamespace, setMigrateNamespace] = useState('')
   const [migrateManualNs, setMigrateManualNs] = useState(false)
-  const [migrateManualNsValue, setMigrateManualNsValue] = useState(namespace || '')
+  const [migrateManualNsValue, setMigrateManualNsValue] = useState(
+    namespace || '',
+  )
   const [migrateNsList, setMigrateNsList] = useState<string[]>([])
   const [migrateNsLoading, setMigrateNsLoading] = useState(false)
   const [migrateNsStatus, setMigrateNsStatus] = useState<{
@@ -215,7 +217,9 @@ export function MigrateDialog({
           )
           if (!del.ok && del.status !== 404) {
             throw new Error(
-              'Cloned successfully, but delete failed (HTTP ' + del.status + ')',
+              'Cloned successfully, but delete failed (HTTP ' +
+                del.status +
+                ')',
             )
           }
         }
@@ -263,8 +267,8 @@ export function MigrateDialog({
         <div style={{ display: 'grid', gap: 12 }}>
           <div style={{ color: 'var(--muted)', fontSize: 13 }}>
             You can <strong>clone</strong> this stack to a new location, or{' '}
-            <strong>move</strong> it. Moving may have downtime because the source
-            deployment is removed after the target is created.
+            <strong>move</strong> it. Moving may have downtime because the
+            source deployment is removed after the target is created.
           </div>
           <FormControl label="Target environment">
             <Select
@@ -336,7 +340,10 @@ export function MigrateDialog({
         <Button variant="ghost" onClick={onClose} disabled={migratePending}>
           Cancel
         </Button>
-        <Button onClick={() => void runMigrate('clone')} disabled={migratePending}>
+        <Button
+          onClick={() => void runMigrate('clone')}
+          disabled={migratePending}
+        >
           {migratePending ? 'Working…' : 'Clone'}
         </Button>
         <Button

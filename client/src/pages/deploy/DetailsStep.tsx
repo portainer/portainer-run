@@ -104,12 +104,17 @@ export function DetailsStep({
     <div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ maxWidth: 420 }}>
-          <FormControl label="App name" hint="Lowercase, alphanumeric and hyphens">
+          <FormControl
+            label="App name"
+            hint="Lowercase, alphanumeric and hyphens"
+          >
             <Input
               type="text"
               value={appName}
               onChange={(e) =>
-                setAppName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))
+                setAppName(
+                  e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+                )
               }
               placeholder="my-app"
             />
@@ -123,14 +128,20 @@ export function DetailsStep({
             auto-selected elsewhere, so deploy still has everything it needs. */}
         {singleEnv && singleNs ? (
           <div style={{ ...HINT_STYLE, marginBottom: 4 }}>
-            Deploying to <strong style={{ color: 'var(--text)' }}>{availableEnvs[0].Name}</strong>
+            Deploying to{' '}
+            <strong style={{ color: 'var(--text)' }}>
+              {availableEnvs[0].Name}
+            </strong>
             {' / '}
             <strong style={{ color: 'var(--text)' }}>{nsList[0]}</strong>
           </div>
         ) : (
           <div style={{ display: 'flex', gap: 12 }}>
             <div style={{ flex: 1 }}>
-              <FormControl label="Deployment target" hint="Portainer environment to deploy into">
+              <FormControl
+                label="Deployment target"
+                hint="Portainer environment to deploy into"
+              >
                 {availableEnvs.length === 1 ? (
                   <LockedValue>{availableEnvs[0].Name}</LockedValue>
                 ) : (
@@ -214,13 +225,15 @@ export function DetailsStep({
               <>
                 {!perms.canDeploy && (
                   <div>
-                    No permission to create Deployments in project space &quot;{resolvedNs}
+                    No permission to create Deployments in project space &quot;
+                    {resolvedNs}
                     &quot;.
                   </div>
                 )}
                 {!perms.canCreatePvc && (
                   <div>
-                    No permission to create PersistentVolumeClaims in project space &quot;
+                    No permission to create PersistentVolumeClaims in project
+                    space &quot;
                     {resolvedNs}&quot;.
                   </div>
                 )}
@@ -240,19 +253,32 @@ export function DetailsStep({
                 options={[
                   {
                     value: 'NodePort',
-                    label: 'Network Accessible - Default, use this unless advised otherwise',
+                    label:
+                      'Network Accessible - Default, use this unless advised otherwise',
                   },
                   ...(envCapabilities.probing || envCapabilities.lbOk !== false
-                    ? [{ value: 'LoadBalancer', label: 'Network Accessible via dedicated IP' }]
+                    ? [
+                        {
+                          value: 'LoadBalancer',
+                          label: 'Network Accessible via dedicated IP',
+                        },
+                      ]
                     : []),
-                  ...(envCapabilities.probing || envCapabilities.ingressOk !== false
-                    ? [{ value: 'Ingress', label: 'Network Accessible via a URL' }]
+                  ...(envCapabilities.probing ||
+                  envCapabilities.ingressOk !== false
+                    ? [
+                        {
+                          value: 'Ingress',
+                          label: 'Network Accessible via a URL',
+                        },
+                      ]
                     : []),
                 ]}
               />
               {!envCapabilities.probing &&
                 envId &&
-                (envCapabilities.lbOk === false || envCapabilities.ingressOk === false) && (
+                (envCapabilities.lbOk === false ||
+                  envCapabilities.ingressOk === false) && (
                   <div style={{ ...HINT_STYLE, marginTop: 4 }}>
                     {[
                       envCapabilities.lbOk === false && 'LoadBalancer',
@@ -261,7 +287,8 @@ export function DetailsStep({
                       .filter(Boolean)
                       .join(' and ')}{' '}
                     not detected on this cluster — option
-                    {envCapabilities.lbOk === false && envCapabilities.ingressOk === false
+                    {envCapabilities.lbOk === false &&
+                    envCapabilities.ingressOk === false
                       ? 's'
                       : ''}{' '}
                     hidden
@@ -276,12 +303,18 @@ export function DetailsStep({
             <div style={{ flex: 1 }}>
               <FormControl label="Hostname">
                 {activeBaseDomain ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                  <div
+                    style={{ display: 'flex', alignItems: 'center', gap: 0 }}
+                  >
                     <Input
                       type="text"
                       value={appName}
                       onChange={(e) =>
-                        setAppName(e.target.value.replace(/[^a-z0-9-]/gi, '-').toLowerCase())
+                        setAppName(
+                          e.target.value
+                            .replace(/[^a-z0-9-]/gi, '-')
+                            .toLowerCase(),
+                        )
                       }
                       style={{
                         borderRadius: '6px 0 0 6px',

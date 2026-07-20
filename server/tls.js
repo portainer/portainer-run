@@ -14,7 +14,7 @@ function ensureSelfSignedCert(certFile, keyFile) {
         ' -days 1095' +
         ' -subj "/CN=portainer-run"' +
         ' -addext "subjectAltName=IP:127.0.0.1,DNS:localhost"',
-      { stdio: 'pipe' }
+      { stdio: 'pipe' },
     )
     console.log('✅  Self-signed certificate generated')
   } catch (e) {

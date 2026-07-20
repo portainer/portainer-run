@@ -20,7 +20,9 @@ export function EmptyRepoWarning({
   const [done, setDone] = useState(false)
 
   if (done) {
-    return <Alert tone="success" title="Repository initialized — ready to deploy." />
+    return (
+      <Alert tone="success" title="Repository initialized — ready to deploy." />
+    )
   }
 
   async function handleInitialize() {
@@ -46,12 +48,16 @@ export function EmptyRepoWarning({
         // is valid here; the button goes in the `action` slot instead.
         <span style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <span>
-            This repository has no commits. Portainer-Run needs at least one commit before it
-            can push manifests and source files. Click Initialize to create an initial commit
-            automatically.
+            This repository has no commits. Portainer-Run needs at least one
+            commit before it can push manifests and source files. Click
+            Initialize to create an initial commit automatically.
           </span>
           {error && (
-            <span style={{ color: 'var(--status-danger, #f04438)', fontSize: 11 }}>{error}</span>
+            <span
+              style={{ color: 'var(--status-danger, #f04438)', fontSize: 11 }}
+            >
+              {error}
+            </span>
           )}
         </span>
       }

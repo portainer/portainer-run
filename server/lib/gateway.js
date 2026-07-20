@@ -32,11 +32,17 @@ function getInstanceId() {
 // ---------------------------------------------------------------------------
 
 function getStoredPsk() {
-  return db.prepare('SELECT value FROM kv WHERE key = ?').get('gateway_psk')?.value ?? null
+  return (
+    db.prepare('SELECT value FROM kv WHERE key = ?').get('gateway_psk')
+      ?.value ?? null
+  )
 }
 
 function storePsk(psk) {
-  db.prepare('INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)').run('gateway_psk', psk)
+  db.prepare('INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)').run(
+    'gateway_psk',
+    psk,
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -52,7 +58,9 @@ async function register() {
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error(`Gateway registration failed (${res.status}): ${body.error || 'unknown error'}`)
+    throw new Error(
+      `Gateway registration failed (${res.status}): ${body.error || 'unknown error'}`,
+    )
   }
   const { psk } = await res.json()
   storePsk(psk)
@@ -77,7 +85,7 @@ export async function requestUploadSession() {
   if (!GATEWAY_URL) {
     throw new Error(
       'GATEWAY_URL is not configured on this Portainer-Run instance. ' +
-      'Set GATEWAY_URL=https://run-gateway.portainer.ai in your environment.',
+        'Set GATEWAY_URL=https://run-gateway.portainer.ai in your environment.',
     )
   }
 
@@ -101,7 +109,9 @@ export async function requestUploadSession() {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error(`Gateway session request failed (${res.status}): ${body.error || 'unknown error'}`)
+    throw new Error(
+      `Gateway session request failed (${res.status}): ${body.error || 'unknown error'}`,
+    )
   }
 
   return res.json() // { sessionId, uploadUrl, expiresAt }
@@ -115,19 +125,27 @@ export async function requestUploadSession() {
  */
 export async function fetchStagedFiles(sessionId) {
   if (!GATEWAY_URL) {
-    throw new Error('GATEWAY_URL is not configured on this Portainer-Run instance.')
+    throw new Error(
+      'GATEWAY_URL is not configured on this Portainer-Run instance.',
+    )
   }
 
-  const res = await fetch(`${GATEWAY_URL}/download/${encodeURIComponent(sessionId)}`)
+  const res = await fetch(
+    `${GATEWAY_URL}/download/${encodeURIComponent(sessionId)}`,
+  )
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error(`Gateway download failed (${res.status}): ${body.error || 'unknown error'}`)
+    throw new Error(
+      `Gateway download failed (${res.status}): ${body.error || 'unknown error'}`,
+    )
   }
 
   const files = await res.json()
   if (!Array.isArray(files) || files.length === 0) {
-    throw new Error('Gateway returned an empty or invalid file list for this session')
+    throw new Error(
+      'Gateway returned an empty or invalid file list for this session',
+    )
   }
 
   return files

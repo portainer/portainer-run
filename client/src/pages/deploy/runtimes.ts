@@ -3,11 +3,34 @@
 // ---------------------------------------------------------------------------
 
 const STATIC_EXTENSIONS = new Set([
-  '.html', '.htm', '.css', '.js', '.mjs', '.json', '.ts',
-  '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp',
-  '.woff', '.woff2', '.ttf', '.eot', '.otf',
-  '.mp4', '.webm', '.mp3', '.ogg',
-  '.pdf', '.txt', '.md', '.xml', '.csv',
+  '.html',
+  '.htm',
+  '.css',
+  '.js',
+  '.mjs',
+  '.json',
+  '.ts',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.svg',
+  '.ico',
+  '.webp',
+  '.woff',
+  '.woff2',
+  '.ttf',
+  '.eot',
+  '.otf',
+  '.mp4',
+  '.webm',
+  '.mp3',
+  '.ogg',
+  '.pdf',
+  '.txt',
+  '.md',
+  '.xml',
+  '.csv',
 ])
 
 function isStaticFile(name: string) {
@@ -53,10 +76,16 @@ const RUNTIMES: RuntimeDef[] = [
         try {
           const parsed = JSON.parse(pkg.text)
           if (parsed?.scripts?.start) return 'npm start'
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
-      const hasServerJs = files.some((f) => f.name === 'server.js' || f.name === 'index.js')
-      return hasServerJs ? `node ${files.find((f) => f.name === 'server.js') ? 'server.js' : 'index.js'}` : 'npm start'
+      const hasServerJs = files.some(
+        (f) => f.name === 'server.js' || f.name === 'index.js',
+      )
+      return hasServerJs
+        ? `node ${files.find((f) => f.name === 'server.js') ? 'server.js' : 'index.js'}`
+        : 'npm start'
     },
     port: 3000,
     workDir: '/app',
@@ -65,10 +94,13 @@ const RUNTIMES: RuntimeDef[] = [
     id: 'python',
     label: 'Python 3.13',
     image: 'python:3.13-slim',
-    detect: (names) => names.includes('requirements.txt') || names.some((n) => n.endsWith('.py')),
+    detect: (names) =>
+      names.includes('requirements.txt') ||
+      names.some((n) => n.endsWith('.py')),
     defaultCmd: (files) => {
       for (const candidate of ['main.py', 'app.py', 'server.py', 'run.py']) {
-        if (files.some((f) => f.name === candidate)) return `python ${candidate}`
+        if (files.some((f) => f.name === candidate))
+          return `python ${candidate}`
       }
       return 'python app.py'
     },
@@ -88,11 +120,14 @@ const RUNTIMES: RuntimeDef[] = [
     id: 'ruby',
     label: 'Ruby 3.4',
     image: 'ruby:3.4-slim',
-    detect: (names) => names.includes('Gemfile') || names.some((n) => n.endsWith('.rb')),
+    detect: (names) =>
+      names.includes('Gemfile') || names.some((n) => n.endsWith('.rb')),
     defaultCmd: (files) => {
       for (const candidate of ['app.rb', 'server.rb', 'config.ru']) {
         if (files.some((f) => f.name === candidate)) {
-          return candidate === 'config.ru' ? 'bundle exec rackup -p 9292 -o 0.0.0.0' : `ruby ${candidate}`
+          return candidate === 'config.ru'
+            ? 'bundle exec rackup -p 9292 -o 0.0.0.0'
+            : `ruby ${candidate}`
         }
       }
       return 'bundle exec ruby app.rb'
@@ -102,13 +137,17 @@ const RUNTIMES: RuntimeDef[] = [
   },
 ]
 
-export function detectRuntime(files: { name: string; text: string }[]): RuntimeDef {
+export function detectRuntime(
+  files: { name: string; text: string }[],
+): RuntimeDef {
   const names = files.map((f) => f.name)
   for (const rt of RUNTIMES) {
     if (rt.detect?.(names)) return rt
   }
   // Static site: all files are static assets (or single HTML)
-  const nonEnv = files.filter((f) => f.name !== '.env.example' && !f.name.endsWith('.env.example'))
+  const nonEnv = files.filter(
+    (f) => f.name !== '.env.example' && !f.name.endsWith('.env.example'),
+  )
   if (nonEnv.length > 0 && nonEnv.every((f) => isStaticFile(f.name))) {
     return NGINX_RUNTIME
   }

@@ -70,7 +70,10 @@ const LEGACY_TAB_REDIRECT: Record<string, string> = {
 export function ServiceDetailIndexRedirect() {
   const { envId = '', namespace = '', name = '' } = useParams()
   return (
-    <Navigate to={serviceDetailPath(envId, namespace, name, 'overview')} replace />
+    <Navigate
+      to={serviceDetailPath(envId, namespace, name, 'overview')}
+      replace
+    />
   )
 }
 
@@ -98,7 +101,9 @@ export function ServiceDetailPage() {
   const tab = tabParam || 'overview'
   const patchEnvPermissions = useAppStore((s) => s.patchEnvPermissions)
   const perms =
-    envId && namespace ? (envPermissions[`${envId}:${namespace}`] ?? null) : null
+    envId && namespace
+      ? (envPermissions[`${envId}:${namespace}`] ?? null)
+      : null
 
   // Live status + access URL for this app, reusing the same env-status feed as
   // the Applications page. Reads from live cluster objects, not git or the DB.
@@ -109,7 +114,10 @@ export function ServiceDetailPage() {
         ? [
             {
               _envId: String(envId),
-              metadata: { namespace, resourceVersion: d.metadata?.resourceVersion },
+              metadata: {
+                namespace,
+                resourceVersion: d.metadata?.resourceVersion,
+              },
             },
           ]
         : [],
@@ -170,14 +178,23 @@ export function ServiceDetailPage() {
   }, [token, envId, namespace, name])
 
   const runRestart = useCallback(async () => {
-    if (!token || !envId || !namespace || !name || restartInFlight.current) return
+    if (!token || !envId || !namespace || !name || restartInFlight.current)
+      return
     restartInFlight.current = true
     setRestartPending(true)
     try {
-      const updated = await restartDeployment(token, String(envId), namespace, name)
+      const updated = await restartDeployment(
+        token,
+        String(envId),
+        namespace,
+        name,
+      )
       if (isDeployment(updated)) setD(updated)
       else void load()
-      pushToast(`“${name}” is restarting — pods will be replaced one by one`, 'ok')
+      pushToast(
+        `“${name}” is restarting — pods will be replaced one by one`,
+        'ok',
+      )
       setTimeout(() => {
         void refreshCache(false)
         void load()
@@ -260,7 +277,9 @@ export function ServiceDetailPage() {
     if (!tabParam) return
     const legacy = LEGACY_TAB_REDIRECT[tabParam]
     if (legacy) {
-      navigate(serviceDetailPath(envId, namespace, name, legacy), { replace: true })
+      navigate(serviceDetailPath(envId, namespace, name, legacy), {
+        replace: true,
+      })
       return
     }
     if (!VALID_TABS.has(tabParam)) {
@@ -316,7 +335,11 @@ export function ServiceDetailPage() {
                   <span
                     key="image"
                     title={image}
-                    style={{ fontFamily: MONO_FONT, fontSize: 12, wordBreak: 'break-all' }}
+                    style={{
+                      fontFamily: MONO_FONT,
+                      fontSize: 12,
+                      wordBreak: 'break-all',
+                    }}
                   >
                     {image}
                   </span>,
@@ -410,13 +433,16 @@ export function ServiceDetailPage() {
                       ns: namespace,
                       name,
                       gitTargetId:
-                        d?.metadata?.annotations?.['portainer-run/git-target-id'] ||
-                        null,
+                        d?.metadata?.annotations?.[
+                          'portainer-run/git-target-id'
+                        ] || null,
                       gitBranch:
-                        d?.metadata?.annotations?.['portainer-run/git-branch'] ||
-                        null,
+                        d?.metadata?.annotations?.[
+                          'portainer-run/git-branch'
+                        ] || null,
                       gitPath:
-                        d?.metadata?.annotations?.['portainer-run/git-path'] || null,
+                        d?.metadata?.annotations?.['portainer-run/git-path'] ||
+                        null,
                       vibeSourcePath:
                         d?.metadata?.annotations?.[
                           'portainer-run/vibe-source-path'
@@ -439,7 +465,12 @@ export function ServiceDetailPage() {
             borderBottom: '1px solid var(--border)',
           }}
         >
-          <Tabs tabs={visibleTabs} value={tab} onChange={onTabChange} size="sm" />
+          <Tabs
+            tabs={visibleTabs}
+            value={tab}
+            onChange={onTabChange}
+            size="sm"
+          />
           <div style={{ flex: 1 }} />
           <Button
             variant="ghost"

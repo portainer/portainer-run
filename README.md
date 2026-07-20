@@ -263,21 +263,21 @@ If the container cannot resolve your Portainer hostname (error: `EAI_AGAIN`), ad
 
 `PORTAINER_URL` and `ENCRYPTION_KEY` are required. All others are optional.
 
-| Variable | Default | Description |
-|---|---|---|
-| `PORTAINER_URL` | (required) | Full URL of your Portainer instance. Example: `https://portainer.example.com:9443` |
-| `ENCRYPTION_KEY` | (required) | Encrypts stored git target credentials at rest. Must be at least 32 characters and identical across deploys. Generate with: `openssl rand -hex 32` |
-| `ANTHROPIC_API_KEY` | (none) | Anthropic API key. Enables the Assistant using Claude. |
-| `OPENAI_API_KEY` | (none) | OpenAI API key. Enables the Assistant using GPT-4o. Set one or the other, not both. Anthropic takes priority if both are set. |
-| `AI_PROVIDER` | auto | Override AI provider: `anthropic` or `openai`. Auto-detected from whichever key is set. |
-| `OPENAI_MODEL` | `gpt-4o` | OpenAI model override. |
-| `BASE_DOMAIN` | (none) | Base domain for Ingress exposure. If set, the deploy flow defaults the Ingress host to `appname.BASE_DOMAIN`. |
-| `GATEWAY_URL` | (none) | File relay gateway for staged uploads. When set, large deploy uploads use the gateway instead of inline MCP transfer. |
-| `PORT` | `443` | HTTPS listen port inside the container. |
-| `HTTP_PORT` | `80` | HTTP redirect port inside the container. |
-| `SSL_CERT` | (none) | Path to TLS certificate file. Uses self-signed if not set. |
-| `SSL_KEY` | (none) | Path to TLS private key file. Uses self-signed if not set. |
-| `SSL_CERT_DIR` | `/app` | Directory for self-signed certificate storage. |
+| Variable            | Default    | Description                                                                                                                                        |
+| ------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORTAINER_URL`     | (required) | Full URL of your Portainer instance. Example: `https://portainer.example.com:9443`                                                                 |
+| `ENCRYPTION_KEY`    | (required) | Encrypts stored git target credentials at rest. Must be at least 32 characters and identical across deploys. Generate with: `openssl rand -hex 32` |
+| `ANTHROPIC_API_KEY` | (none)     | Anthropic API key. Enables the Assistant using Claude.                                                                                             |
+| `OPENAI_API_KEY`    | (none)     | OpenAI API key. Enables the Assistant using GPT-4o. Set one or the other, not both. Anthropic takes priority if both are set.                      |
+| `AI_PROVIDER`       | auto       | Override AI provider: `anthropic` or `openai`. Auto-detected from whichever key is set.                                                            |
+| `OPENAI_MODEL`      | `gpt-4o`   | OpenAI model override.                                                                                                                             |
+| `BASE_DOMAIN`       | (none)     | Base domain for Ingress exposure. If set, the deploy flow defaults the Ingress host to `appname.BASE_DOMAIN`.                                      |
+| `GATEWAY_URL`       | (none)     | File relay gateway for staged uploads. When set, large deploy uploads use the gateway instead of inline MCP transfer.                              |
+| `PORT`              | `443`      | HTTPS listen port inside the container.                                                                                                            |
+| `HTTP_PORT`         | `80`       | HTTP redirect port inside the container.                                                                                                           |
+| `SSL_CERT`          | (none)     | Path to TLS certificate file. Uses self-signed if not set.                                                                                         |
+| `SSL_KEY`           | (none)     | Path to TLS private key file. Uses self-signed if not set.                                                                                         |
+| `SSL_CERT_DIR`      | `/app`     | Directory for self-signed certificate storage.                                                                                                     |
 
 `PORTAINER_RUN_VERSION` is not a runtime setting. It is a Docker build argument, set by the CI and release workflows at image build time, and surfaced read-only in the sidebar. Local builds default it to `dev`.
 

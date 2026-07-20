@@ -71,7 +71,11 @@ export function OverviewExposure({
 function EnvValue({ envKey, value }: { envKey: string; value: string }) {
   const [revealed, setRevealed] = useState(false)
   const isSecret = SECRET_PATTERN.test(envKey)
-  const mono = { fontFamily: MONO_FONT, fontSize: 12, wordBreak: 'break-all' as const }
+  const mono = {
+    fontFamily: MONO_FONT,
+    fontSize: 12,
+    wordBreak: 'break-all' as const,
+  }
   if (!isSecret) {
     return <span style={mono}>{value}</span>
   }
@@ -90,17 +94,26 @@ function EnvValue({ envKey, value }: { envKey: string; value: string }) {
  * objects already in hand (deployment + env-status cache), so it has no
  * dependency on the git target or the local database.
  */
-export function SimpleOverview({ d, extra }: { d: Deployment; extra: AppExtra }) {
+export function SimpleOverview({
+  d,
+  extra,
+}: {
+  d: Deployment
+  extra: AppExtra
+}) {
   const { status, base, reason } = friendlyStatus(d, extra?.reason)
   const container = d.spec?.template?.spec?.containers?.[0]
   const envs = (container?.env || [])
     .filter((e) => e && typeof e.name === 'string' && e.value != null)
     .map((e) => ({ key: e.name, value: String(e.value) }))
   const tone =
-    status === 'running' ? 'success'
-      : status === 'error' ? 'danger'
-      : status === 'stopped' ? 'neutral'
-      : 'warning'
+    status === 'running'
+      ? 'success'
+      : status === 'error'
+        ? 'danger'
+        : status === 'stopped'
+          ? 'neutral'
+          : 'warning'
 
   const accessUrl = extra?.accessUrl || null
   const accessLabel = extra?.accessLabel || null
@@ -122,9 +135,18 @@ export function SimpleOverview({ d, extra }: { d: Deployment; extra: AppExtra })
       <Section title="Address">
         {accessUrl ? (
           <div
-            style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 14,
+              flexWrap: 'wrap',
+            }}
           >
-            <Button onClick={() => window.open(accessUrl, '_blank', 'noopener,noreferrer')}>
+            <Button
+              onClick={() =>
+                window.open(accessUrl, '_blank', 'noopener,noreferrer')
+              }
+            >
               Open your app
             </Button>
             <a

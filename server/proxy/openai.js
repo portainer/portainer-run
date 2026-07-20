@@ -11,7 +11,7 @@ export function proxyToOpenAI(req, res, body) {
   if (!OPENAI_KEY) {
     res.writeHead(503, { 'Content-Type': 'application/json', ...CORS })
     res.end(
-      JSON.stringify({ error: 'OPENAI_API_KEY not configured on server' })
+      JSON.stringify({ error: 'OPENAI_API_KEY not configured on server' }),
     )
     return
   }
@@ -86,9 +86,12 @@ export function proxyToOpenAI(req, res, body) {
             res.end(respBody)
           } catch {
             if (!res.headersSent) {
-              res.writeHead(502, { 'Content-Type': 'application/json', ...CORS })
+              res.writeHead(502, {
+                'Content-Type': 'application/json',
+                ...CORS,
+              })
               res.end(
-                JSON.stringify({ error: 'Failed to parse OpenAI response' })
+                JSON.stringify({ error: 'Failed to parse OpenAI response' }),
               )
             }
           }
@@ -105,10 +108,10 @@ export function proxyToOpenAI(req, res, body) {
       res.write(
         'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_openai","type":"message","role":"assistant","content":[],"model":"' +
           OPENAI_MODEL +
-          '"}}\n\n'
+          '"}}\n\n',
       )
       res.write(
-        'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n'
+        'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n',
       )
       let buffer = ''
       upRes.on('data', (chunk) => {
@@ -120,10 +123,10 @@ export function proxyToOpenAI(req, res, body) {
           const data = line.slice(6).trim()
           if (data === '[DONE]') {
             res.write(
-              'event: content_block_stop\ndata: {"type":"content_block_stop","index":0}\n\n'
+              'event: content_block_stop\ndata: {"type":"content_block_stop","index":0}\n\n',
             )
             res.write(
-              'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}\n\n'
+              'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}\n\n',
             )
             res.write('event: message_stop\ndata: {"type":"message_stop"}\n\n')
             return
@@ -155,7 +158,7 @@ export function proxyToOpenAI(req, res, body) {
           // ignore
         }
       })
-    }
+    },
   )
   upstream.on('error', (e) => {
     console.error('[openai proxy error]', e.message)

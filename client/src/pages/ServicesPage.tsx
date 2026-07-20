@@ -113,8 +113,7 @@ function serviceRowId(d: Deployment): string {
 const ACTIONS_COL_WIDTH = 120
 const ROW_GRID: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns:
-    `minmax(140px, 1.4fr) minmax(100px, 1fr) minmax(100px, 1fr) minmax(140px, 1.2fr) minmax(90px, 0.9fr) minmax(70px, 0.6fr) minmax(90px, 0.9fr) ${ACTIONS_COL_WIDTH}px`,
+  gridTemplateColumns: `minmax(140px, 1.4fr) minmax(100px, 1fr) minmax(100px, 1fr) minmax(140px, 1.2fr) minmax(90px, 0.9fr) minmax(70px, 0.6fr) minmax(90px, 0.9fr) ${ACTIONS_COL_WIDTH}px`,
   alignItems: 'center',
   gap: 12,
   padding: '10px 14px',
@@ -475,9 +474,7 @@ export function ServicesPage() {
               >
                 Refresh
               </Button>
-              <Button onClick={() => navigate(ROUTES.deploy)}>
-                + Deploy
-              </Button>
+              <Button onClick={() => navigate(ROUTES.deploy)}>+ Deploy</Button>
             </div>
           }
         />

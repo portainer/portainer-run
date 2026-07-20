@@ -16,7 +16,14 @@ import { ROUTES } from './lib/routes.js'
  *  Portainer login, so this never sticks around when unauthenticated. */
 function SessionLoading() {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100vh',
+      }}
+    >
       Loading…
     </div>
   )
@@ -39,7 +46,10 @@ export function AppRoutes() {
     <Routes>
       <Route path="/" element={<RootRedirect />} />
       <Route element={<AuthedLayout />}>
-        <Route path="dashboard" element={<Navigate to={ROUTES.services} replace />} />
+        <Route
+          path="dashboard"
+          element={<Navigate to={ROUTES.services} replace />}
+        />
         <Route path="applications" element={<ServicesPage />} />
         <Route
           path="applications/:envId/:namespace/:name"
@@ -49,7 +59,10 @@ export function AppRoutes() {
           path="applications/:envId/:namespace/:name/:tab"
           element={<ServiceDetailPage />}
         />
-        <Route path="deploy" element={<Navigate to={ROUTES.deploy} replace />} />
+        <Route
+          path="deploy"
+          element={<Navigate to={ROUTES.deploy} replace />}
+        />
         <Route path="deploy/vibe" element={<VibeDeploy />} />
         <Route path="readiness" element={<ReadinessPage />} />
         <Route path="git-targets" element={<GitTargetsPage />} />

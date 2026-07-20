@@ -118,7 +118,9 @@ function readPlainFile(file: File): Promise<UploadedFile> {
 }
 
 /** Read a FileList from an <input type="file">, expanding zip archives. */
-export async function readFileList(fileList: FileList): Promise<UploadedFile[]> {
+export async function readFileList(
+  fileList: FileList,
+): Promise<UploadedFile[]> {
   const allFiles = Array.from(fileList)
   const zips = allFiles.filter((f) => f.name.toLowerCase().endsWith('.zip'))
   const rest = allFiles.filter((f) => !f.name.toLowerCase().endsWith('.zip'))
@@ -143,7 +145,8 @@ export async function readDropEvent(
       .filter(Boolean)
     if (entries.length) {
       const zipEntries = entries.filter(
-        (entry: any) => entry.isFile && entry.name.toLowerCase().endsWith('.zip'),
+        (entry: any) =>
+          entry.isFile && entry.name.toLowerCase().endsWith('.zip'),
       )
       const otherEntries = entries.filter(
         (entry: any) =>

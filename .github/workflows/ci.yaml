@@ -2,9 +2,9 @@ name: ci
 
 on:
   push:
-    branches: [ "develop" ]
+    branches: ['develop']
   pull_request:
-    branches: [ "develop" ]
+    branches: ['develop']
     types: [opened, reopened, synchronize]
   workflow_dispatch:
 
@@ -22,7 +22,7 @@ jobs:
     outputs:
       value: ${{ steps.resolve.outputs.value }}
     steps:
-      - name: "[preparation] resolve image tag"
+      - name: '[preparation] resolve image tag'
         id: resolve
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -38,7 +38,7 @@ jobs:
       # Exchange the org's GitHub App credentials for a short-lived, narrowly
       # scoped installation token so checkout can pull the private design-system
       # submodule (the default GITHUB_TOKEN can't see a separate repo).
-      - name: "[preparation] fetch GitHub App token"
+      - name: '[preparation] fetch GitHub App token'
         id: fetch-token
         uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
         with:
@@ -48,22 +48,22 @@ jobs:
           repositories: portainer-run,design-system
           permission-contents: read
 
-      - name: "[preparation] checkout the current branch"
+      - name: '[preparation] checkout the current branch'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           submodules: recursive
           token: ${{ steps.fetch-token.outputs.token }}
 
-      - name: "[validation] check server syntax"
+      - name: '[validation] check server syntax'
         run: node --check server/server.js
 
-      - name: "[preparation] set up QEMU"
+      - name: '[preparation] set up QEMU'
         uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
 
-      - name: "[preparation] set up Docker Buildx"
+      - name: '[preparation] set up Docker Buildx'
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
 
-      - name: "[execution] build multi-arch image and export as OCI tarball"
+      - name: '[execution] build multi-arch image and export as OCI tarball'
         if: github.event_name == 'pull_request'
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
         with:
@@ -78,12 +78,12 @@ jobs:
           tags: ${{ env.IMAGE_NAME }}:${{ needs.tag.outputs.value }}
           outputs: type=oci,dest=/tmp/image.tar
 
-      - name: "[execution] save image tag metadata"
+      - name: '[execution] save image tag metadata'
         if: github.event_name == 'pull_request'
         run: |
           echo "${{ needs.tag.outputs.value }}" > /tmp/image-tag.txt
 
-      - name: "[execution] upload image artifact"
+      - name: '[execution] upload image artifact'
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -91,7 +91,7 @@ jobs:
           path: /tmp/image.tar
           retention-days: 1
 
-      - name: "[execution] upload image tag artifact"
+      - name: '[execution] upload image tag artifact'
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -99,14 +99,14 @@ jobs:
           path: /tmp/image-tag.txt
           retention-days: 1
 
-      - name: "[preparation] log in to registry"
+      - name: '[preparation] log in to registry'
         if: github.event_name != 'pull_request'
         uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: "[execution] build and push multi-arch image"
+      - name: '[execution] build and push multi-arch image'
         if: github.event_name != 'pull_request'
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
         with:

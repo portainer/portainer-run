@@ -51,11 +51,13 @@ export function ServiceDetailRevisionsTab({
           )
           .sort((a: any, b: any) => {
             const ra = parseInt(
-              a.metadata.annotations?.['deployment.kubernetes.io/revision'] || '0',
+              a.metadata.annotations?.['deployment.kubernetes.io/revision'] ||
+                '0',
               10,
             )
             const rb = parseInt(
-              b.metadata.annotations?.['deployment.kubernetes.io/revision'] || '0',
+              b.metadata.annotations?.['deployment.kubernetes.io/revision'] ||
+                '0',
               10,
             )
             return rb - ra
@@ -92,7 +94,8 @@ export function ServiceDetailRevisionsTab({
         const targetRs = history.find(
           (rs: any) =>
             String(
-              rs.metadata.annotations?.['deployment.kubernetes.io/revision'] || '',
+              rs.metadata.annotations?.['deployment.kubernetes.io/revision'] ||
+                '',
             ) === String(rev),
         )
         if (!targetRs?.spec?.template) {
@@ -110,7 +113,8 @@ export function ServiceDetailRevisionsTab({
         const dep = await getDep.json()
         const template = JSON.parse(JSON.stringify(targetRs.spec.template))
         if (template.metadata?.labels) {
-          const { ['pod-template-hash']: _h, ...rest } = template.metadata.labels
+          const { ['pod-template-hash']: _h, ...rest } =
+            template.metadata.labels
           template.metadata = {
             ...template.metadata,
             labels: rest,
@@ -174,7 +178,8 @@ export function ServiceDetailRevisionsTab({
         {err}
         <br />
         <span style={{ color: 'var(--muted)' }}>
-          This may mean the token cannot read ReplicaSets in namespace {namespace}.
+          This may mean the token cannot read ReplicaSets in namespace{' '}
+          {namespace}.
         </span>
       </p>
     )
@@ -233,7 +238,9 @@ export function ServiceDetailRevisionsTab({
             >
               {img}
             </span>
-            <span style={{ color: 'var(--muted)', fontSize: 12, flexShrink: 0 }}>
+            <span
+              style={{ color: 'var(--muted)', fontSize: 12, flexShrink: 0 }}
+            >
               {age(rs.metadata.creationTimestamp)}
             </span>
             <Badge tone={ready > 0 ? 'success' : 'neutral'} size="sm">

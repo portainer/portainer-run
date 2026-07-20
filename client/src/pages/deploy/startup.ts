@@ -6,7 +6,8 @@ export const STARTUP_POLL_MS = 3000
 // Vibe apps run npm/pip installs in init containers, so first boot can be slow.
 export const STARTUP_TIMEOUT_MS = 5 * 60 * 1000
 
-export type StartupPhase = 'deploying' | 'starting' | 'ready' | 'error' | 'timeout'
+export type StartupPhase =
+  'deploying' | 'starting' | 'ready' | 'error' | 'timeout'
 
 // Mirrors sanitizeStackName in server/routes/vibe.js: the deployment name and
 // `app` label are derived from the entered app name, so we must match them when

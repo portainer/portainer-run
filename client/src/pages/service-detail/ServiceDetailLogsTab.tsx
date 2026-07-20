@@ -105,7 +105,8 @@ export function ServiceDetailLogsTab({
       const q = search.toLowerCase()
       const visible = source.filter(({ text }) => {
         if (sev === 'err' && !/error|fatal|panic/i.test(text)) return false
-        if (sev === 'warn' && !/error|fatal|panic|warn/i.test(text)) return false
+        if (sev === 'warn' && !/error|fatal|panic|warn/i.test(text))
+          return false
         if (q && !text.toLowerCase().includes(q)) return false
         return true
       })
@@ -240,7 +241,9 @@ Analyse this data and follow the instructions in your system prompt.`
         }
         const err = eb?.error
         const emsg =
-          typeof err === 'string' ? err : err?.message || 'HTTP ' + response.status
+          typeof err === 'string'
+            ? err
+            : err?.message || 'HTTP ' + response.status
         throw new Error(emsg)
       }
       const full = await readTriageSseStream(response.body, (acc: string) => {
@@ -274,7 +277,9 @@ Analyse this data and follow the instructions in your system prompt.`
     setBusy('fetch')
     setLogLines([])
     try {
-      const cParam = container ? `&container=${encodeURIComponent(container)}` : ''
+      const cParam = container
+        ? `&container=${encodeURIComponent(container)}`
+        : ''
       const r = await kubeFetch(
         token,
         envId,
@@ -300,7 +305,9 @@ Analyse this data and follow the instructions in your system prompt.`
     setOutputErr('')
     setLogLines([])
     setBusy('stream')
-    const cParam = container ? `&container=${encodeURIComponent(container)}` : ''
+    const cParam = container
+      ? `&container=${encodeURIComponent(container)}`
+      : ''
     const path = `/api/v1/namespaces/${namespace}/pods/${encodeURIComponent(pod)}/log?follow=true&tailLines=100${cParam}`
 
     const controller = new AbortController()
@@ -308,7 +315,9 @@ Analyse this data and follow the instructions in your system prompt.`
     setStreaming(true)
 
     try {
-      const r = await kubeFetch(token, envId, path, { signal: controller.signal })
+      const r = await kubeFetch(token, envId, path, {
+        signal: controller.signal,
+      })
       if (!r.ok) throw new Error('HTTP ' + r.status)
       if (!r.body) throw new Error('No response body')
       const reader = r.body.getReader()
@@ -535,7 +544,9 @@ Analyse this data and follow the instructions in your system prompt.`
             </Button>
           )}
           {streaming ? (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
               <StatusDot tone="danger" animation="pulse" />
               <span style={{ color: 'var(--muted)', fontSize: 12 }}>Live</span>
             </span>

@@ -45,9 +45,17 @@ export function StartupPanel({
   // Step 1 — Deploying
   let s1: TimelineStep
   if (phase === 'deploying') {
-    s1 = { tone: 'accent', bullet: spinner, desc: 'Saving your app and setting things up' }
+    s1 = {
+      tone: 'accent',
+      bullet: spinner,
+      desc: 'Saving your app and setting things up',
+    }
   } else if (deployFailed) {
-    s1 = { tone: 'danger', bullet: cross, desc: errorMsg || 'Something went wrong while setting up' }
+    s1 = {
+      tone: 'danger',
+      bullet: cross,
+      desc: errorMsg || 'Something went wrong while setting up',
+    }
   } else {
     s1 = { tone: 'success', bullet: check, desc: 'Saved and set up' }
   }
@@ -57,11 +65,23 @@ export function StartupPanel({
   if (phase === 'deploying' || deployFailed) {
     s2 = { tone: 'neutral', desc: 'Waiting for your app to start' }
   } else if (phase === 'starting') {
-    s2 = { tone: 'accent', bullet: spinner, desc: reason || 'Waiting for your app to start' }
+    s2 = {
+      tone: 'accent',
+      bullet: spinner,
+      desc: reason || 'Waiting for your app to start',
+    }
   } else if (phase === 'timeout') {
-    s2 = { tone: 'warning', bullet: spinner, desc: reason || 'This is taking longer than usual — still starting' }
+    s2 = {
+      tone: 'warning',
+      bullet: spinner,
+      desc: reason || 'This is taking longer than usual — still starting',
+    }
   } else if (startFailed) {
-    s2 = { tone: 'danger', bullet: cross, desc: reason || "Your app couldn't start" }
+    s2 = {
+      tone: 'danger',
+      bullet: cross,
+      desc: reason || "Your app couldn't start",
+    }
   } else {
     s2 = { tone: 'success', bullet: check, desc: 'Started successfully' }
   }
@@ -74,12 +94,29 @@ export function StartupPanel({
 
   return (
     <div>
-      <StepHeading>{phase === 'ready' ? 'Your app is live' : 'Deploying your app'}</StepHeading>
+      <StepHeading>
+        {phase === 'ready' ? 'Your app is live' : 'Deploying your app'}
+      </StepHeading>
       <div style={{ maxWidth: 460, padding: '8px 4px 4px' }}>
         <Timeline>
-          <TimelineItem tone={s1.tone} bullet={s1.bullet} title="Deploying" description={s1.desc} />
-          <TimelineItem tone={s2.tone} bullet={s2.bullet} title="Starting" description={s2.desc} />
-          <TimelineItem tone={s3.tone} bullet={s3.bullet} title="Ready" description={s3.desc} />
+          <TimelineItem
+            tone={s1.tone}
+            bullet={s1.bullet}
+            title="Deploying"
+            description={s1.desc}
+          />
+          <TimelineItem
+            tone={s2.tone}
+            bullet={s2.bullet}
+            title="Starting"
+            description={s2.desc}
+          />
+          <TimelineItem
+            tone={s3.tone}
+            bullet={s3.bullet}
+            title="Ready"
+            description={s3.desc}
+          />
         </Timeline>
       </div>
       <StartupActions
@@ -110,7 +147,9 @@ function StartupActions({
     return (
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
         {url && (
-          <Button onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}>
+          <Button
+            onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
+          >
             Open my app
           </Button>
         )}

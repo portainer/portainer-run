@@ -13,7 +13,10 @@ export interface RepoEntry {
  * @param parentPath repo-relative folder being listed ('' for the root)
  * @param entries    the directory's immediate children
  */
-export function dirEntriesToNodes(parentPath: string, entries: RepoEntry[]): FileNode[] {
+export function dirEntriesToNodes(
+  parentPath: string,
+  entries: RepoEntry[],
+): FileNode[] {
   return entries
     .map((entry) => {
       const name = entry.path.replace(/^\/+|\/+$/g, '')
@@ -23,6 +26,10 @@ export function dirEntriesToNodes(parentPath: string, entries: RepoEntry[]): Fil
     })
     .filter((node) => node.name)
     .sort((a, b) =>
-      a.type !== b.type ? (a.type === 'folder' ? -1 : 1) : a.name.localeCompare(b.name),
+      a.type !== b.type
+        ? a.type === 'folder'
+          ? -1
+          : 1
+        : a.name.localeCompare(b.name),
     )
 }
