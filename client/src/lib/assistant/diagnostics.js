@@ -7,7 +7,8 @@ import { kubeFetch } from '../api.js'
  * @returns {Promise<string>}
  */
 export async function gatherServiceDiagnostics(token, dep, opts = {}) {
-  const logTail = typeof opts.logTailLines === 'number' ? opts.logTailLines : 100
+  const logTail =
+    typeof opts.logTailLines === 'number' ? opts.logTailLines : 100
   const dName = dep.metadata.name
   const dNs = dep.metadata.namespace
   const dEnvId = dep._envId
@@ -55,7 +56,9 @@ export async function gatherServiceDiagnostics(token, dep, opts = {}) {
     ),
     Promise.resolve(
       pods.map((pod) => {
-        const lines = [`=== Pod: ${pod.metadata.name} (${pod.status?.phase || '?'}) ===`]
+        const lines = [
+          `=== Pod: ${pod.metadata.name} (${pod.status?.phase || '?'}) ===`,
+        ]
         for (const c of pod.status?.conditions || []) {
           lines.push(
             `  ${c.type}: ${c.status}${c.reason ? ' (' + c.reason + ')' : ''}${
@@ -91,7 +94,11 @@ export async function gatherServiceDiagnostics(token, dep, opts = {}) {
                 new Date(b.lastTimestamp || 0) - new Date(a.lastTimestamp || 0),
             )
             return evts.length
-              ? '=== Events ===\n' + evts.slice(0, 10).map((e) => `  [${e.type}] ${e.reason}: ${e.message}`).join('\n')
+              ? '=== Events ===\n' +
+                  evts
+                    .slice(0, 10)
+                    .map((e) => `  [${e.type}] ${e.reason}: ${e.message}`)
+                    .join('\n')
               : ''
           } catch {
             return ''
@@ -110,11 +117,15 @@ export async function gatherServiceDiagnostics(token, dep, opts = {}) {
               const j = await r.json()
               const evts = (j.items || []).sort(
                 (a, b) =>
-                  new Date(b.lastTimestamp || 0) - new Date(a.lastTimestamp || 0),
+                  new Date(b.lastTimestamp || 0) -
+                  new Date(a.lastTimestamp || 0),
               )
               return evts.length
                 ? `=== Pod Events: ${pod.metadata.name} ===\n` +
-                    evts.slice(0, 5).map((e) => `  [${e.type}] ${e.reason}: ${e.message}`).join('\n')
+                    evts
+                      .slice(0, 5)
+                      .map((e) => `  [${e.type}] ${e.reason}: ${e.message}`)
+                      .join('\n')
                 : ''
             } catch {
               return ''
@@ -125,7 +136,9 @@ export async function gatherServiceDiagnostics(token, dep, opts = {}) {
     ]),
   ])
 
-  const allDiag = [...condChunks, ...eventChunks, ...logChunks].filter(Boolean).join('\n\n')
+  const allDiag = [...condChunks, ...eventChunks, ...logChunks]
+    .filter(Boolean)
+    .join('\n\n')
   if (!allDiag.trim()) return ''
   return (
     '\n\nLIVE DIAGNOSTIC DATA for ' +

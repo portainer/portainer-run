@@ -46,7 +46,10 @@ function rvFingerprint(deps, state) {
   }
   const out = {}
   for (const [envId, { rvs, namespaces }] of Object.entries(by)) {
-    out[envId] = { rv: rvs.sort().join(','), namespaces: [...namespaces].sort() }
+    out[envId] = {
+      rv: rvs.sort().join(','),
+      namespaces: [...namespaces].sort(),
+    }
   }
   return out
 }

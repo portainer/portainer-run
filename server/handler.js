@@ -43,7 +43,11 @@ export async function handleRequest(req, res) {
   }
 
   // CSRF: block browser-issued cross-site requests to state-changing routes.
-  if (req.method !== 'GET' && req.method !== 'HEAD' && isCrossSiteRequest(req)) {
+  if (
+    req.method !== 'GET' &&
+    req.method !== 'HEAD' &&
+    isCrossSiteRequest(req)
+  ) {
     res.writeHead(403, { 'Content-Type': 'application/json', ...CORS })
     res.end(JSON.stringify({ error: 'Cross-site request blocked' }))
     return

@@ -30,7 +30,7 @@ export function buildDeployPreview(cfg) {
 
 /**
  * @param {string} text
- * @returns {null | { serviceName: string, envId: string, namespace: string, instances: number }} 
+ * @returns {null | { serviceName: string, envId: string, namespace: string, instances: number }}
  */
 export function parseScaleAction(text) {
   const m = text.match(
@@ -43,7 +43,8 @@ export function parseScaleAction(text) {
   const deps = visibleDeployments(useAppStore.getState())
   const dep = deps.find(
     (d) =>
-      d.metadata.name.toLowerCase() === tgt || t.includes(d.metadata.name.toLowerCase()),
+      d.metadata.name.toLowerCase() === tgt ||
+      t.includes(d.metadata.name.toLowerCase()),
   )
   if (!dep) return null
   return {

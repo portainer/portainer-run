@@ -25,7 +25,11 @@ export function buildAssistantContext(pathname) {
   const envNames = s.environments.map((e) => e.Name).join(', ') || 'none'
   const deps = visibleDeployments(s)
   const depCount = deps.length
-  const depNames = deps.map((d) => d.metadata.name).slice(0, 20).join(', ') || 'none'
+  const depNames =
+    deps
+      .map((d) => d.metadata.name)
+      .slice(0, 20)
+      .join(', ') || 'none'
   let ctx = `Current page: ${page}. Environments: ${envNames}. Managed services: ${depCount}${depCount > 0 ? ' (' + depNames + ')' : ''}.`
 
   const m = matchPath(
@@ -34,7 +38,8 @@ export function buildAssistantContext(pathname) {
   )
   if (m?.params) {
     const { envId, namespace, name } = m.params
-    const envName = s.environments.find((e) => String(e.Id) === String(envId))?.Name || envId
+    const envName =
+      s.environments.find((e) => String(e.Id) === String(envId))?.Name || envId
     const d = deps.find(
       (x) =>
         x.metadata.name === name &&

@@ -17,13 +17,13 @@
 
 import { readBody } from '../lib/http.js'
 import { CORS } from '../lib/cors.js'
-import {
-  BASE_DOMAIN,
-  CONFIG_NAMESPACE,
-  GATEWAY_URL,
-} from '../config.js'
+import { BASE_DOMAIN, CONFIG_NAMESPACE, GATEWAY_URL } from '../config.js'
 import { requestUploadSession, fetchStagedFiles } from '../lib/gateway.js'
-import { resolveCallerIdentity, extractToken, portainerGet } from '../lib/identity.js'
+import {
+  resolveCallerIdentity,
+  extractToken,
+  portainerGet,
+} from '../lib/identity.js'
 import { resolvePortainerTarget } from '../resolve-portainer.js'
 import { getConnectionsForUser } from '../models/connection.js'
 import { handleVibe } from './vibe.js'
@@ -76,25 +76,31 @@ function buildTools() {
 
   tools.push({
     name: 'list_environments',
-    description: 'List available Kubernetes environments in Portainer. Call this first to find the envId needed for deployment.',
+    description:
+      'List available Kubernetes environments in Portainer. Call this first to find the envId needed for deployment.',
     inputSchema: { type: 'object', properties: {} },
   })
 
   tools.push({
     name: 'list_namespaces',
-    description: 'List Kubernetes namespaces available in a specific environment.',
+    description:
+      'List Kubernetes namespaces available in a specific environment.',
     inputSchema: {
       type: 'object',
       required: ['envId'],
       properties: {
-        envId: { type: 'string', description: 'Environment ID from list_environments' },
+        envId: {
+          type: 'string',
+          description: 'Environment ID from list_environments',
+        },
       },
     },
   })
 
   tools.push({
     name: 'list_git_targets',
-    description: 'List git repositories configured in Portainer-Run. These are used to store deployment manifests. Call this to find the gitTargetId needed for deployment.',
+    description:
+      'List git repositories configured in Portainer-Run. These are used to store deployment manifests. Call this to find the gitTargetId needed for deployment.',
     inputSchema: { type: 'object', properties: {} },
   })
 
@@ -110,7 +116,10 @@ function buildTools() {
       type: 'object',
       required: ['envId'],
       properties: {
-        envId: { type: 'string', description: 'Environment ID from list_environments' },
+        envId: {
+          type: 'string',
+          description: 'Environment ID from list_environments',
+        },
       },
     },
   })
@@ -136,36 +145,49 @@ function buildTools() {
       'list_git_targets first to get the required IDs.',
     inputSchema: {
       type: 'object',
-      required: ['appName', 'envId', 'namespace', 'gitTargetId', 'stagedSessionId'],
+      required: [
+        'appName',
+        'envId',
+        'namespace',
+        'gitTargetId',
+        'stagedSessionId',
+      ],
       properties: {
         appName: {
           type: 'string',
-          description: 'Application name — lowercase alphanumeric and hyphens only, e.g. my-expense-tracker',
+          description:
+            'Application name — lowercase alphanumeric and hyphens only, e.g. my-expense-tracker',
         },
         envId: {
           type: 'string',
-          description: 'Target Kubernetes environment ID (from list_environments)',
+          description:
+            'Target Kubernetes environment ID (from list_environments)',
         },
         namespace: {
           type: 'string',
-          description: 'Kubernetes namespace to deploy into (from list_namespaces)',
+          description:
+            'Kubernetes namespace to deploy into (from list_namespaces)',
         },
         gitTargetId: {
           type: 'string',
-          description: 'Git target ID for manifest storage (from list_git_targets). Git targets cannot be created via MCP — if none exist, direct the user to add one in the Portainer-Run UI first.',
+          description:
+            'Git target ID for manifest storage (from list_git_targets). Git targets cannot be created via MCP — if none exist, direct the user to add one in the Portainer-Run UI first.',
         },
         runtime: {
           type: 'string',
           enum: ['auto', 'node', 'python', 'php', 'ruby', 'nginx'],
-          description: 'Runtime override. Default: auto (detected from the uploaded files). Set to "nginx" to deploy a static HTML/CSS/JS site — upload only the static files (index.html, css, js, assets) and do NOT scaffold a Node/Express or other server to serve them.',
+          description:
+            'Runtime override. Default: auto (detected from the uploaded files). Set to "nginx" to deploy a static HTML/CSS/JS site — upload only the static files (index.html, css, js, assets) and do NOT scaffold a Node/Express or other server to serve them.',
         },
         stagedSessionId: {
           type: 'string',
-          description: 'Session ID from request_upload_session, after the complete source files have been POSTed to its uploadUrl. This is the only way to supply files.',
+          description:
+            'Session ID from request_upload_session, after the complete source files have been POSTed to its uploadUrl. This is the only way to supply files.',
         },
         envVars: {
           type: 'array',
-          description: 'Environment variables for the app. Auto-detected from an uploaded .env.example if omitted.',
+          description:
+            'Environment variables for the app. Auto-detected from an uploaded .env.example if omitted.',
           items: {
             type: 'object',
             required: ['key', 'value'],
@@ -178,16 +200,25 @@ function buildTools() {
         exposeType: {
           type: 'string',
           enum: ['none', 'NodePort', 'LoadBalancer', 'Ingress'],
-          description: 'How to expose the app externally. Default: Ingress when the server has a base domain configured (a hostname can be derived), otherwise NodePort.',
+          description:
+            'How to expose the app externally. Default: Ingress when the server has a base domain configured (a hostname can be derived), otherwise NodePort.',
         },
         ingress: {
           type: 'object',
           description:
             'Ingress settings, used only when exposeType is "Ingress". If host is omitted and a base domain is configured, defaults to <appName>.<baseDomain>.',
           properties: {
-            host: { type: 'string', description: 'Full ingress hostname, e.g. my-app.example.com. Required when exposeType is "Ingress" unless the server has a base domain configured (check list_ingress_classes — ingressHostRequired). If no base domain is configured, ask the user for the hostname.' },
+            host: {
+              type: 'string',
+              description:
+                'Full ingress hostname, e.g. my-app.example.com. Required when exposeType is "Ingress" unless the server has a base domain configured (check list_ingress_classes — ingressHostRequired). If no base domain is configured, ask the user for the hostname.',
+            },
             path: { type: 'string', description: 'Ingress path. Default: /' },
-            ingressClass: { type: 'string', description: 'Ingress class name, e.g. nginx. Call list_ingress_classes to see options. If omitted, the cluster default IngressClass is applied automatically.' },
+            ingressClass: {
+              type: 'string',
+              description:
+                'Ingress class name, e.g. nginx. Call list_ingress_classes to see options. If omitted, the cluster default IngressClass is applied automatically.',
+            },
           },
         },
         branch: {
@@ -230,7 +261,8 @@ async function fetchDisabledEnvs(target, token, envIds) {
   for (const id of envIds) {
     try {
       const cm = await portainerGet(
-        target, token,
+        target,
+        token,
         `/api/endpoints/${id}/kubernetes/api/v1/namespaces/${CONFIG_NAMESPACE}/configmaps/portainer-run-config`,
       )
       const raw = cm?.data?.disabledEnvs
@@ -241,7 +273,9 @@ async function fetchDisabledEnvs(target, token, envIds) {
         for (const [k, v] of Object.entries(parsed)) map[String(k)] = v
         return map
       }
-    } catch { /* unreachable env or no config — try the next */ }
+    } catch {
+      /* unreachable env or no config — try the next */
+    }
   }
   return {}
 }
@@ -249,7 +283,10 @@ async function fetchDisabledEnvs(target, token, envIds) {
 async function toolListEnvironments(req) {
   const token = extractToken(req)
   const target = resolvePortainerTarget()
-  if (!target) throw new Error('Cannot resolve Portainer target — ensure PORTAINER_URL is set on the server')
+  if (!target)
+    throw new Error(
+      'Cannot resolve Portainer target — ensure PORTAINER_URL is set on the server',
+    )
 
   const eps = await portainerGet(target, token, '/api/endpoints')
   // Portainer EndpointType: 1=Docker, 2=Agent-on-Docker, 3=Azure, 4=Edge-agent-on-Docker,
@@ -257,20 +294,31 @@ async function toolListEnvironments(req) {
   // Kubernetes-only, so include 5–7 (matches the UI in services/session.js).
   const K8S_TYPES = [5, 6, 7]
   const TYPE_LABELS = { 5: 'local', 6: 'agent', 7: 'edge' }
-  const k8sEnvs = (Array.isArray(eps) ? eps : []).filter((e) => K8S_TYPES.includes(e.Type))
+  const k8sEnvs = (Array.isArray(eps) ? eps : []).filter((e) =>
+    K8S_TYPES.includes(e.Type),
+  )
 
   // Hide environments an admin has disabled from deploy flows (matches the UI).
-  const disabled = await fetchDisabledEnvs(target, token, k8sEnvs.map((e) => e.Id))
+  const disabled = await fetchDisabledEnvs(
+    target,
+    token,
+    k8sEnvs.map((e) => e.Id),
+  )
   return k8sEnvs
     .filter((e) => !disabled[String(e.Id)])
-    .map((e) => ({ id: String(e.Id), name: e.Name, type: TYPE_LABELS[e.Type] || 'kubernetes' }))
+    .map((e) => ({
+      id: String(e.Id),
+      name: e.Name,
+      type: TYPE_LABELS[e.Type] || 'kubernetes',
+    }))
 }
 
 async function toolListNamespaces(req, args) {
   const { envId } = args
   if (!envId) throw new Error('envId is required')
   // Validate envId is numeric to prevent path injection into Portainer API
-  if (!/^\d+$/.test(String(envId))) throw new Error('envId must be a numeric environment ID')
+  if (!/^\d+$/.test(String(envId)))
+    throw new Error('envId must be a numeric environment ID')
   const token = extractToken(req)
   const target = resolvePortainerTarget()
   if (!target) throw new Error('Cannot resolve Portainer target')
@@ -278,7 +326,11 @@ async function toolListNamespaces(req, args) {
   // Portainer-native, access-policy-aware endpoint: returns only the namespaces
   // the caller can access. The raw /kubernetes/api/v1/namespaces proxy is NOT
   // filtered by Portainer's access policies and leaks every namespace.
-  const data = await portainerGet(target, token, `/api/kubernetes/${envId}/namespaces`)
+  const data = await portainerGet(
+    target,
+    token,
+    `/api/kubernetes/${envId}/namespaces`,
+  )
   const list = Array.isArray(data) ? data : []
   return list
     .filter((n) => !n.IsSystem) // Portainer flags kube-* and portainer as system
@@ -318,7 +370,8 @@ async function toolListGitTargets(req, caller) {
  */
 async function fetchIngressClasses(target, token, envId) {
   const data = await portainerGet(
-    target, token,
+    target,
+    token,
     `/api/endpoints/${envId}/kubernetes/apis/networking.k8s.io/v1/ingressclasses`,
   )
   const items = data?.items || []
@@ -326,7 +379,10 @@ async function fetchIngressClasses(target, token, envId) {
     .map((c) => ({
       name: c.metadata?.name,
       controller: c.spec?.controller || '',
-      isDefault: c.metadata?.annotations?.['ingressclass.kubernetes.io/is-default-class'] === 'true',
+      isDefault:
+        c.metadata?.annotations?.[
+          'ingressclass.kubernetes.io/is-default-class'
+        ] === 'true',
     }))
     .filter((c) => c.name)
 }
@@ -335,7 +391,8 @@ async function toolListIngressClasses(req, args) {
   const { envId } = args
   if (!envId) throw new Error('envId is required')
   // Validate envId is numeric to prevent path injection into Portainer API
-  if (!/^\d+$/.test(String(envId))) throw new Error('envId must be a numeric environment ID')
+  if (!/^\d+$/.test(String(envId)))
+    throw new Error('envId must be a numeric environment ID')
   const token = extractToken(req)
   const target = resolvePortainerTarget()
   if (!target) throw new Error('Cannot resolve Portainer target')
@@ -379,10 +436,16 @@ const RUNTIMES = [
         try {
           const parsed = JSON.parse(pkg.text)
           if (parsed?.scripts?.start) return 'npm start'
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
-      const hasServerJs = files.some((f) => f.name === 'server.js' || f.name === 'index.js')
-      return hasServerJs ? `node ${files.find((f) => f.name === 'server.js') ? 'server.js' : 'index.js'}` : 'npm start'
+      const hasServerJs = files.some(
+        (f) => f.name === 'server.js' || f.name === 'index.js',
+      )
+      return hasServerJs
+        ? `node ${files.find((f) => f.name === 'server.js') ? 'server.js' : 'index.js'}`
+        : 'npm start'
     },
     port: 3000,
     workDir: '/app',
@@ -390,10 +453,13 @@ const RUNTIMES = [
   {
     id: 'python',
     image: 'python:3.13-slim',
-    detect: (names) => names.includes('requirements.txt') || names.some((n) => n.endsWith('.py')),
+    detect: (names) =>
+      names.includes('requirements.txt') ||
+      names.some((n) => n.endsWith('.py')),
     defaultCmd: (files) => {
       for (const candidate of ['main.py', 'app.py', 'server.py', 'run.py']) {
-        if (files.some((f) => f.name === candidate)) return `python ${candidate}`
+        if (files.some((f) => f.name === candidate))
+          return `python ${candidate}`
       }
       return 'python app.py'
     },
@@ -411,11 +477,14 @@ const RUNTIMES = [
   {
     id: 'ruby',
     image: 'ruby:3.4-slim',
-    detect: (names) => names.includes('Gemfile') || names.some((n) => n.endsWith('.rb')),
+    detect: (names) =>
+      names.includes('Gemfile') || names.some((n) => n.endsWith('.rb')),
     defaultCmd: (files) => {
       for (const candidate of ['app.rb', 'server.rb', 'config.ru']) {
         if (files.some((f) => f.name === candidate)) {
-          return candidate === 'config.ru' ? 'bundle exec rackup -p 9292 -o 0.0.0.0' : `ruby ${candidate}`
+          return candidate === 'config.ru'
+            ? 'bundle exec rackup -p 9292 -o 0.0.0.0'
+            : `ruby ${candidate}`
         }
       }
       return 'bundle exec ruby app.rb'
@@ -445,7 +514,10 @@ function detectRuntimeForFiles(files, forcedId) {
   let rt
   if (forcedId && forcedId !== 'auto') {
     rt = ALL_RUNTIMES.find((r) => r.id === forcedId)
-    if (!rt) throw new Error(`Unknown runtime "${forcedId}" — use one of: ${ALL_RUNTIMES.map((r) => r.id).join(', ')}`)
+    if (!rt)
+      throw new Error(
+        `Unknown runtime "${forcedId}" — use one of: ${ALL_RUNTIMES.map((r) => r.id).join(', ')}`,
+      )
   } else {
     // Static sites (all assets static) and the no-match case both default to nginx.
     rt = RUNTIMES.find((r) => r.detect(names)) || NGINX_RUNTIME
@@ -465,8 +537,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 function pickNodeIp(nodes) {
   for (const node of nodes || []) {
     const addrs = node.status?.addresses || []
-    const ip = addrs.find((a) => a.type === 'ExternalIP')?.address
-      || addrs.find((a) => a.type === 'InternalIP')?.address
+    const ip =
+      addrs.find((a) => a.type === 'ExternalIP')?.address ||
+      addrs.find((a) => a.type === 'InternalIP')?.address
     if (ip) return ip
   }
   return null
@@ -479,24 +552,42 @@ function pickNodeIp(nodes) {
  * this polls briefly. Returns { url, label, type } or null. Best-effort —
  * never throws.
  */
-async function resolveAppAccessUrl(target, token, envId, ns, appName, { attempts = 1, delayMs = 0 } = {}) {
+async function resolveAppAccessUrl(
+  target,
+  token,
+  envId,
+  ns,
+  appName,
+  { attempts = 1, delayMs = 0 } = {},
+) {
   const base = `/api/endpoints/${envId}/kubernetes`
   let last = null
   for (let i = 0; i < attempts; i++) {
     try {
       const [svc, ing, nodesData] = await Promise.all([
-        portainerGet(target, token, `${base}/api/v1/namespaces/${ns}/services/${appName}`).catch(() => null),
-        portainerGet(target, token, `${base}/apis/networking.k8s.io/v1/namespaces/${ns}/ingresses/${appName}`).catch(() => null),
+        portainerGet(
+          target,
+          token,
+          `${base}/api/v1/namespaces/${ns}/services/${appName}`,
+        ).catch(() => null),
+        portainerGet(
+          target,
+          token,
+          `${base}/apis/networking.k8s.io/v1/namespaces/${ns}/ingresses/${appName}`,
+        ).catch(() => null),
         portainerGet(target, token, `${base}/api/v1/nodes`).catch(() => null),
       ])
       const svcs = svc?.kind === 'Service' ? [svc] : []
       const ings = ing?.kind === 'Ingress' ? [ing] : []
       // Fall back to the Portainer host when node IPs aren't listable (403) —
       // gives a usable NodePort URL on single-node/internal clusters.
-      const nodeIp = pickNodeIp(nodesData?.items) || (svcs.length ? target.host : null)
+      const nodeIp =
+        pickNodeIp(nodesData?.items) || (svcs.length ? target.host : null)
       last = resolveUrl(appName, svcs, ings, nodeIp)
       if (last?.url) return last
-    } catch { /* best effort */ }
+    } catch {
+      /* best effort */
+    }
     if (i < attempts - 1) await sleep(delayMs)
   }
   return last
@@ -507,14 +598,38 @@ async function resolveAppAccessUrl(target, token, envId, ns, appName, { attempts
 // "..." (spread/rest, e.g. `const { a, ...rest } = x`) and short-but-real files
 // are not flagged.
 const PLACEHOLDER_MARKERS = [
-  { re: /\brest of (the )?(file|code|content|implementation|component|markup|styles?|script|document)\b/i, reason: 'a "rest of the file" note' },
-  { re: /\b(your|the|actual|full|real|original|complete) (code|content|file|markup|implementation) (here|goes here|belongs here|below|above)\b/i, reason: 'a "content goes here" note' },
-  { re: /\b(content|code|file|markup|output|section|html|body) (omitted|truncated|snipped|abbreviated|redacted|shortened)\b/i, reason: 'an "omitted/truncated" note' },
-  { re: /(\/\/|#|<!--|\/\*)\s*\.\.\.\s*(rest|remainder|more|omitted|truncat|unchanged|same|continue|abbreviat|snip)/i, reason: 'a comment ellipsis placeholder' },
-  { re: /\[\s*(omitted|truncated|placeholder|snip|redacted)\s*\]/i, reason: 'a bracketed placeholder' },
-  { re: /\bplaceholder (file|content)\b/i, reason: 'a "placeholder content" note' },
-  { re: /\bpaste (the )?(full|real|actual|original|complete|entire) (file|content|code|contents)\b/i, reason: 'a "paste the full file" note' },
-  { re: /\bTODO:\s*(paste|insert|fill in|add the|replace with)/i, reason: 'a TODO to fill in content' },
+  {
+    re: /\brest of (the )?(file|code|content|implementation|component|markup|styles?|script|document)\b/i,
+    reason: 'a "rest of the file" note',
+  },
+  {
+    re: /\b(your|the|actual|full|real|original|complete) (code|content|file|markup|implementation) (here|goes here|belongs here|below|above)\b/i,
+    reason: 'a "content goes here" note',
+  },
+  {
+    re: /\b(content|code|file|markup|output|section|html|body) (omitted|truncated|snipped|abbreviated|redacted|shortened)\b/i,
+    reason: 'an "omitted/truncated" note',
+  },
+  {
+    re: /(\/\/|#|<!--|\/\*)\s*\.\.\.\s*(rest|remainder|more|omitted|truncat|unchanged|same|continue|abbreviat|snip)/i,
+    reason: 'a comment ellipsis placeholder',
+  },
+  {
+    re: /\[\s*(omitted|truncated|placeholder|snip|redacted)\s*\]/i,
+    reason: 'a bracketed placeholder',
+  },
+  {
+    re: /\bplaceholder (file|content)\b/i,
+    reason: 'a "placeholder content" note',
+  },
+  {
+    re: /\bpaste (the )?(full|real|actual|original|complete|entire) (file|content|code|contents)\b/i,
+    reason: 'a "paste the full file" note',
+  },
+  {
+    re: /\bTODO:\s*(paste|insert|fill in|add the|replace with)/i,
+    reason: 'a TODO to fill in content',
+  },
 ]
 
 // Scan uploaded files for obvious stub/placeholder content. Returns the first
@@ -525,7 +640,8 @@ function detectPlaceholderContent(files) {
     const content = typeof f?.content === 'string' ? f.content : ''
     if (!content) continue
     for (const m of PLACEHOLDER_MARKERS) {
-      if (m.re.test(content)) return { path: f?.path || '(unknown)', reason: m.reason }
+      if (m.re.test(content))
+        return { path: f?.path || '(unknown)', reason: m.reason }
     }
   }
   return null
@@ -537,25 +653,39 @@ async function toolRequestUploadSession() {
 
 async function toolDeployVibeApp(req, args, caller) {
   const {
-    appName, envId, namespace, gitTargetId,
-    envVars, ingress = {}, branch = 'main',
-    runtime = 'auto', stagedSessionId,
+    appName,
+    envId,
+    namespace,
+    gitTargetId,
+    envVars,
+    ingress = {},
+    branch = 'main',
+    runtime = 'auto',
+    stagedSessionId,
   } = args
 
   if (!appName || !envId || !namespace || !gitTargetId) {
-    throw new Error('appName, envId, namespace, and gitTargetId are all required')
+    throw new Error(
+      'appName, envId, namespace, and gitTargetId are all required',
+    )
   }
   if (!/^\d+$/.test(String(envId))) {
-    throw new Error('envId must be the numeric environment ID from list_environments')
+    throw new Error(
+      'envId must be the numeric environment ID from list_environments',
+    )
   }
   if (!stagedSessionId) {
-    throw new Error('stagedSessionId is required. Call request_upload_session, POST the complete files to its uploadUrl, then call deploy_app with the returned sessionId.')
+    throw new Error(
+      'stagedSessionId is required. Call request_upload_session, POST the complete files to its uploadUrl, then call deploy_app with the returned sessionId.',
+    )
   }
 
   // All files arrive via the gateway upload session — there is no inline path.
   const files = await fetchStagedFiles(stagedSessionId)
   if (!Array.isArray(files) || files.length === 0) {
-    throw new Error('No files found for this upload session. Start a new session with request_upload_session, upload the files, then retry.')
+    throw new Error(
+      'No files found for this upload session. Start a new session with request_upload_session, upload the files, then retry.',
+    )
   }
 
   // Reject obvious placeholder / truncated content before it reaches git. This
@@ -564,7 +694,7 @@ async function toolDeployVibeApp(req, args, caller) {
   if (stub) {
     throw new Error(
       `Upload rejected: "${stub.path}" looks like a placeholder or truncated file (found ${stub.reason}). ` +
-      'Upload the complete, unmodified contents of every file via a new upload session, then retry.',
+        'Upload the complete, unmodified contents of every file via a new upload session, then retry.',
     )
   }
 
@@ -577,16 +707,23 @@ async function toolDeployVibeApp(req, args, caller) {
   // Resolve ingress settings. When exposing via Ingress without an explicit host,
   // fall back to <appName>.<BASE_DOMAIN> if a base domain is configured — mirroring
   // the template/UI default. Without a host, buildVibeManifests skips the Ingress.
-  const resolvedIngress = exposeType === 'Ingress'
-    ? {
-        host: ingress.host || (BASE_DOMAIN ? `${safeAppName}.${BASE_DOMAIN}` : ''),
-        path: ingress.path || '/',
-        ...(ingress.ingressClass ? { ingressClass: ingress.ingressClass } : {}),
-      }
-    : {}
+  const resolvedIngress =
+    exposeType === 'Ingress'
+      ? {
+          host:
+            ingress.host ||
+            (BASE_DOMAIN ? `${safeAppName}.${BASE_DOMAIN}` : ''),
+          path: ingress.path || '/',
+          ...(ingress.ingressClass
+            ? { ingressClass: ingress.ingressClass }
+            : {}),
+        }
+      : {}
 
   if (exposeType === 'Ingress' && !resolvedIngress.host) {
-    throw new Error('exposeType "Ingress" requires ingress.host (or a configured BASE_DOMAIN)')
+    throw new Error(
+      'exposeType "Ingress" requires ingress.host (or a configured BASE_DOMAIN)',
+    )
   }
 
   // When no class was supplied, pick an IngressClass so the Ingress is actually
@@ -597,11 +734,19 @@ async function toolDeployVibeApp(req, args, caller) {
     try {
       const target = resolvePortainerTarget()
       if (target) {
-        const classes = await fetchIngressClasses(target, extractToken(req), envId)
-        const chosen = classes.find((c) => c.isDefault) || (classes.length === 1 ? classes[0] : null)
+        const classes = await fetchIngressClasses(
+          target,
+          extractToken(req),
+          envId,
+        )
+        const chosen =
+          classes.find((c) => c.isDefault) ||
+          (classes.length === 1 ? classes[0] : null)
         if (chosen) resolvedIngress.ingressClass = chosen.name
       }
-    } catch { /* no class resolvable — continue without one */ }
+    } catch {
+      /* no class resolvable — continue without one */
+    }
   }
 
   // Detect runtime, image, start command, working dir, and port from the files —
@@ -612,7 +757,9 @@ async function toolDeployVibeApp(req, args, caller) {
   // Auto-detect env vars from .env.example if not provided
   let resolvedEnvVars = envVars
   if (!resolvedEnvVars) {
-    const envExample = files.find((f) => f.path === '.env.example' || f.path.endsWith('/.env.example'))
+    const envExample = files.find(
+      (f) => f.path === '.env.example' || f.path.endsWith('/.env.example'),
+    )
     if (envExample) {
       resolvedEnvVars = envExample.content
         .split('\n')
@@ -640,34 +787,38 @@ async function toolDeployVibeApp(req, args, caller) {
       const ep = await portainerGet(target, token, `/api/endpoints/${envId}`)
       if (ep && ep.Name) resolvedEnvName = ep.Name
     }
-  } catch { /* fall back to envId-based path */ }
+  } catch {
+    /* fall back to envId-based path */
+  }
 
-  const mockBodyBuf = Buffer.from(JSON.stringify({
-    gitTargetId,
-    branch,
-    pathPrefix: '',
-    pollInterval: '5m',
-    envId,
-    envName: resolvedEnvName,
-    deployParams: {
-      appName: safeAppName,
-      ns: namespace,
-      instances: 1,
-      exposeType,
-      servicePorts: [detected.port],
-      ingress: resolvedIngress,
-    },
-    vibeParams: {
-      runtime: detected.id,
-      runtimeImage: detected.image,
-      startCmd: detected.startCmd,
-      workDir: detected.workDir,
-      envVars: resolvedEnvVars,
-      sourceType: 'upload',
-      sourceFiles: files.map((f) => ({ path: f.path, content: f.content })),
-      gitSource: null,
-    },
-  }))
+  const mockBodyBuf = Buffer.from(
+    JSON.stringify({
+      gitTargetId,
+      branch,
+      pathPrefix: '',
+      pollInterval: '5m',
+      envId,
+      envName: resolvedEnvName,
+      deployParams: {
+        appName: safeAppName,
+        ns: namespace,
+        instances: 1,
+        exposeType,
+        servicePorts: [detected.port],
+        ingress: resolvedIngress,
+      },
+      vibeParams: {
+        runtime: detected.id,
+        runtimeImage: detected.image,
+        startCmd: detected.startCmd,
+        workDir: detected.workDir,
+        envVars: resolvedEnvVars,
+        sourceType: 'upload',
+        sourceFiles: files.map((f) => ({ path: f.path, content: f.content })),
+        gitSource: null,
+      },
+    }),
+  )
 
   const mockReq = {
     method: 'POST',
@@ -679,7 +830,9 @@ async function toolDeployVibeApp(req, args, caller) {
     on(event, handler) {
       if (event === 'data') process.nextTick(() => handler(mockBodyBuf))
       if (event === 'end') process.nextTick(() => handler())
-      if (event === 'error') { /* no-op */ }
+      if (event === 'error') {
+        /* no-op */
+      }
       return this
     },
   }
@@ -688,20 +841,35 @@ async function toolDeployVibeApp(req, args, caller) {
   await new Promise((resolve, reject) => {
     const mockRes = {
       statusCode: 200,
-      writeHead(code) { this.statusCode = code },
-      end(body) { this._body = body || ''; resolve(this) },
+      writeHead(code) {
+        this.statusCode = code
+      },
+      end(body) {
+        this._body = body || ''
+        resolve(this)
+      },
     }
     handleVibe(mockReq, mockRes, '/api/vibe/deploy').catch(reject)
-  }).then((r) => { result = r })
+  }).then((r) => {
+    result = r
+  })
 
   if (result.statusCode >= 400) {
     let errMsg = 'Deploy failed'
-    try { errMsg = JSON.parse(result._body)?.error || errMsg } catch { /* ignore */ }
+    try {
+      errMsg = JSON.parse(result._body)?.error || errMsg
+    } catch {
+      /* ignore */
+    }
     throw new Error(errMsg)
   }
 
   let data = {}
-  try { data = JSON.parse(result._body) } catch { /* ignore */ }
+  try {
+    data = JSON.parse(result._body)
+  } catch {
+    /* ignore */
+  }
   const deployedName = data.appName || safeAppName
 
   // Resolve an access URL for the response. Ingress hosts are known immediately;
@@ -710,17 +878,38 @@ async function toolDeployVibeApp(req, args, caller) {
   try {
     const target = resolvePortainerTarget()
     if (exposeType === 'Ingress' && resolvedIngress.host) {
-      const p = resolvedIngress.path && resolvedIngress.path !== '/' ? resolvedIngress.path : ''
-      access = { url: `http://${resolvedIngress.host}${p}`, label: resolvedIngress.host, type: 'ingress' }
-    } else if (target && (exposeType === 'NodePort' || exposeType === 'LoadBalancer')) {
-      access = await resolveAppAccessUrl(target, token, envId, namespace, deployedName, { attempts: 4, delayMs: 1500 })
+      const p =
+        resolvedIngress.path && resolvedIngress.path !== '/'
+          ? resolvedIngress.path
+          : ''
+      access = {
+        url: `http://${resolvedIngress.host}${p}`,
+        label: resolvedIngress.host,
+        type: 'ingress',
+      }
+    } else if (
+      target &&
+      (exposeType === 'NodePort' || exposeType === 'LoadBalancer')
+    ) {
+      access = await resolveAppAccessUrl(
+        target,
+        token,
+        envId,
+        namespace,
+        deployedName,
+        { attempts: 4, delayMs: 1500 },
+      )
     }
-  } catch { /* best effort — URL is a convenience */ }
+  } catch {
+    /* best effort — URL is a convenience */
+  }
 
   let message = `${deployedName} deployed to ${namespace} successfully.`
   if (access?.url) {
     message += ` Access it at ${access.url}`
-    if (access.type === 'ingress') message += ' (ensure DNS for the host points to your ingress controller; served over HTTP unless TLS is configured)'
+    if (access.type === 'ingress')
+      message +=
+        ' (ensure DNS for the host points to your ingress controller; served over HTTP unless TLS is configured)'
   } else if (exposeType === 'none') {
     message += ' It is not exposed externally (exposeType "none").'
   } else {
@@ -745,12 +934,17 @@ async function toolGetAppStatus(req, args) {
     throw new Error('appName, envId, and namespace are all required')
   }
   if (!/^\d+$/.test(String(envId))) {
-    throw new Error('envId must be the numeric environment ID from list_environments')
+    throw new Error(
+      'envId must be the numeric environment ID from list_environments',
+    )
   }
   const token = extractToken(req)
   const target = resolvePortainerTarget()
   if (!target) {
-    return { found: false, message: 'Could not resolve the Portainer target for this request.' }
+    return {
+      found: false,
+      message: 'Could not resolve the Portainer target for this request.',
+    }
   }
 
   // Ask the cluster directly for the Deployment rather than trusting the
@@ -767,27 +961,37 @@ async function toolGetAppStatus(req, args) {
   }
 
   if (!dep) {
-    return { found: false, message: `No application found for ${appName} in ${namespace}` }
+    return {
+      found: false,
+      message: `No application found for ${appName} in ${namespace}`,
+    }
   }
 
   const desired = dep.spec?.replicas ?? 1
   const ready = dep.status?.readyReplicas || 0
   const available = dep.status?.availableReplicas || 0
-  const unavailableCond = (dep.status?.conditions || [])
-    .find((c) => c.type === 'Available' && c.status === 'False')
+  const unavailableCond = (dep.status?.conditions || []).find(
+    (c) => c.type === 'Available' && c.status === 'False',
+  )
   const status =
-    desired === 0 ? 'stopped'
-      : ready >= desired && available >= desired ? 'running'
-      : ready > 0 ? 'partial'
-      : unavailableCond ? 'error'
-      : 'pending'
+    desired === 0
+      ? 'stopped'
+      : ready >= desired && available >= desired
+        ? 'running'
+        : ready > 0
+          ? 'partial'
+          : unavailableCond
+            ? 'error'
+            : 'pending'
   const container = dep.spec?.template?.spec?.containers?.[0]
 
   // Resolve a live access URL (Service/Ingress may still be settling).
   let access = null
   try {
     access = await resolveAppAccessUrl(target, token, envId, namespace, appName)
-  } catch { /* best effort */ }
+  } catch {
+    /* best effort */
+  }
 
   return {
     found: true,
@@ -870,7 +1074,17 @@ export async function handleMcp(req, res) {
   const caller = await resolveCallerIdentity(req)
   if (!caller) {
     res.writeHead(401, { 'Content-Type': 'application/json', ...CORS })
-    res.end(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unauthorized — provide a Portainer API token via Authorization: Bearer <token> or X-API-Key header' } }))
+    res.end(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: null,
+        error: {
+          code: -32001,
+          message:
+            'Unauthorized — provide a Portainer API token via Authorization: Bearer <token> or X-API-Key header',
+        },
+      }),
+    )
     return
   }
 
@@ -880,7 +1094,13 @@ export async function handleMcp(req, res) {
     rpc = JSON.parse(body.toString('utf8'))
   } catch {
     res.writeHead(400, { 'Content-Type': 'application/json', ...CORS })
-    res.end(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }))
+    res.end(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: -32700, message: 'Parse error' },
+      }),
+    )
     return
   }
 
@@ -900,12 +1120,14 @@ export async function handleMcp(req, res) {
   } catch (err) {
     const isRpcError = err && typeof err.code === 'number'
     res.writeHead(200, { 'Content-Type': 'application/json', ...CORS })
-    res.end(JSON.stringify({
-      jsonrpc: '2.0',
-      id,
-      error: isRpcError
-        ? err
-        : { code: -32603, message: err?.message || 'Internal error' },
-    }))
+    res.end(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id,
+        error: isRpcError
+          ? err
+          : { code: -32603, message: err?.message || 'Internal error' },
+      }),
+    )
   }
 }

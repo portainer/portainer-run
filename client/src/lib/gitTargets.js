@@ -77,6 +77,21 @@ export function listBranches(id) {
   return serverFetch(`/api/connections/${id}/branches`)
 }
 
+/**
+ * List a single directory level for a branch (entry base names + type).
+ * Feeds the lazy-loading "Source from Git" folder picker in Vibe Deploy so the
+ * whole repository is never preloaded — each folder is fetched only when opened.
+ * @param {string} id
+ * @param {string} branch
+ * @param {string} [path]  repo-relative folder path ('' for the repository root)
+ * @returns {Promise<{ files: Array<{ path: string, type: 'file'|'dir' }> }>}
+ */
+export function listRepoDir(id, branch, path = '') {
+  const params = new URLSearchParams({ branch })
+  if (path) params.set('path', path)
+  return serverFetch(`/api/connections/${id}/files?${params.toString()}`)
+}
+
 // --- App manifest cleanup ---
 
 /**

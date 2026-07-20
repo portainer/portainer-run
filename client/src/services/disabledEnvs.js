@@ -8,7 +8,11 @@ export async function loadDisabledEnvs(token, environments) {
   const CM_NS = st().configNamespace
   for (const env of environments) {
     try {
-      const r = await kubeFetch(token, env.Id, `/api/v1/namespaces/${CM_NS}/configmaps/${CM_NAME}`)
+      const r = await kubeFetch(
+        token,
+        env.Id,
+        `/api/v1/namespaces/${CM_NS}/configmaps/${CM_NAME}`,
+      )
       if (r.status === 404) {
         st().setDisabledEnvs({})
         return
@@ -22,7 +26,9 @@ export async function loadDisabledEnvs(token, environments) {
       }
       const parsed = JSON.parse(raw)
       const normalized = {}
-      for (const [k, v] of Object.entries(parsed && typeof parsed === 'object' ? parsed : {})) {
+      for (const [k, v] of Object.entries(
+        parsed && typeof parsed === 'object' ? parsed : {},
+      )) {
         normalized[String(k)] = v
       }
       st().setDisabledEnvs(normalized)
@@ -59,10 +65,15 @@ export async function saveDisabledEnvs(token, environments, disabledEnvs) {
         },
       )
       if (patch.status === 404) {
-        await kubeFetch(token, env.Id, `/api/v1/namespaces/${CM_NS}/configmaps`, {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        })
+        await kubeFetch(
+          token,
+          env.Id,
+          `/api/v1/namespaces/${CM_NS}/configmaps`,
+          {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          },
+        )
         return
       }
       if (patch.ok) return

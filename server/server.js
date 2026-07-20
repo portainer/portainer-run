@@ -17,10 +17,19 @@ import { loadTlsOptions } from './tls.js'
 
 function onError(e) {
   const err = e
-  if (err && typeof err === 'object' && 'code' in err && err.code === 'EADDRINUSE') {
+  if (
+    err &&
+    typeof err === 'object' &&
+    'code' in err &&
+    err.code === 'EADDRINUSE'
+  ) {
     console.error(`\n❌  Port ${PORT} already in use\n`)
   } else {
-    console.error('\n❌ ', (err && err instanceof Error && err.message) || err, '\n')
+    console.error(
+      '\n❌ ',
+      (err && err instanceof Error && err.message) || err,
+      '\n',
+    )
   }
   process.exit(1)
 }
@@ -36,7 +45,9 @@ if (SERVE_HTTP) {
       `    AI triage: ${AI_PROVIDER ? AI_PROVIDER + ' ✓' : '✗ not set'}`,
     )
     console.log(`    Cache:     ${CACHE_FILE}`)
-    console.log(`    Domain:    ${BASE_DOMAIN || '(not set — NodePort fallback)'}\n`)
+    console.log(
+      `    Domain:    ${BASE_DOMAIN || '(not set — NodePort fallback)'}\n`,
+    )
   })
   httpServer.on('error', onError)
 } else {
@@ -77,7 +88,9 @@ if (SERVE_HTTP) {
     })
     redirectServer.listen(HTTP_PORT, () => {})
     redirectServer.on('error', (e) => {
-      console.warn(`⚠️   HTTP redirect on port ${HTTP_PORT} unavailable: ${e.message}`)
+      console.warn(
+        `⚠️   HTTP redirect on port ${HTTP_PORT} unavailable: ${e.message}`,
+      )
     })
   }
 }

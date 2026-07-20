@@ -19,8 +19,8 @@ services:
     container_name: portainer-run
     restart: unless-stopped
     ports:
-      - "443:443"   # HTTPS
-      - "80:80"     # HTTP → HTTPS redirect
+      - '443:443' # HTTPS
+      - '80:80' # HTTP → HTTPS redirect
     environment:
       # ── Required ──────────────────────────────────────────────────────────
       - PORTAINER_URL=https://portainer.example.com:9443
@@ -67,7 +67,7 @@ services:
       # ── Persistent session cache ──────────────────────────────────────────
       # Without this, the cache is lost on container restart.
       # Uncomment and ensure the host path exists before starting.
-       - portainer-run-data:/app/data
+      - portainer-run-data:/app/data
 
       # ── Real TLS certificates ─────────────────────────────────────────────
       # Mount your cert directory and set SSL_CERT / SSL_KEY above.
@@ -81,7 +81,14 @@ services:
     #   - 1.1.1.1
 
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "--no-check-certificate", "https://localhost/config"]
+      test:
+        [
+          'CMD',
+          'wget',
+          '-qO-',
+          '--no-check-certificate',
+          'https://localhost/config',
+        ]
       interval: 30s
       timeout: 10s
       retries: 3

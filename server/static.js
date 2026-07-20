@@ -32,12 +32,19 @@ export function tryServeStatic(pathname, res) {
     if (!rel) return false
     const filePath = path.join(DIST_DIR, rel)
     const distAbs = path.resolve(DIST_DIR)
-    if (!path.resolve(filePath).startsWith(distAbs + path.sep) && path.resolve(filePath) !== distAbs) {
+    if (
+      !path.resolve(filePath).startsWith(distAbs + path.sep) &&
+      path.resolve(filePath) !== distAbs
+    ) {
       return false
     }
     if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
       const ext = path.extname(filePath)
-      return serveFile(filePath, res, contentTypes[ext] || 'application/octet-stream')
+      return serveFile(
+        filePath,
+        res,
+        contentTypes[ext] || 'application/octet-stream',
+      )
     }
     const index = path.join(DIST_DIR, 'index.html')
     if (fs.existsSync(index) && (pathname === '/' || !path.extname(pathname))) {

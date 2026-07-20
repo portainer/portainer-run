@@ -6,7 +6,7 @@ name: ci-publish
 # never in the ci workflow that runs fork-contributed code.
 on:
   workflow_run:
-    workflows: ["ci"]
+    workflows: ['ci']
     types: [completed]
 
 permissions:
@@ -27,7 +27,7 @@ jobs:
       github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - name: "[preparation] download image artifact"
+      - name: '[preparation] download image artifact'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: pr-image
@@ -35,7 +35,7 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: "[preparation] download image tag artifact"
+      - name: '[preparation] download image tag artifact'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: pr-image-tag
@@ -43,7 +43,7 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: "[preparation] resolve and validate image tag"
+      - name: '[preparation] resolve and validate image tag'
         id: tag
         run: |
           # Read tag from artifact written by the unprivileged ci workflow.
@@ -59,16 +59,16 @@ jobs:
           PR_NUMBER="${RAW_TAG#pr-}"
           echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
 
-      - name: "[preparation] set up Docker Buildx"
+      - name: '[preparation] set up Docker Buildx'
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
 
-      - name: "[preparation] log in to registry"
+      - name: '[preparation] log in to registry'
         uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: "[execution] push image to registry"
+      - name: '[execution] push image to registry'
         # Extract the pre-built OCI tarball and push via imagetools create.
         # Specify the tag explicitly in the oci-layout reference — Docker 28+ /
         # BuildKit v0.29+ no longer resolves an untagged oci-layout reference
@@ -85,7 +85,7 @@ jobs:
             --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.value }} \
             "oci-layout:///tmp/image-oci:${{ steps.tag.outputs.value }}"
 
-      - name: "[execution] post PR comment"
+      - name: '[execution] post PR comment'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |

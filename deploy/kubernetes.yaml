@@ -28,7 +28,7 @@ metadata:
   name: portainer-run-config
   namespace: portainer-addon-portainer-run
 data:
-  PORTAINER_URL: "https://portainer.portainer.svc.cluster.local:9443"
+  PORTAINER_URL: 'https://portainer.portainer.svc.cluster.local:9443'
   # Cluster-internal DNS is the default (addon runs alongside Portainer).
   # For an external Portainer, use its public URL instead:
   # PORTAINER_URL: "https://portainer.example.com:9443"
@@ -40,7 +40,7 @@ data:
   # ── File relay gateway ───────────────────────────────────────────────────────
   # Required for staged file uploads via the run-gateway proxy.
   # When set, large vibe deploy uploads use the gateway instead of inline MCP transfer.
-  GATEWAY_URL: "https://run-gateway.portainer.ai"
+  GATEWAY_URL: 'https://run-gateway.portainer.ai'
 
   # ── AI model override ────────────────────────────────────────────────────────
   # OpenAI model to use (default: gpt-4o). No effect when using Anthropic.
@@ -57,8 +57,8 @@ data:
   # serve HTTP directly. Without this we run HTTPS + an HTTP→HTTPS redirect on
   # port 80; the gateway hits that redirect and bounces the browser to the
   # cluster DNS name, out of the Portainer base URL.
-  SERVE_HTTP: "1"
-  PORT: "80"
+  SERVE_HTTP: '1'
+  PORT: '80'
 
   # ── Cache directory ──────────────────────────────────────────────────────────
   # Override the directory used for persistent cache (default: /app/data).
@@ -81,11 +81,11 @@ stringData:
   # ── Required: encryption key ────────────────────────────────────────────────
   # Encrypts stored Git target credentials at rest. Min 32 chars.
   # Generate: openssl rand -hex 32 | base64
-  ENCRYPTION_KEY: ""
+  ENCRYPTION_KEY: ''
 
   # ── Anthropic (Claude) ──────────────────────────────────────────────────────
   # Base64-encode your key: echo -n 'sk-ant-...' | base64
-  ANTHROPIC_API_KEY: ""
+  ANTHROPIC_API_KEY: ''
 
   # ── OpenAI (GPT-4o) — uncomment if using OpenAI instead ────────────────────
   # OPENAI_API_KEY: ""

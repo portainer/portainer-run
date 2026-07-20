@@ -22,7 +22,10 @@ function kubeCall(token, envId, kubePath, target) {
     () =>
       new Promise((resolve, reject) => {
         const upPath = `/api/endpoints/${envId}/kubernetes${kubePath}`
-        const headers = { Accept: 'application/json', ...portainerAuthHeaders(token) }
+        const headers = {
+          Accept: 'application/json',
+          ...portainerAuthHeaders(token),
+        }
         const transport = target.isHttps ? https : http
         const req = transport.request(
           {
@@ -46,17 +49,17 @@ function kubeCall(token, envId, kubePath, target) {
                 resolve({ status: res.statusCode, body: {} })
               }
             })
-          }
+          },
         )
         req.on('error', reject)
         req.end()
-      })
+      }),
   )
 }
 
 function resolveStatusReason(pod) {
   const scheduledCond = (pod.status?.conditions || []).find(
-    (c) => c.type === 'PodScheduled'
+    (c) => c.type === 'PodScheduled',
   )
   if (scheduledCond?.status === 'False') {
     const msg = (scheduledCond.message || '').toLowerCase()
@@ -88,22 +91,26 @@ function resolveStatusReason(pod) {
     ...(pod.status?.initContainerStatuses || []),
   ]
   if (pod.status?.phase === 'Pending' && !allCS.length) {
-    const isScheduled = (pod.status?.conditions || []).find(
-      (c) => c.type === 'PodScheduled'
-    )?.status === 'True'
+    const isScheduled =
+      (pod.status?.conditions || []).find((c) => c.type === 'PodScheduled')
+        ?.status === 'True'
     return isScheduled ? 'Preparing your app...' : 'Waiting for a node'
   }
 
   // Init containers running — surface a meaningful message by name
   const runningInit = (pod.status?.initContainerStatuses || []).find(
-    (cs) => cs.state?.running && !cs.ready
+    (cs) => cs.state?.running && !cs.ready,
   )
   if (runningInit) {
     switch (runningInit.name) {
-      case 'vibe-sync':    return 'Downloading your app files...'
-      case 'vibe-install': return 'Installing dependencies...'
-      case 'vibe-env':     return 'Applying settings...'
-      default:             return 'Getting ready...'
+      case 'vibe-sync':
+        return 'Downloading your app files...'
+      case 'vibe-install':
+        return 'Installing dependencies...'
+      case 'vibe-env':
+        return 'Applying settings...'
+      default:
+        return 'Getting ready...'
     }
   }
   for (const cs of allCS) {
@@ -142,14 +149,12 @@ function resolveStatusReason(pod) {
 
 export function resolveUrl(appName, svcs, ings, nodeIp) {
   for (const ing of ings.filter(
-    (i) => i.metadata?.labels?.app === appName || i.metadata?.name === appName
+    (i) => i.metadata?.labels?.app === appName || i.metadata?.name === appName,
   )) {
     for (const rule of ing.spec?.rules || []) {
       const host = rule.host
       if (!host) continue
-      const tls = ing.spec?.tls?.some(
-        (t) => !t.hosts || t.hosts.includes(host)
-      )
+      const tls = ing.spec?.tls?.some((t) => !t.hosts || t.hosts.includes(host))
       const scheme = tls ? 'https' : 'http'
       const pathStr = rule.http?.paths?.[0]?.path || '/'
       return {
@@ -162,7 +167,7 @@ export function resolveUrl(appName, svcs, ings, nodeIp) {
   for (const svc of svcs.filter(
     (s) =>
       s.spec?.type === 'LoadBalancer' &&
-      (s.metadata?.labels?.app === appName || s.metadata?.name === appName)
+      (s.metadata?.labels?.app === appName || s.metadata?.name === appName),
   )) {
     const entry = svc.status?.loadBalancer?.ingress?.[0]
     const external = entry?.ip || entry?.hostname
@@ -179,7 +184,7 @@ export function resolveUrl(appName, svcs, ings, nodeIp) {
   for (const svc of svcs.filter(
     (s) =>
       s.spec?.type === 'NodePort' &&
-      (s.metadata?.labels?.app === appName || s.metadata?.name === appName)
+      (s.metadata?.labels?.app === appName || s.metadata?.name === appName),
   )) {
     const nodePort = svc.spec?.ports?.[0]?.nodePort
     if (nodePort && nodeIp) {
@@ -204,8 +209,18 @@ async function buildEnvStatus(token, envId, target, namespaces = []) {
   const labelSel = encodeURIComponent('managed-by=portainer-run')
   const [podsR, svcsR, ingsR, nodesR] = await Promise.all([
     kubeCall(token, envId, '/api/v1/pods?labelSelector=' + labelSel, target),
-    kubeCall(token, envId, '/api/v1/services?labelSelector=' + labelSel, target),
-    kubeCall(token, envId, '/apis/networking.k8s.io/v1/ingresses?labelSelector=' + labelSel, target),
+    kubeCall(
+      token,
+      envId,
+      '/api/v1/services?labelSelector=' + labelSel,
+      target,
+    ),
+    kubeCall(
+      token,
+      envId,
+      '/apis/networking.k8s.io/v1/ingresses?labelSelector=' + labelSel,
+      target,
+    ),
     kubeCall(token, envId, '/api/v1/nodes', target),
   ])
 
@@ -220,18 +235,36 @@ async function buildEnvStatus(token, envId, target, namespaces = []) {
   if ((podsR.status === 403 || svcsR.status === 403) && namespaces.length > 0) {
     const nsResults = await Promise.all(
       namespaces.flatMap((ns) => [
-        kubeCall(token, envId, `/api/v1/namespaces/${ns}/pods?labelSelector=${labelSel}`, target),
-        kubeCall(token, envId, `/api/v1/namespaces/${ns}/services?labelSelector=${labelSel}`, target),
-        kubeCall(token, envId, `/apis/networking.k8s.io/v1/namespaces/${ns}/ingresses?labelSelector=${labelSel}`, target),
-      ])
+        kubeCall(
+          token,
+          envId,
+          `/api/v1/namespaces/${ns}/pods?labelSelector=${labelSel}`,
+          target,
+        ),
+        kubeCall(
+          token,
+          envId,
+          `/api/v1/namespaces/${ns}/services?labelSelector=${labelSel}`,
+          target,
+        ),
+        kubeCall(
+          token,
+          envId,
+          `/apis/networking.k8s.io/v1/namespaces/${ns}/ingresses?labelSelector=${labelSel}`,
+          target,
+        ),
+      ]),
     )
     pods = []
     svcs = []
     ings = []
     for (let i = 0; i < nsResults.length; i += 3) {
-      if (nsResults[i].status === 200)     pods.push(...(nsResults[i].body.items || []))
-      if (nsResults[i + 1].status === 200) svcs.push(...(nsResults[i + 1].body.items || []))
-      if (nsResults[i + 2].status === 200) ings.push(...(nsResults[i + 2].body.items || []))
+      if (nsResults[i].status === 200)
+        pods.push(...(nsResults[i].body.items || []))
+      if (nsResults[i + 1].status === 200)
+        svcs.push(...(nsResults[i + 1].body.items || []))
+      if (nsResults[i + 2].status === 200)
+        ings.push(...(nsResults[i + 2].body.items || []))
     }
   }
 
@@ -281,12 +314,15 @@ async function buildEnvStatus(token, envId, target, namespaces = []) {
   return result
 }
 
-setInterval(() => {
-  const now = Date.now()
-  for (const [k, v] of statusCache) {
-    if (v.expiresAt < now) statusCache.delete(k)
-  }
-}, 2 * 60 * 1000)
+setInterval(
+  () => {
+    const now = Date.now()
+    for (const [k, v] of statusCache) {
+      if (v.expiresAt < now) statusCache.delete(k)
+    }
+  },
+  2 * 60 * 1000,
+)
 
 /**
  * @param {import('http').IncomingMessage} req
@@ -311,7 +347,7 @@ export async function handleEnvStatus(req, res, envId) {
     res.end(
       JSON.stringify({
         error: 'Server is misconfigured: PORTAINER_URL is not set.',
-      })
+      }),
     )
     return
   }
