@@ -3,9 +3,10 @@ import { File, Folder, FolderOpen, Loader2 } from 'lucide-react'
 
 import type { FileNode } from '@ds/v3-components/FilePicker/FilePicker'
 
+import { MONO_FONT } from '../service-detail/detailUi'
+
 const ROW_H = 32
 const INDENT_PX = 18
-const MONO_FONT = "ui-monospace, 'SF Mono', 'Menlo', monospace"
 /** Sentinel id for the repository-root selection (deploy the whole repo). */
 const ROOT_ID = ''
 

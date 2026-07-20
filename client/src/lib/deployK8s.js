@@ -364,6 +364,15 @@ export async function createExposureForApp(
 /**
  * @param {string} token
  * @param {object} p0
+ * @param {string} p0.envId
+ * @param {string} p0.ns
+ * @param {string} p0.appName
+ * @param {number} p0.instances
+ * @param {object[]} p0.containerSpecs built Kubernetes container specs
+ * @param {{ name: string, size: string, storageClass?: string, mountPath: string, containerId: string }[]} p0.volumeDefs
+ * @param {string} p0.exposeType
+ * @param {number[]} p0.servicePorts
+ * @param {{ host: string, path: string, port: number, ingressClass: string }} p0.ingress
  * @param {string[]} p0.containerRowIds — same length as `containerSpecs`; `volumeDefs[].containerId` must match
  */
 export async function executeDeploy(

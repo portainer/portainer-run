@@ -15,12 +15,9 @@ import {
   stripCommonRoot,
   type UploadedFile,
 } from '../../lib/fileIntake'
-import { MONO_FONT, Section } from './detailUi'
+import { MONO_FONT, SECRET_PATTERN, Section } from './detailUi'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
-// Mirrors the deploy form: values whose key looks sensitive are masked.
-const SECRET_PATTERN = /SECRET|KEY|TOKEN|PASSWORD|PASS|AUTH|CREDENTIAL/i
 
 const ERROR_TEXT: React.CSSProperties = {
   color: 'var(--status-danger, #f04438)',

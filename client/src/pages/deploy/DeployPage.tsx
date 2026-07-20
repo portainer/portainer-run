@@ -38,7 +38,7 @@ import {
   stripCommonRoot,
   type UploadedFile,
 } from '../../lib/fileIntake'
-import { MONO_FONT } from '../service-detail/detailUi'
+import { MONO_FONT, SECRET_PATTERN } from '../service-detail/detailUi'
 import { GitOpsStepFields, useGitOpsSelection } from './GitOpsStep'
 import type { GitOpsSelection } from './GitOpsStep'
 
@@ -185,12 +185,6 @@ function parseEnvExample(text: string): EnvVar[] {
   }
   return vars
 }
-
-// Keys whose names imply a secret value. Kept in sync with the server's
-// isSensitiveEnvKey in routes/vibe.js — matching values are stored in a
-// Kubernetes Secret instead of being committed to git (issue #38).
-const SECRET_PATTERN =
-  /(^|[^A-Z])(PASSWORD|PASSWD|PASS|SECRET|TOKEN|API[_-]?KEY|APIKEY|ACCESS[_-]?KEY|PRIVATE[_-]?KEY|CREDENTIALS?|AUTH|DSN|CONNECTION[_-]?STRING|CERT|SIGNING)([^A-Z]|$)/i
 
 // ---------------------------------------------------------------------------
 // File drop zone

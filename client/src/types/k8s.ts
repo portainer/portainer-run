@@ -104,3 +104,11 @@ export interface Deployment {
   _envId?: number
   _envName?: string
 }
+
+/** Runtime guard for values returned by loosely-typed (JS) fetch helpers. */
+export function isDeployment(value: unknown): value is Deployment {
+  if (typeof value !== 'object' || value === null) return false
+  if (!('metadata' in value)) return false
+  const meta = value.metadata
+  return typeof meta === 'object' && meta !== null
+}

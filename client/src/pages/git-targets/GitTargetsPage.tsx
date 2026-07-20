@@ -3,6 +3,12 @@ import { useEffect, useState } from 'react'
 import { Badge } from '@ds/v3-components/Badge/Badge'
 import { Button } from '@ds/v3-components/Button/Button'
 import { Card } from '@ds/v3-components/Card/Card'
+import {
+  Dialog,
+  DialogBody,
+  DialogFooter,
+  DialogHeader,
+} from '@ds/v3-components/Dialog/Dialog'
 import { Skeleton } from '@ds/v3-components/Skeleton/Skeleton'
 import { PageTitle } from '@ds/v3-templates/PageTitle/PageTitle'
 
@@ -22,12 +28,18 @@ import { TestResultAlert, type GitTestResult } from './TestResultAlert'
 
 export function GitTargetsPage() {
   const isAdmin = useAppStore((s) => s.isAdmin)
+  const pushToast = useAppStore((s) => s.pushToast)
   const [connections, setConnections] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<any | null>(null)
   const [testResults, setTestResults] = useState<Record<string, GitTestResult>>({})
   const [testing, setTesting] = useState<Record<string, boolean>>({})
+  const [pendingDelete, setPendingDelete] = useState<{
+    id: string
+    name: string
+  } | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     void load()
@@ -62,13 +74,17 @@ export function GitTargetsPage() {
     }
   }
 
-  async function handleDelete(id: string, name: string) {
-    if (!confirm(`Delete git target "${name}"?`)) return
+  async function confirmDelete() {
+    if (!pendingDelete) return
+    setDeleting(true)
     try {
-      await deleteGitTarget(id)
+      await deleteGitTarget(pendingDelete.id)
+      setPendingDelete(null)
       void load()
     } catch (e: any) {
-      alert('Delete failed: ' + e.message)
+      pushToast('Delete failed: ' + (e?.message || String(e)), 'err')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -220,7 +236,9 @@ export function GitTargetsPage() {
                       <Button
                         variant="light"
                         color="danger"
-                        onClick={() => void handleDelete(conn.id, conn.name)}
+                        onClick={() =>
+                          setPendingDelete({ id: conn.id, name: conn.name })
+                        }
                       >
                         Delete
                       </Button>
@@ -232,6 +250,43 @@ export function GitTargetsPage() {
           ))}
         </div>
       )}
+
+      <Dialog
+        open={Boolean(pendingDelete)}
+        onClose={() => {
+          if (!deleting) setPendingDelete(null)
+        }}
+        width={440}
+      >
+        <DialogHeader
+          title="Delete git target"
+          onClose={() => {
+            if (!deleting) setPendingDelete(null)
+          }}
+        />
+        <DialogBody>
+          <div>
+            Delete git target <strong>{pendingDelete?.name}</strong>? Deployments
+            that reference it will no longer be able to sync. This cannot be undone.
+          </div>
+        </DialogBody>
+        <DialogFooter>
+          <Button
+            variant="ghost"
+            onClick={() => setPendingDelete(null)}
+            disabled={deleting}
+          >
+            Cancel
+          </Button>
+          <Button
+            color="danger"
+            onClick={() => void confirmDelete()}
+            disabled={deleting}
+          >
+            {deleting ? 'Deleting…' : 'Delete'}
+          </Button>
+        </DialogFooter>
+      </Dialog>
     </div>
   )
 }

@@ -50,11 +50,12 @@ import {
 } from '../../lib/deployK8s.js'
 import { withDefaultCnames } from '../../lib/deployFormModel.js'
 import { fetchExposureDetail } from './fetchExposureDetail.js'
-import { Kv, MONO_FONT, Section, TabPanel } from './detailUi'
+import { Kv, MONO_FONT, SECRET_PATTERN, Section, TabPanel } from './detailUi'
 import { ServiceDetailLogsTab } from './ServiceDetailLogsTab'
 import { ServiceDetailMetricsTab } from './ServiceDetailMetricsTab'
 import { ServiceDetailRevisionsTab } from './ServiceDetailRevisionsTab'
 import { ServiceDetailEditTab } from './ServiceDetailEditTab'
+import { isDeployment } from '../../types/k8s'
 import type { Deployment, EnvVar } from '../../types/k8s'
 
 /** Live status/access details for an app, sourced from the env-status feed. */
@@ -177,9 +178,6 @@ function headerStatusFromDeployment(d: Deployment | null): {
   }
   return { status: 'error', statusLabel: 'Not available', statusTone: 'danger' }
 }
-
-// Keys whose values are treated as sensitive and masked by default.
-const SECRET_PATTERN = /SECRET|KEY|TOKEN|PASSWORD|PASS|AUTH|CREDENTIAL/i
 
 // Plain-language, business-builder friendly status line for the simple Overview.
 function friendlyStatus(d: Deployment, reason: string | undefined) {
@@ -448,7 +446,7 @@ export function ServiceDetailPage() {
     setRestartPending(true)
     try {
       const updated = await restartDeployment(token, String(envId), namespace, name)
-      if (updated) setD(updated as Deployment)
+      if (isDeployment(updated)) setD(updated)
       else void load()
       pushToast(`“${name}” is restarting — pods will be replaced one by one`, 'ok')
       setTimeout(() => {
@@ -581,18 +579,15 @@ export function ServiceDetailPage() {
             const spec = buildK8sContainer(c)
             return spec ? { id: c.id, spec } : null
           })
-          .filter(Boolean) as { id: string; spec: unknown }[]
+          .filter((p): p is { id: string; spec: object } => p !== null)
         if (!pairs.length) throw new Error('No containers found to migrate')
         const volDefs = forBuild
           .map((c) => readVolumeDefForDeploy(c))
-          .filter(Boolean)
+          .filter((v): v is NonNullable<typeof v> => v !== null)
         const servicePorts = (loaded.svcPorts || [])
           .map((p: unknown) => parseInt(String(p), 10))
           .filter((n: number) => n > 0)
-        type DeployOptions = Parameters<typeof executeDeploy>[1]
-        // executeDeploy's JSDoc only annotates containerRowIds, so TS rejects
-        // the full options object; the shape matches what the JS expects.
-        await executeDeploy(token, {
+        const deployOptions = {
           envId: targetEnv,
           ns: targetNs,
           appName: name,
@@ -611,7 +606,8 @@ export function ServiceDetailPage() {
             port: loaded.ingPort || 80,
             ingressClass: (loaded.ingClass || '').trim(),
           },
-        } as DeployOptions)
+        }
+        await executeDeploy(token, deployOptions)
         if (mode === 'move') {
           const del = await kubeFetch(
             token,
