@@ -1,16 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Check, FileText, Loader2, Lock, Upload, X } from 'lucide-react'
 
 import { Alert } from '@ds/v3-components/Alert/Alert'
-import { Badge } from '@ds/v3-components/Badge/Badge'
 import { Button } from '@ds/v3-components/Button/Button'
 import type { FileNode } from '@ds/v3-components/FilePicker/FilePicker'
-import { FormControl, Input } from '@ds/v3-components/FormField/FormField'
-import { SegmentedControl } from '@ds/v3-components/Segmented/Segmented'
-import { Select } from '@ds/v3-components/Select/Select'
-import { Timeline, TimelineItem } from '@ds/v3-components/Timeline/Timeline'
-import type { TimelineTone } from '@ds/v3-components/Timeline/Timeline'
 import { MultiStepWizard } from '@ds/v3-templates/MultiStepWizard/MultiStepWizard'
 import type { WizardContext, WizardStep } from '@ds/v3-templates/MultiStepWizard/MultiStepWizard'
 import { PageTitle } from '@ds/v3-templates/PageTitle/PageTitle'
@@ -18,7 +11,6 @@ import { PageTitle } from '@ds/v3-templates/PageTitle/PageTitle'
 import { ROUTES } from '../../lib/routes.js'
 import { listGitTargets, listRepoDir } from '../../lib/gitTargets.js'
 import { dirEntriesToNodes } from './gitRepoTree'
-import { GitFolderTree } from './GitFolderTree'
 import {
   useAppStore,
   visibleEnvironments,
@@ -32,425 +24,24 @@ import {
   manualRefresh,
   schedulePostDeployRefreshes,
 } from '../../services/refreshDeployments.js'
-import {
-  readDropEvent,
-  readFileList,
-  stripCommonRoot,
-  type UploadedFile,
-} from '../../lib/fileIntake'
-import { MONO_FONT, SECRET_PATTERN } from '../service-detail/detailUi'
+import { stripCommonRoot, type UploadedFile } from '../../lib/fileIntake'
 import { GitOpsStepFields, useGitOpsSelection } from './GitOpsStep'
 import type { GitOpsSelection } from './GitOpsStep'
+import { detectRuntime, type RuntimeDef } from './runtimes'
+import { parseEnvExample, type EnvVar } from './envExample'
+import {
+  STARTUP_POLL_MS,
+  STARTUP_TIMEOUT_MS,
+  isBlockingReason,
+  sanitizeAppName,
+  type StartupPhase,
+} from './startup'
+import { FilesStep } from './FilesStep'
+import { DetailsStep } from './DetailsStep'
+import { SettingsStep } from './SettingsStep'
+import { StartupPanel } from './StartupPanel'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
-// ---------------------------------------------------------------------------
-// Runtime detection
-// ---------------------------------------------------------------------------
-
-const STATIC_EXTENSIONS = new Set([
-  '.html', '.htm', '.css', '.js', '.mjs', '.json', '.ts',
-  '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp',
-  '.woff', '.woff2', '.ttf', '.eot', '.otf',
-  '.mp4', '.webm', '.mp3', '.ogg',
-  '.pdf', '.txt', '.md', '.xml', '.csv',
-])
-
-function isStaticFile(name: string) {
-  const dot = name.lastIndexOf('.')
-  return dot >= 0 && STATIC_EXTENSIONS.has(name.slice(dot).toLowerCase())
-}
-
-interface RuntimeDef {
-  id: string
-  label: string
-  image: string
-  detect?: (names: string[]) => boolean
-  defaultCmd: (files: { name: string; text: string }[]) => string
-  port: number
-  workDir: string
-}
-
-const NGINX_RUNTIME: RuntimeDef = {
-  id: 'nginx',
-  label: 'nginx (static)',
-  // Unprivileged NGINX: runs as UID 101, listens on 8080, and moves its PID and
-  // temp paths to /tmp, so it needs no Linux capabilities at startup. Required
-  // because all pods drop ALL capabilities under our pod security baseline (#39).
-  // Note: a custom nginx.conf must include `pid /tmp/nginx.pid`.
-  image: 'nginxinc/nginx-unprivileged:alpine',
-  defaultCmd: () => "nginx -g 'daemon off;'",
-  port: 8080,
-  workDir: '/usr/share/nginx/html',
-}
-
-const RUNTIMES: RuntimeDef[] = [
-  {
-    id: 'node',
-    label: 'Node.js 22',
-    image: 'node:22',
-    detect: (names) => {
-      const base = names.map((n) => n.split('/').pop() as string)
-      return base.includes('package.json') || base.includes('server.js')
-    },
-    defaultCmd: (files) => {
-      const pkg = files.find((f) => f.name === 'package.json')
-      if (pkg) {
-        try {
-          const parsed = JSON.parse(pkg.text)
-          if (parsed?.scripts?.start) return 'npm start'
-        } catch { /* ignore */ }
-      }
-      const hasServerJs = files.some((f) => f.name === 'server.js' || f.name === 'index.js')
-      return hasServerJs ? `node ${files.find((f) => f.name === 'server.js') ? 'server.js' : 'index.js'}` : 'npm start'
-    },
-    port: 3000,
-    workDir: '/app',
-  },
-  {
-    id: 'python',
-    label: 'Python 3.13',
-    image: 'python:3.13-slim',
-    detect: (names) => names.includes('requirements.txt') || names.some((n) => n.endsWith('.py')),
-    defaultCmd: (files) => {
-      for (const candidate of ['main.py', 'app.py', 'server.py', 'run.py']) {
-        if (files.some((f) => f.name === candidate)) return `python ${candidate}`
-      }
-      return 'python app.py'
-    },
-    port: 8000,
-    workDir: '/app',
-  },
-  {
-    id: 'php',
-    label: 'PHP 8.4',
-    image: 'php:8.4-apache',
-    detect: (names) => names.some((n) => n.endsWith('.php')),
-    defaultCmd: () => 'apache2-foreground',
-    port: 80,
-    workDir: '/var/www/html',
-  },
-  {
-    id: 'ruby',
-    label: 'Ruby 3.4',
-    image: 'ruby:3.4-slim',
-    detect: (names) => names.includes('Gemfile') || names.some((n) => n.endsWith('.rb')),
-    defaultCmd: (files) => {
-      for (const candidate of ['app.rb', 'server.rb', 'config.ru']) {
-        if (files.some((f) => f.name === candidate)) {
-          return candidate === 'config.ru' ? 'bundle exec rackup -p 9292 -o 0.0.0.0' : `ruby ${candidate}`
-        }
-      }
-      return 'bundle exec ruby app.rb'
-    },
-    port: 9292,
-    workDir: '/app',
-  },
-]
-
-function detectRuntime(files: { name: string; text: string }[]): RuntimeDef {
-  const names = files.map((f) => f.name)
-  for (const rt of RUNTIMES) {
-    if (rt.detect?.(names)) return rt
-  }
-  // Static site: all files are static assets (or single HTML)
-  const nonEnv = files.filter((f) => f.name !== '.env.example' && !f.name.endsWith('.env.example'))
-  if (nonEnv.length > 0 && nonEnv.every((f) => isStaticFile(f.name))) {
-    return NGINX_RUNTIME
-  }
-  // Nothing matched — default to nginx as safe fallback
-  return NGINX_RUNTIME
-}
-
-// ---------------------------------------------------------------------------
-// .env.example parsing
-// ---------------------------------------------------------------------------
-
-interface EnvVar {
-  key: string
-  value: string
-  custom?: boolean
-}
-
-function parseEnvExample(text: string): EnvVar[] {
-  const vars: EnvVar[] = []
-  for (const raw of text.split('\n')) {
-    const line = raw.trim()
-    if (!line || line.startsWith('#')) continue
-    const eq = line.indexOf('=')
-    if (eq < 0) continue
-    const key = line.slice(0, eq).trim()
-    const val = line.slice(eq + 1).trim().replace(/^["']|["']$/g, '')
-    if (key) vars.push({ key, value: val })
-  }
-  return vars
-}
-
-// ---------------------------------------------------------------------------
-// File drop zone
-// ---------------------------------------------------------------------------
-
-function DropZone({ onFiles }: { onFiles: (files: UploadedFile[]) => void }) {
-  const [dragging, setDragging] = useState(false)
-  const [hover, setHover] = useState(false)
-  const folderRef = useRef<HTMLInputElement>(null)
-  const filesRef = useRef<HTMLInputElement>(null)
-
-  async function onDrop(e: React.DragEvent) {
-    e.preventDefault()
-    setDragging(false)
-    const result = await readDropEvent(e)
-    if (result) onFiles(result)
-  }
-
-  const active = dragging || hover
-  const accent = 'var(--accent, #2e90fa)'
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onDragOver={(e) => {
-        e.preventDefault()
-        setDragging(true)
-      }}
-      onDragLeave={() => setDragging(false)}
-      onDrop={onDrop}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      onClick={() => folderRef.current?.click()}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          folderRef.current?.click()
-        }
-      }}
-      style={{
-        border: `1.5px dashed ${active ? accent : 'var(--border)'}`,
-        borderRadius: 12,
-        padding: '40px 24px',
-        textAlign: 'center',
-        cursor: 'pointer',
-        outline: 'none',
-        background: dragging
-          ? `color-mix(in srgb, ${accent} 8%, transparent)`
-          : hover
-            ? 'color-mix(in srgb, var(--text) 3%, transparent)'
-            : 'transparent',
-        transition: 'border-color 120ms ease, background-color 120ms ease',
-      }}
-    >
-      <input
-        ref={folderRef}
-        type="file"
-        // @ts-expect-error non-standard folder-picker attribute
-        webkitdirectory=""
-        multiple
-        style={{ display: 'none' }}
-        onChange={(e) => {
-          if (e.target.files?.length) void readFileList(e.target.files).then(onFiles)
-        }}
-      />
-      <input
-        ref={filesRef}
-        type="file"
-        multiple
-        style={{ display: 'none' }}
-        onChange={(e) => {
-          if (e.target.files?.length) void readFileList(e.target.files).then(onFiles)
-        }}
-      />
-      <div
-        style={{
-          width: 52,
-          height: 52,
-          borderRadius: '50%',
-          margin: '0 auto 16px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: `color-mix(in srgb, ${accent} 12%, transparent)`,
-          color: accent,
-          transition: 'transform 120ms ease',
-          transform: active ? 'translateY(-2px)' : 'none',
-        }}
-      >
-        <Upload size={22} />
-      </div>
-      <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>
-        {dragging ? 'Drop to upload' : 'Drop your project folder here'}
-      </div>
-      <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 18 }}>
-        or browse below — we&rsquo;ll detect the runtime automatically
-      </div>
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-        <Button
-          variant="ghost"
-          onClick={(e) => {
-            e.stopPropagation()
-            folderRef.current?.click()
-          }}
-        >
-          Upload folder
-        </Button>
-        <Button
-          variant="ghost"
-          onClick={(e) => {
-            e.stopPropagation()
-            filesRef.current?.click()
-          }}
-        >
-          Upload files
-        </Button>
-      </div>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// File list row
-// ---------------------------------------------------------------------------
-
-function FileRow({
-  file,
-  tag,
-  onRemove,
-}: {
-  file: UploadedFile
-  tag: 'runtime' | 'env' | null
-  onRemove: () => void
-}) {
-  const sizeKb = (file.size / 1024).toFixed(1)
-  const isEnvFile = file.name === '.env.example' || file.name.endsWith('.env.example')
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        background: 'var(--bg)',
-        border: '1px solid var(--border)',
-        borderRadius: 6,
-        padding: '7px 10px',
-      }}
-    >
-      <FileText
-        size={12}
-        style={{
-          color: isEnvFile ? 'var(--status-warning, #f79009)' : 'var(--accent, #2e90fa)',
-          flexShrink: 0,
-        }}
-      />
-      <span
-        style={{
-          fontFamily: MONO_FONT,
-          fontSize: 11,
-          color: 'var(--text)',
-          flex: 1,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {file.webkitRelativePath && file.webkitRelativePath !== file.name
-          ? file.webkitRelativePath
-          : file.name}
-      </span>
-      <span
-        style={{ fontFamily: MONO_FONT, fontSize: 10, color: 'var(--muted)', flexShrink: 0 }}
-      >
-        {sizeKb} KB
-      </span>
-      {tag && (
-        <Badge tone={tag === 'runtime' ? 'success' : 'warning'} size="sm">
-          {tag === 'runtime' ? 'runtime' : '.env detected'}
-        </Badge>
-      )}
-      <button
-        type="button"
-        onClick={onRemove}
-        style={{
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          color: 'var(--muted)',
-          display: 'flex',
-          padding: 2,
-          flexShrink: 0,
-        }}
-        aria-label={`Remove ${file.name}`}
-      >
-        <X size={11} />
-      </button>
-    </div>
-  )
-}
-
-/** Locked single-choice value shown instead of a select. */
-function LockedValue({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        background: 'var(--bg)',
-        border: '1px solid var(--border)',
-        borderRadius: 6,
-        padding: '9px 12px',
-        fontFamily: MONO_FONT,
-        fontSize: 13,
-        color: 'var(--text)',
-      }}
-    >
-      <Lock size={11} style={{ color: 'var(--muted)' }} />
-      {children}
-    </div>
-  )
-}
-
-function StepHeading({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 16 }}>
-      {children}
-    </div>
-  )
-}
-
-const HINT_STYLE: React.CSSProperties = { fontSize: 12, color: 'var(--muted)' }
-
-// ---------------------------------------------------------------------------
-// Startup progress (deploy → starting → ready)
-// ---------------------------------------------------------------------------
-
-const STARTUP_POLL_MS = 3000
-// Vibe apps run npm/pip installs in init containers, so first boot can be slow.
-const STARTUP_TIMEOUT_MS = 5 * 60 * 1000
-
-type StartupPhase = 'deploying' | 'starting' | 'ready' | 'error' | 'timeout'
-
-// Mirrors sanitizeStackName in server/routes/vibe.js: the deployment name and
-// `app` label are derived from the entered app name, so we must match them when
-// polling for readiness.
-function sanitizeAppName(name: string) {
-  return name.replace(/[^a-z0-9-]/gi, '-').toLowerCase()
-}
-
-// A subset of the human-friendly reasons from server/env-status.js that mean the
-// app cannot recover on its own — surfacing these lets us stop waiting early.
-function isBlockingReason(reason: string | null): boolean {
-  if (!reason) return false
-  const r = reason.toLowerCase()
-  return (
-    r.includes('keeps crashing') ||
-    r.includes('download the image') ||
-    r.includes('image name is invalid') ||
-    r.includes('failed to start') ||
-    r.includes('missing config') ||
-    r.includes('memory limit') ||
-    r.includes('exiting with errors')
-  )
-}
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -1198,641 +789,6 @@ export function VibeDeploy() {
 
   // ---- Step content renderers ----
 
-  function renderFilesStep() {
-    return (
-      <div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Source type toggle */}
-          <div style={{ alignSelf: 'flex-start' }}>
-            <SegmentedControl
-              size="sm"
-              options={[
-                { value: 'upload', label: 'Upload files' },
-                { value: 'git', label: 'From Git repository' },
-              ]}
-              value={sourceType}
-              onChange={(val) => {
-                setSourceType(val)
-                setGitSourceConfirmed(false)
-                setDetectedRuntime(null)
-              }}
-            />
-          </div>
-
-          {/* Upload source */}
-          {sourceType === 'upload' && (
-            <>
-              {files.length === 0 ? (
-                <DropZone onFiles={handleFilesAdded} />
-              ) : (
-                <>
-                  <div
-                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                  >
-                    <span style={HINT_STYLE}>
-                      {files.length} file{files.length !== 1 ? 's' : ''} selected
-                    </span>
-                    <Button variant="ghost" onClick={resetFiles}>
-                      Remove all
-                    </Button>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {files.map((f, i) => (
-                      <FileRow
-                        key={f.webkitRelativePath || f.name}
-                        file={f}
-                        tag={
-                          f.name === 'package.json' ||
-                          f.name === 'requirements.txt' ||
-                          f.name === 'Gemfile' ||
-                          f.name === 'server.js'
-                            ? 'runtime'
-                            : f.name === '.env.example' || f.name.endsWith('.env.example')
-                              ? 'env'
-                              : null
-                        }
-                        onRemove={() => removeFile(i)}
-                      />
-                    ))}
-                  </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <input
-                      id="vibe-add-folder"
-                      type="file"
-                      // @ts-expect-error non-standard folder-picker attribute
-                      webkitdirectory=""
-                      multiple
-                      style={{ display: 'none' }}
-                      onChange={(e) => {
-                        if (e.target.files?.length)
-                          void readFileList(e.target.files).then(handleFilesAdded)
-                      }}
-                    />
-                    <input
-                      id="vibe-add-files"
-                      type="file"
-                      multiple
-                      style={{ display: 'none' }}
-                      onChange={(e) => {
-                        if (e.target.files?.length)
-                          void readFileList(e.target.files).then(handleFilesAdded)
-                      }}
-                    />
-                    <Button
-                      variant="ghost"
-                      onClick={() => document.getElementById('vibe-add-folder')?.click()}
-                    >
-                      + Add folder
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      onClick={() => document.getElementById('vibe-add-files')?.click()}
-                    >
-                      + Add files
-                    </Button>
-                  </div>
-                </>
-              )}
-            </>
-          )}
-
-          {/* Git source */}
-          {sourceType === 'git' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <FormControl label="Git target">
-                <Select
-                  value={gitSourceTargetId}
-                  onChange={(e) => {
-                    setGitSourceTargetId(e.target.value)
-                    setGitSourceBranches([])
-                    setGitSourceBranch('main')
-                    setGitSourceConfirmed(false)
-                    if (e.target.value) void loadGitSourceBranches(e.target.value)
-                  }}
-                  options={[
-                    { value: '', label: '— Select —' },
-                    ...gitTargetsList.map((t) => ({
-                      value: t.id,
-                      label: `${t.name}${t.shared ? ' (shared)' : ''}`,
-                    })),
-                  ]}
-                />
-              </FormControl>
-              <FormControl label="Branch">
-                {gitSourceBranches.length > 0 ? (
-                  <Select
-                    value={gitSourceBranch}
-                    onChange={(e) => setGitSourceBranch(e.target.value)}
-                    options={gitSourceBranches.map((b) => ({ value: b, label: b }))}
-                  />
-                ) : (
-                  <Input
-                    type="text"
-                    value={gitSourceBranch}
-                    onChange={(e) => setGitSourceBranch(e.target.value)}
-                    placeholder="main"
-                  />
-                )}
-              </FormControl>
-
-              {!gitSourceTargetId || !gitSourceBranch.trim() ? (
-                <div style={HINT_STYLE}>Choose a target and branch to browse the repository.</div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={HINT_STYLE}>
-                    Expand folders to browse the repository and select the single folder that
-                    contains your app. We&rsquo;ll deploy that folder and detect its runtime
-                    automatically.
-                  </div>
-                  <GitFolderTree
-                    key={`${gitSourceTargetId}:${gitSourceBranch}`}
-                    loadChildren={loadGitDir}
-                    selectedPath={gitSourceConfirmed ? gitSourcePath : null}
-                    onSelect={handleGitFolderSelect}
-                    maxHeight={320}
-                  />
-                </div>
-              )}
-
-              {gitSourceConfirmed && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '10px 14px',
-                    background: 'rgba(23,178,106,0.08)',
-                    border: '1px solid rgba(23,178,106,0.3)',
-                    borderRadius: 6,
-                    fontSize: 12,
-                    fontFamily: MONO_FONT,
-                    color: 'var(--status-success, #17b26a)',
-                  }}
-                >
-                  ✓ Deploying{' '}
-                  <span style={{ color: 'var(--text)' }}>{gitSourcePath || 'repository root'}</span>
-                  {detectedRuntime ? ` as ${detectedRuntime.label}` : ''}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  function renderSettingsStep() {
-    return (
-      <div>
-        <StepHeading>App settings</StepHeading>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ ...HINT_STYLE, marginBottom: 4 }}>
-            Your app needs a few settings — fill in the values below and they will be applied
-            securely at deploy time.
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {envVars.map((v, i) => (
-              <div
-                key={i}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '160px 1fr auto',
-                  gap: 8,
-                  alignItems: 'center',
-                }}
-              >
-                {v.custom ? (
-                  <Input
-                    type="text"
-                    value={v.key}
-                    placeholder="NAME"
-                    style={{ fontFamily: MONO_FONT, fontSize: 12 }}
-                    onChange={(e) =>
-                      setEnvVars((prev) =>
-                        prev.map((x, j) => (j === i ? { ...x, key: e.target.value } : x)),
-                      )
-                    }
-                  />
-                ) : (
-                  <div
-                    style={{
-                      fontFamily: MONO_FONT,
-                      fontSize: 12,
-                      color: 'var(--muted)',
-                      background: 'var(--bg)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 5,
-                      padding: '7px 10px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {v.key}
-                  </div>
-                )}
-                <Input
-                  type={SECRET_PATTERN.test(v.key) ? 'password' : 'text'}
-                  value={v.value}
-                  placeholder={SECRET_PATTERN.test(v.key) ? '••••••••' : 'value'}
-                  onChange={(e) =>
-                    setEnvVars((prev) =>
-                      prev.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)),
-                    )
-                  }
-                />
-                <Button
-                  variant="ghost"
-                  aria-label="Remove variable"
-                  onClick={() => setEnvVars((prev) => prev.filter((_, j) => j !== i))}
-                >
-                  ✕
-                </Button>
-              </div>
-            ))}
-          </div>
-          <Button
-            variant="ghost"
-            style={{ alignSelf: 'flex-start' }}
-            onClick={() => setEnvVars((prev) => [...prev, { key: '', value: '', custom: true }])}
-          >
-            + Add variable
-          </Button>
-          <div style={HINT_STYLE}>
-            Values whose name looks sensitive (password, token, key, secret, and similar) are
-            hidden here, stored in a Kubernetes Secret in your project space, and are never
-            written into the git repository. Other values are committed as plain configuration.
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  function renderDetailsStep() {
-    const availableEnvs = environments.filter((e: any) => !isEnvDisabled({ disabledEnvs }, e.Id))
-    const singleEnv = availableEnvs.length === 1
-    const singleNs = nsList.length === 1 && !nsLoading && !manualNs
-    const activeBaseDomain = ingressHostMap[ingClass] || ''
-
-    return (
-      <div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ maxWidth: 420 }}>
-            <FormControl label="App name" hint="Lowercase, alphanumeric and hyphens">
-              <Input
-                type="text"
-                value={appName}
-                onChange={(e) =>
-                  setAppName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))
-                }
-                placeholder="my-app"
-              />
-            </FormControl>
-          </div>
-
-          {/* When the user has exactly one environment and one project space,
-              there is nothing to choose. Hide the infrastructure selectors
-              entirely — non-technical users should not have to reason about
-              environments or namespaces (per user feedback). The values are
-              auto-selected elsewhere, so deploy still has everything it needs. */}
-          {singleEnv && singleNs ? (
-            <div style={{ ...HINT_STYLE, marginBottom: 4 }}>
-              Deploying to <strong style={{ color: 'var(--text)' }}>{availableEnvs[0].Name}</strong>
-              {' / '}
-              <strong style={{ color: 'var(--text)' }}>{nsList[0]}</strong>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', gap: 12 }}>
-              <div style={{ flex: 1 }}>
-                <FormControl label="Deployment target" hint="Portainer environment to deploy into">
-                  {availableEnvs.length === 1 ? (
-                    <LockedValue>{availableEnvs[0].Name}</LockedValue>
-                  ) : (
-                    <Select
-                      value={envId}
-                      onChange={(e) => {
-                        setEnvId(e.target.value)
-                        setNamespace('')
-                        setNsList([])
-                        setManualNs(false)
-                        setNsHint({ text: '', tone: 'dim' })
-                      }}
-                      options={[
-                        { value: '', label: '— Select —' },
-                        ...availableEnvs.map((e: any) => ({
-                          value: String(e.Id),
-                          label: e.Name,
-                        })),
-                      ]}
-                    />
-                  )}
-                </FormControl>
-              </div>
-              <div style={{ flex: 1 }}>
-                <FormControl
-                  label="Project space"
-                  hint="Project space must already exist in the target"
-                >
-                  <div>
-                    {!manualNs ? (
-                      nsList.length === 1 && !nsLoading ? (
-                        <LockedValue>{nsList[0]}</LockedValue>
-                      ) : (
-                        <Select
-                          value={namespace}
-                          onChange={(e) => setNamespace(e.target.value)}
-                          disabled={!envId || nsLoading}
-                          options={[
-                            {
-                              value: '',
-                              label: !envId
-                                ? 'Select target first...'
-                                : nsLoading
-                                  ? 'Loading project spaces...'
-                                  : '— Select —',
-                            },
-                            ...nsList.map((n) => ({ value: n, label: n })),
-                          ]}
-                        />
-                      )
-                    ) : (
-                      <Input
-                        type="text"
-                        value={manualNsValue}
-                        onChange={(e) => setManualNsValue(e.target.value)}
-                        placeholder="my-project-space"
-                      />
-                    )}
-                    {nsHint.text && (
-                      <div
-                        style={{
-                          fontFamily: MONO_FONT,
-                          fontSize: 12,
-                          color: nsStatusColor,
-                          marginTop: 4,
-                        }}
-                      >
-                        {nsHint.text}
-                      </div>
-                    )}
-                  </div>
-                </FormControl>
-              </div>
-            </div>
-          )}
-
-          {perms && (!perms.canDeploy || !perms.canCreatePvc) && (
-            <Alert
-              tone="danger"
-              title={
-                <>
-                  {!perms.canDeploy && (
-                    <div>
-                      No permission to create Deployments in project space &quot;{resolvedNs}
-                      &quot;.
-                    </div>
-                  )}
-                  {!perms.canCreatePvc && (
-                    <div>
-                      No permission to create PersistentVolumeClaims in project space &quot;
-                      {resolvedNs}&quot;.
-                    </div>
-                  )}
-                </>
-              }
-              description="Select a different project space or contact your platform administrator."
-            />
-          )}
-
-          <div style={{ maxWidth: 420 }}>
-            <FormControl label="Expose as">
-              <div>
-                <Select
-                  value={exposeType}
-                  onChange={(e) => setExposeType(e.target.value)}
-                  disabled={envCapabilities.probing}
-                  options={[
-                    {
-                      value: 'NodePort',
-                      label: 'Network Accessible - Default, use this unless advised otherwise',
-                    },
-                    ...(envCapabilities.probing || envCapabilities.lbOk !== false
-                      ? [{ value: 'LoadBalancer', label: 'Network Accessible via dedicated IP' }]
-                      : []),
-                    ...(envCapabilities.probing || envCapabilities.ingressOk !== false
-                      ? [{ value: 'Ingress', label: 'Network Accessible via a URL' }]
-                      : []),
-                  ]}
-                />
-                {!envCapabilities.probing &&
-                  envId &&
-                  (envCapabilities.lbOk === false || envCapabilities.ingressOk === false) && (
-                    <div style={{ ...HINT_STYLE, marginTop: 4 }}>
-                      {[
-                        envCapabilities.lbOk === false && 'LoadBalancer',
-                        envCapabilities.ingressOk === false && 'Ingress',
-                      ]
-                        .filter(Boolean)
-                        .join(' and ')}{' '}
-                      not detected on this cluster — option
-                      {envCapabilities.lbOk === false && envCapabilities.ingressOk === false
-                        ? 's'
-                        : ''}{' '}
-                      hidden
-                    </div>
-                  )}
-              </div>
-            </FormControl>
-          </div>
-
-          {exposeType === 'Ingress' && (
-            <div style={{ display: 'flex', gap: 12 }}>
-              <div style={{ flex: 1 }}>
-                <FormControl label="Hostname">
-                  {activeBaseDomain ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-                      <Input
-                        type="text"
-                        value={appName}
-                        onChange={(e) =>
-                          setAppName(e.target.value.replace(/[^a-z0-9-]/gi, '-').toLowerCase())
-                        }
-                        style={{
-                          borderRadius: '6px 0 0 6px',
-                          borderRight: 'none',
-                          flex: '0 0 auto',
-                          width: 140,
-                        }}
-                      />
-                      <span
-                        style={{
-                          padding: '8px 12px',
-                          background: 'var(--bg)',
-                          border: '1px solid var(--border)',
-                          borderRadius: '0 6px 6px 0',
-                          fontFamily: MONO_FONT,
-                          fontSize: 13,
-                          color: 'var(--muted)',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        .{activeBaseDomain}
-                      </span>
-                    </div>
-                  ) : (
-                    <Input
-                      type="text"
-                      value={ingHost}
-                      onChange={(e) => setIngHost(e.target.value)}
-                      placeholder="app.example.com"
-                    />
-                  )}
-                </FormControl>
-              </div>
-              <div style={{ flex: 1 }}>
-                <FormControl label="Ingress class">
-                  {envCapabilities.ingressClasses.length > 1 ? (
-                    <Select
-                      value={ingClass}
-                      onChange={(e) => setIngClass(e.target.value)}
-                      options={envCapabilities.ingressClasses.map((c: any) => ({
-                        value: c.name,
-                        label: `${c.name}${c.isDefault ? ' (default)' : ''}`,
-                      }))}
-                    />
-                  ) : (
-                    <Input
-                      type="text"
-                      value={ingClass}
-                      onChange={(e) => setIngClass(e.target.value)}
-                      placeholder="nginx"
-                      readOnly={envCapabilities.ingressClasses.length === 1}
-                      style={
-                        envCapabilities.ingressClasses.length === 1
-                          ? { opacity: 0.6, cursor: 'default' }
-                          : {}
-                      }
-                    />
-                  )}
-                </FormControl>
-              </div>
-            </div>
-          )}
-
-          {(!appName || !envId || !resolvedNs) && (
-            <div
-              style={{
-                textAlign: 'right',
-                fontSize: 12,
-                color: 'var(--status-warning, #f79009)',
-              }}
-            >
-              {[
-                !appName && 'Enter an app name',
-                !envId && 'Select a deployment target',
-                !resolvedNs && 'Select a project space',
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  function renderStartupPanel() {
-    const phase = startupPhase
-    const spinner = <Loader2 size={12} className="animate-spin" />
-    const check = <Check size={12} strokeWidth={2.5} />
-    const cross = <X size={12} strokeWidth={2.5} />
-
-    const deployFailed = phase === 'error' && startupFailStage === 'deploy'
-    const startFailed = phase === 'error' && startupFailStage === 'start'
-
-    // Step 1 — Deploying
-    let s1: { tone: TimelineTone; bullet?: React.ReactNode; desc: React.ReactNode }
-    if (phase === 'deploying') {
-      s1 = { tone: 'accent', bullet: spinner, desc: 'Saving your app and setting things up' }
-    } else if (deployFailed) {
-      s1 = { tone: 'danger', bullet: cross, desc: startupErrorMsg || 'Something went wrong while setting up' }
-    } else {
-      s1 = { tone: 'success', bullet: check, desc: 'Saved and set up' }
-    }
-
-    // Step 2 — Starting
-    let s2: { tone: TimelineTone; bullet?: React.ReactNode; desc: React.ReactNode }
-    if (phase === 'deploying' || deployFailed) {
-      s2 = { tone: 'neutral', desc: 'Waiting for your app to start' }
-    } else if (phase === 'starting') {
-      s2 = { tone: 'accent', bullet: spinner, desc: startupReason || 'Waiting for your app to start' }
-    } else if (phase === 'timeout') {
-      s2 = { tone: 'warning', bullet: spinner, desc: startupReason || 'This is taking longer than usual — still starting' }
-    } else if (startFailed) {
-      s2 = { tone: 'danger', bullet: cross, desc: startupReason || "Your app couldn't start" }
-    } else {
-      s2 = { tone: 'success', bullet: check, desc: 'Started successfully' }
-    }
-
-    // Step 3 — Ready
-    const s3: { tone: TimelineTone; bullet?: React.ReactNode; desc: React.ReactNode } =
-      phase === 'ready'
-        ? { tone: 'success', bullet: check, desc: 'Your app is up and running' }
-        : { tone: 'neutral', desc: 'Your app will be live here' }
-
-    return (
-      <div>
-        <StepHeading>{phase === 'ready' ? 'Your app is live' : 'Deploying your app'}</StepHeading>
-        <div style={{ maxWidth: 460, padding: '8px 4px 4px' }}>
-          <Timeline>
-            <TimelineItem tone={s1.tone} bullet={s1.bullet} title="Deploying" description={s1.desc} />
-            <TimelineItem tone={s2.tone} bullet={s2.bullet} title="Starting" description={s2.desc} />
-            <TimelineItem tone={s3.tone} bullet={s3.bullet} title="Ready" description={s3.desc} />
-          </Timeline>
-        </div>
-        {renderStartupActions()}
-      </div>
-    )
-  }
-
-  function renderStartupActions() {
-    if (startupPhase === 'ready') {
-      return (
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
-          {startupUrl && (
-            <Button onClick={() => window.open(startupUrl, '_blank', 'noopener,noreferrer')}>
-              Open my app
-            </Button>
-          )}
-          <Button variant={startupUrl ? 'ghost' : undefined} onClick={finishToServices}>
-            Go to my apps
-          </Button>
-        </div>
-      )
-    }
-    if (startupPhase === 'error') {
-      return (
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
-          <Button onClick={finishToServices}>View application</Button>
-          <Button variant="ghost" onClick={resetDeployForm}>
-            Start over
-          </Button>
-        </div>
-      )
-    }
-    if (startupPhase === 'timeout') {
-      return (
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
-          <Button onClick={resumeWaiting}>Keep waiting</Button>
-          <Button variant="ghost" onClick={finishToServices}>
-            View application
-          </Button>
-        </div>
-      )
-    }
-    return null
-  }
-
   function renderStorageStep() {
     if (!stagedParams) return null
     return (
@@ -1966,15 +922,82 @@ export function VibeDeploy() {
           ctxRef.current = ctx
           switch (ctx.activeStep) {
             case 'files':
-              return renderFilesStep()
+              return (
+                <FilesStep
+                  sourceType={sourceType}
+                  setSourceType={setSourceType}
+                  files={files}
+                  onFilesAdded={handleFilesAdded}
+                  onResetFiles={resetFiles}
+                  onRemoveFile={removeFile}
+                  gitTargetsList={gitTargetsList}
+                  gitSourceTargetId={gitSourceTargetId}
+                  setGitSourceTargetId={setGitSourceTargetId}
+                  gitSourceBranch={gitSourceBranch}
+                  setGitSourceBranch={setGitSourceBranch}
+                  gitSourceBranches={gitSourceBranches}
+                  setGitSourceBranches={setGitSourceBranches}
+                  gitSourceConfirmed={gitSourceConfirmed}
+                  setGitSourceConfirmed={setGitSourceConfirmed}
+                  gitSourcePath={gitSourcePath}
+                  detectedRuntime={detectedRuntime}
+                  setDetectedRuntime={setDetectedRuntime}
+                  loadGitSourceBranches={(id) => void loadGitSourceBranches(id)}
+                  loadGitDir={loadGitDir}
+                  onGitFolderSelect={(p) => void handleGitFolderSelect(p)}
+                />
+              )
             case 'settings':
-              return renderSettingsStep()
+              return <SettingsStep envVars={envVars} setEnvVars={setEnvVars} />
             case 'details':
-              return renderDetailsStep()
+              return (
+                <DetailsStep
+                  availableEnvs={environments.filter(
+                    (e: any) => !isEnvDisabled({ disabledEnvs }, e.Id),
+                  )}
+                  appName={appName}
+                  setAppName={setAppName}
+                  envId={envId}
+                  setEnvId={setEnvId}
+                  nsList={nsList}
+                  setNsList={setNsList}
+                  nsLoading={nsLoading}
+                  manualNs={manualNs}
+                  setManualNs={setManualNs}
+                  manualNsValue={manualNsValue}
+                  setManualNsValue={setManualNsValue}
+                  namespace={namespace}
+                  setNamespace={setNamespace}
+                  nsHint={nsHint}
+                  setNsHint={setNsHint}
+                  nsStatusColor={nsStatusColor}
+                  resolvedNs={resolvedNs}
+                  perms={perms}
+                  exposeType={exposeType}
+                  setExposeType={setExposeType}
+                  envCapabilities={envCapabilities}
+                  ingHost={ingHost}
+                  setIngHost={setIngHost}
+                  ingClass={ingClass}
+                  setIngClass={setIngClass}
+                  ingressHostMap={ingressHostMap}
+                />
+              )
             case 'storage':
               return renderStorageStep()
             case 'deploy':
-              return renderStartupPanel()
+              return (
+                <StartupPanel
+                  phase={startupPhase}
+                  reason={startupReason}
+                  url={startupUrl}
+                  errorMsg={startupErrorMsg}
+                  failStage={startupFailStage}
+                  onFinish={finishToServices}
+                  onReset={resetDeployForm}
+                  onKeepWaiting={resumeWaiting}
+                />
+              )
             default:
               return null
           }
