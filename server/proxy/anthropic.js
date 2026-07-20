@@ -11,7 +11,7 @@ export function proxyToAnthropic(req, res, body) {
   if (!ANTHROPIC_KEY) {
     res.writeHead(503, { 'Content-Type': 'application/json', ...CORS })
     res.end(
-      JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured on server' })
+      JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured on server' }),
     )
     return
   }
@@ -45,7 +45,7 @@ export function proxyToAnthropic(req, res, body) {
         'Cache-Control': 'no-cache',
       })
       upRes.pipe(res)
-    }
+    },
   )
   upstream.on('error', (e) => {
     console.error('[anthropic proxy error]', e.message)

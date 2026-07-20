@@ -4,7 +4,11 @@ import { useAppStore, visibleEnvironments } from '../store/useAppStore.js'
 const TS_KEY = 'portainer_run_ts'
 
 function touchSession() {
-  try { localStorage.setItem(TS_KEY, String(Date.now())) } catch { /* ignore */ }
+  try {
+    localStorage.setItem(TS_KEY, String(Date.now()))
+  } catch {
+    /* ignore */
+  }
 }
 
 let refreshTimer = null
@@ -39,10 +43,14 @@ export async function refreshCache(manual = false) {
   const state = st()
   const envs = visibleEnvironments(state)
   if (!envs.length) {
-    st().setCache((c) => ({ ...c, lastFetch: Date.now(), everLoaded: true, fetching: false }))
+    st().setCache((c) => ({
+      ...c,
+      lastFetch: Date.now(),
+      everLoaded: true,
+      fetching: false,
+    }))
     setCacheStatus('fresh')
     touchSession()
-
 
     if (!manual) scheduleNextRefresh()
     return
@@ -53,17 +61,23 @@ export async function refreshCache(manual = false) {
       envs.map(async (env) => {
         const deps = await fetchEnvDeployments(token, env, isAdmin)
         st().setCache((prev) => {
-          const next = [...prev.deployments.filter((d) => d._envId !== env.Id), ...deps]
+          const next = [
+            ...prev.deployments.filter((d) => d._envId !== env.Id),
+            ...deps,
+          ]
           // Do not set fetching:true here — it is already true and will be cleared in finally
           return { ...prev, everLoaded: true, deployments: next }
         })
       }),
     )
-    st().setCache((c) => ({ ...c, lastFetch: Date.now(), everLoaded: true, fetching: false }))
+    st().setCache((c) => ({
+      ...c,
+      lastFetch: Date.now(),
+      everLoaded: true,
+      fetching: false,
+    }))
     setCacheStatus('fresh')
     touchSession()
-
-
   } catch (e) {
     if (manual) st().pushToast('Refresh failed: ' + (e && e.message), 'err')
     setCacheStatus('stale')

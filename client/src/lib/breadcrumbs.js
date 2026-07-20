@@ -46,7 +46,10 @@ export function getBreadcrumbItems(pathname) {
     }
     return [
       { label: 'Applications', to: ROUTES.services },
-      { label: name, to: serviceDetailPath(envId, namespace, name, 'overview') },
+      {
+        label: name,
+        to: serviceDetailPath(envId, namespace, name, 'overview'),
+      },
       { label: tabLabel, current: true },
     ]
   }

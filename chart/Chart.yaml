@@ -10,4 +10,4 @@ version: 1.2.8
 # Application version — the Portainer-Run release this chart ships. Free-form,
 # so it carries the full release string. Used as the image tag when
 # image.tag is left empty.
-appVersion: "1.2.8"
+appVersion: '1.2.8'

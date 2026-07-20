@@ -7,7 +7,7 @@ const initialCache = {
   everLoaded: false,
 }
 
-export const useAppStore = create((set, get) => ({
+export const useAppStore = create((set, _get) => ({
   token: '',
   /** @deprecated Portainer target is fixed server-side; retained only for legacy store reads. */
   portainerBaseUrl: '',
@@ -57,7 +57,8 @@ export const useAppStore = create((set, get) => ({
   templatesLoading: false,
 
   setToken: (token) => set({ token }),
-  setPortainerBaseUrl: (portainerBaseUrl) => set({ portainerBaseUrl: portainerBaseUrl || '' }),
+  setPortainerBaseUrl: (portainerBaseUrl) =>
+    set({ portainerBaseUrl: portainerBaseUrl || '' }),
   setPortainerFromServer: (v) => set({ portainerFromServer: Boolean(v) }),
   setServerLabel: (serverLabel) => set({ serverLabel }),
   setEnvironments: (environments) => set({ environments }),
@@ -70,13 +71,18 @@ export const useAppStore = create((set, get) => ({
   setVersion: (v) => set({ version: v || 'dev' }),
   setDisabledEnvs: (disabledEnvs) => set({ disabledEnvs }),
   setCache: (updater) =>
-    set((s) => (typeof updater === 'function' ? { cache: updater(s.cache) } : { cache: updater })),
+    set((s) =>
+      typeof updater === 'function'
+        ? { cache: updater(s.cache) }
+        : { cache: updater },
+    ),
   setCacheField: (patch) => set((s) => ({ cache: { ...s.cache, ...patch } })),
   setCacheStatus: (cacheStatus) => set({ cacheStatus }),
   setConnected: (connected) => set({ connected }),
   setAuthChecking: (authChecking) => set({ authChecking }),
   setConnectError: (connectError) => set({ connectError }),
-  setEnvStatusClientCache: (envStatusClientCache) => set({ envStatusClientCache }),
+  setEnvStatusClientCache: (envStatusClientCache) =>
+    set({ envStatusClientCache }),
   patchEnvStatus: (envId, rv, data) =>
     set((s) => ({
       envStatusClientCache: {
@@ -87,9 +93,12 @@ export const useAppStore = create((set, get) => ({
 
   setEnvPermissions: (envPermissions) => set({ envPermissions }),
   patchEnvPermissions: (envId, namespace, perms) =>
-    set((s) => ({ envPermissions: { ...s.envPermissions, [`${envId}:${namespace}`]: perms } })),
+    set((s) => ({
+      envPermissions: { ...s.envPermissions, [`${envId}:${namespace}`]: perms },
+    })),
   setDeleteTarget: (deleteTarget) => set({ deleteTarget }),
-  markAppDeleting: (key) => set((s) => ({ deletingApps: { ...s.deletingApps, [key]: true } })),
+  markAppDeleting: (key) =>
+    set((s) => ({ deletingApps: { ...s.deletingApps, [key]: true } })),
   clearAppDeleting: (key) =>
     set((s) => {
       const next = { ...s.deletingApps }
@@ -109,7 +118,8 @@ export const useAppStore = create((set, get) => ({
     setTimeout(() => useAppStore.getState().removeToast(tid), 4000)
     return tid
   },
-  removeToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+  removeToast: (id) =>
+    set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
   reset: () =>
     set((s) => ({
@@ -122,7 +132,7 @@ export const useAppStore = create((set, get) => ({
       isAdmin: false,
       userId: null,
       username: '',
-  userId: null,
+      userId: null,
       isAiAvailable: false,
       disabledEnvs: {},
       cache: { ...initialCache },

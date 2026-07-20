@@ -1,4 +1,9 @@
-import { PORTAINER_URL, portainerHost, portainerPort, portainerIsHttps } from './config.js'
+import {
+  PORTAINER_URL,
+  portainerHost,
+  portainerPort,
+  portainerIsHttps,
+} from './config.js'
 
 /**
  * Target for outbound calls to the Portainer instance.

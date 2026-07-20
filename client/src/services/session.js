@@ -38,7 +38,9 @@ export async function bootstrap() {
       return false
     }
     if (!meR.ok) {
-      st().setConnectError(`Could not load your Portainer account (HTTP ${meR.status}).`)
+      st().setConnectError(
+        `Could not load your Portainer account (HTTP ${meR.status}).`,
+      )
       st().setAuthChecking(false)
       return false
     }
@@ -57,7 +59,9 @@ export async function bootstrap() {
   try {
     const epR = await apiFetch(null, '/endpoints')
     const eps = epR.ok ? await epR.json() : []
-    const kubeEps = (Array.isArray(eps) ? eps : []).filter((e) => K8S_TYPES.includes(e.Type))
+    const kubeEps = (Array.isArray(eps) ? eps : []).filter((e) =>
+      K8S_TYPES.includes(e.Type),
+    )
     st().setEnvironments(kubeEps)
   } catch {
     st().setEnvironments([])
@@ -67,7 +71,11 @@ export async function bootstrap() {
     const cacheRes = await serverFetch('/cache')
     if (cacheRes.ok) {
       const cached = await cacheRes.json()
-      if (cached && Array.isArray(cached.deployments) && cached.deployments.length) {
+      if (
+        cached &&
+        Array.isArray(cached.deployments) &&
+        cached.deployments.length
+      ) {
         st().setCache({
           deployments: cached.deployments,
           lastFetch: cached.lastFetch || null,
@@ -87,7 +95,11 @@ export async function bootstrap() {
   // Background tasks — don't block first render.
   void loadDisabledEnvs(SESSION_SENTINEL, st().environments)
     .then(() => {
-      st().setCache((c) => ({ ...c, fetching: false, deployments: visibleDeployments(useAppStore.getState()) }))
+      st().setCache((c) => ({
+        ...c,
+        fetching: false,
+        deployments: visibleDeployments(useAppStore.getState()),
+      }))
       return refreshCache(false)
     })
     .catch(() => {})

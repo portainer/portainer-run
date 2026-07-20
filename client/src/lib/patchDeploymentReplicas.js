@@ -7,7 +7,13 @@ import { kubeFetch } from './api.js'
  * @param {string} name
  * @param {number} replicas
  */
-export async function patchDeploymentReplicas(token, envId, namespace, name, replicas) {
+export async function patchDeploymentReplicas(
+  token,
+  envId,
+  namespace,
+  name,
+  replicas,
+) {
   const r = Math.max(0, Math.min(100, parseInt(String(replicas), 10) || 0))
   const ns = encodeURIComponent(namespace)
   const n = encodeURIComponent(name)

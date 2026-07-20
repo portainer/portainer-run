@@ -20,7 +20,8 @@ export function appDeleteKey(envId, ns, name) {
  * @returns {Promise<boolean>}  true if the deployment was deleted, false on failure
  */
 export async function deleteApp(target, { deleteManifest = false } = {}) {
-  const { envId, ns, name, gitTargetId, gitBranch, gitPath, vibeSourcePath } = target
+  const { envId, ns, name, gitTargetId, gitBranch, gitPath, vibeSourcePath } =
+    target
   const isVibeDeploy = Boolean(vibeSourcePath)
   const isGitOps = Boolean(gitTargetId && gitBranch && gitPath)
 
@@ -36,7 +37,11 @@ export async function deleteApp(target, { deleteManifest = false } = {}) {
     // 1. Read Deployment first so we can find all PVC names from spec.volumes
     let pvcNames = [name] // fallback: assume PVC shares the deployment name
     try {
-      const depRes = await kubeFetch(token, envId, `/apis/apps/v1/namespaces/${ns}/deployments/${name}`)
+      const depRes = await kubeFetch(
+        token,
+        envId,
+        `/apis/apps/v1/namespaces/${ns}/deployments/${name}`,
+      )
       if (depRes.ok) {
         const dep = await depRes.json()
         const vols = dep?.spec?.template?.spec?.volumes || []
@@ -45,27 +50,56 @@ export async function deleteApp(target, { deleteManifest = false } = {}) {
           .map((v) => v.persistentVolumeClaim.claimName)
         if (fromSpec.length > 0) pvcNames = fromSpec
       }
-    } catch { /* non-fatal — fall through to name-based fallback */ }
+    } catch {
+      /* non-fatal — fall through to name-based fallback */
+    }
 
     // 2. Delete the git credentials Secret if this is a Vibe Deploy app (best-effort)
     if (isVibeDeploy) {
-      await kubeFetch(token, envId, `/api/v1/namespaces/${ns}/secrets/${name}-git-credentials`, { method: 'DELETE' }).catch(() => {})
+      await kubeFetch(
+        token,
+        envId,
+        `/api/v1/namespaces/${ns}/secrets/${name}-git-credentials`,
+        { method: 'DELETE' },
+      ).catch(() => {})
       // App secrets Secret, if one was created for sensitive env vars (issue #38)
-      await kubeFetch(token, envId, `/api/v1/namespaces/${ns}/secrets/${name}-app-secrets`, { method: 'DELETE' }).catch(() => {})
+      await kubeFetch(
+        token,
+        envId,
+        `/api/v1/namespaces/${ns}/secrets/${name}-app-secrets`,
+        { method: 'DELETE' },
+      ).catch(() => {})
     }
 
     // 3. Delete the Kubernetes Deployment
-    const r = await kubeFetch(token, envId, `/apis/apps/v1/namespaces/${ns}/deployments/${name}`, {
-      method: 'DELETE',
-    })
+    const r = await kubeFetch(
+      token,
+      envId,
+      `/apis/apps/v1/namespaces/${ns}/deployments/${name}`,
+      {
+        method: 'DELETE',
+      },
+    )
     if (!r.ok && r.status !== 404) throw new Error('HTTP ' + r.status)
 
     // 4. Delete associated resources — best-effort, 404s silently ignored
     await Promise.allSettled([
-      kubeFetch(token, envId, `/api/v1/namespaces/${ns}/services/${name}`, { method: 'DELETE' }),
-      kubeFetch(token, envId, `/apis/networking.k8s.io/v1/namespaces/${ns}/ingresses/${name}`, { method: 'DELETE' }),
+      kubeFetch(token, envId, `/api/v1/namespaces/${ns}/services/${name}`, {
+        method: 'DELETE',
+      }),
+      kubeFetch(
+        token,
+        envId,
+        `/apis/networking.k8s.io/v1/namespaces/${ns}/ingresses/${name}`,
+        { method: 'DELETE' },
+      ),
       ...pvcNames.map((pvcName) =>
-        kubeFetch(token, envId, `/api/v1/namespaces/${ns}/persistentvolumeclaims/${pvcName}`, { method: 'DELETE' })
+        kubeFetch(
+          token,
+          envId,
+          `/api/v1/namespaces/${ns}/persistentvolumeclaims/${pvcName}`,
+          { method: 'DELETE' },
+        ),
       ),
     ])
 
@@ -76,7 +110,12 @@ export async function deleteApp(target, { deleteManifest = false } = {}) {
       try {
         const paths = [gitPath]
         if (isVibeDeploy && vibeSourcePath) paths.push(vibeSourcePath)
-        await deleteAppPaths({ gitTargetId, branch: gitBranch, paths, appName: name })
+        await deleteAppPaths({
+          gitTargetId,
+          branch: gitBranch,
+          paths,
+          appName: name,
+        })
       } catch (e) {
         st().pushToast(
           `Deployment deleted but Git cleanup failed: ${e?.message || 'unknown error'} — check the token has write access to the repository`,

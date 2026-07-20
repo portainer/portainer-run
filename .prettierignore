@@ -1,0 +1,7 @@
+dist
+client/design-system
+
+# Helm templates use Go template syntax ({{ ... }}), which isn't valid YAML
+# on its own — prettier's YAML parser can't parse it. Chart.yaml/values.yaml
+# at the chart root are plain YAML and stay checked.
+chart/templates/

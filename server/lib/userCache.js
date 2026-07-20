@@ -9,7 +9,10 @@ const cache = new Map()
 export function getCachedUser(token) {
   const entry = cache.get(token)
   if (!entry) return null
-  if (Date.now() > entry.expiresAt) { cache.delete(token); return null }
+  if (Date.now() > entry.expiresAt) {
+    cache.delete(token)
+    return null
+  }
   return entry
 }
 

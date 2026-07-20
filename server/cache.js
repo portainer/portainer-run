@@ -24,7 +24,7 @@ function getCacheFileKeyOrReject(token, req, res) {
       res.end(
         JSON.stringify({
           error: 'Server is misconfigured: PORTAINER_URL is not set.',
-        })
+        }),
       )
     }
     return null

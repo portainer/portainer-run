@@ -8,6 +8,8 @@ import { GPU_RESOURCE_KEYS } from './deployFormModel.js'
  * @property {TriBool} ok — true = pass, false = fail, null = warn / N/A
  * @property {string} label
  * @property {string} detail
+ * @property {Array<{name: string, isDefault?: boolean}>} [classes] — ingress classes (checkIngress only)
+ * @property {string|null} [defaultClass] — default ingress class name (checkIngress only)
  */
 
 /**
@@ -37,7 +39,10 @@ export async function checkIngress(token, envId) {
     if (classes.length > 0) {
       const mapped = classes.map((c) => ({
         name: c.metadata.name,
-        isDefault: c.metadata?.annotations?.['ingressclass.kubernetes.io/is-default-class'] === 'true',
+        isDefault:
+          c.metadata?.annotations?.[
+            'ingressclass.kubernetes.io/is-default-class'
+          ] === 'true',
       }))
       const defaultClass = (mapped.find((c) => c.isDefault) || mapped[0]).name
       return {
@@ -65,7 +70,11 @@ export async function checkIngress(token, envId) {
       defaultClass: null,
     }
   } catch (e) {
-    return { ok: false, label: 'Error', detail: e instanceof Error ? e.message : String(e) }
+    return {
+      ok: false,
+      label: 'Error',
+      detail: e instanceof Error ? e.message : String(e),
+    }
   }
 }
 
@@ -115,10 +124,15 @@ export async function checkLoadBalancer(token, envId) {
     return {
       ok: null,
       label: 'No LB services',
-      detail: 'No LoadBalancer-type services found — cannot confirm provisioner',
+      detail:
+        'No LoadBalancer-type services found — cannot confirm provisioner',
     }
   } catch (e) {
-    return { ok: false, label: 'Error', detail: e instanceof Error ? e.message : String(e) }
+    return {
+      ok: false,
+      label: 'Error',
+      detail: e instanceof Error ? e.message : String(e),
+    }
   }
 }
 
@@ -129,12 +143,18 @@ export async function checkLoadBalancer(token, envId) {
  */
 export async function checkStorage(token, envId) {
   try {
-    const r = await kubeFetch(token, envId, '/apis/storage.k8s.io/v1/storageclasses')
+    const r = await kubeFetch(
+      token,
+      envId,
+      '/apis/storage.k8s.io/v1/storageclasses',
+    )
     if (!r.ok) throw new Error('HTTP ' + r.status)
     const classes = (await r.json()).items || []
     const defaultClass = classes.find(
       (sc) =>
-        sc.metadata?.annotations?.['storageclass.kubernetes.io/is-default-class'] === 'true',
+        sc.metadata?.annotations?.[
+          'storageclass.kubernetes.io/is-default-class'
+        ] === 'true',
     )
     if (defaultClass) {
       return {
@@ -150,9 +170,17 @@ export async function checkStorage(token, envId) {
         detail: `${classes.length} type(s) exist but none marked as default`,
       }
     }
-    return { ok: false, label: 'None defined', detail: 'No storage types found in this cluster' }
+    return {
+      ok: false,
+      label: 'None defined',
+      detail: 'No storage types found in this cluster',
+    }
   } catch (e) {
-    return { ok: false, label: 'Error', detail: e instanceof Error ? e.message : String(e) }
+    return {
+      ok: false,
+      label: 'Error',
+      detail: e instanceof Error ? e.message : String(e),
+    }
   }
 }
 
@@ -195,7 +223,11 @@ export async function checkNodes(token, envId) {
       detail: `${nodes.length} node(s), none in Ready state`,
     }
   } catch (e) {
-    return { ok: false, label: 'Error', detail: e instanceof Error ? e.message : String(e) }
+    return {
+      ok: false,
+      label: 'Error',
+      detail: e instanceof Error ? e.message : String(e),
+    }
   }
 }
 
@@ -232,9 +264,17 @@ export async function checkGPU(token, envId) {
       .map(([k, v]) => `${v}× ${k.split('/')[1] || k}`)
       .join(', ')
     const nodeLabel = `${[...new Set(gpuNodes)].length} node(s)`
-    return { ok: true, label: summary, detail: `${nodeLabel} with GPU capacity` }
+    return {
+      ok: true,
+      label: summary,
+      detail: `${nodeLabel} with GPU capacity`,
+    }
   } catch (e) {
-    return { ok: false, label: 'Error', detail: e instanceof Error ? e.message : String(e) }
+    return {
+      ok: false,
+      label: 'Error',
+      detail: e instanceof Error ? e.message : String(e),
+    }
   }
 }
 

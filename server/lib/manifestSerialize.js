@@ -25,7 +25,15 @@ export function normalizeQuantity(value, type = 'memory') {
   let v = String(value).trim()
 
   // Common wrong suffixes → correct
-  const memMap = { mb: 'Mi', gb: 'Gi', kb: 'Ki', tb: 'Ti', mib: 'Mi', gib: 'Gi', kib: 'Ki' }
+  const memMap = {
+    mb: 'Mi',
+    gb: 'Gi',
+    kb: 'Ki',
+    tb: 'Ti',
+    mib: 'Mi',
+    gib: 'Gi',
+    kib: 'Ki',
+  }
   const lv = v.toLowerCase()
   for (const [wrong, right] of Object.entries(memMap)) {
     if (lv.endsWith(wrong)) {
@@ -42,15 +50,16 @@ export function normalizeQuantity(value, type = 'memory') {
   // Validate: Kubernetes quantity regex
   // CPU: digits optionally followed by 'm', or decimal
   // Memory: digits followed by Ki/Mi/Gi/Ti/Pi/Ei or K/M/G/T/P/E or bare number
-  const valid = /^(\d+(\.\d+)?m?|(\d+(\.\d+)?(Ki|Mi|Gi|Ti|Pi|Ei|K|M|G|T|P|E)?))$/.test(v)
+  const valid =
+    /^(\d+(\.\d+)?m?|(\d+(\.\d+)?(Ki|Mi|Gi|Ti|Pi|Ei|K|M|G|T|P|E)?))$/.test(v)
   if (!valid) {
-    throw new Error(`Invalid ${type} quantity: "${value}". Use values like 100m, 500m (CPU) or 128Mi, 1Gi (memory).`)
+    throw new Error(
+      `Invalid ${type} quantity: "${value}". Use values like 100m, 500m (CPU) or 128Mi, 1Gi (memory).`,
+    )
   }
 
   return v
 }
-
-
 
 /**
  * Serialize one or more Kubernetes manifest objects to a multi-document YAML string.
@@ -99,29 +108,43 @@ export function buildManifests({
   gitopsAnnotations,
 }) {
   // Attach volumeMounts to the right container spec (same logic as executeDeploy)
-  const idToSpec = new Map(containerRowIds.map((id, i) => [id, containerSpecs[i]]))
+  const idToSpec = new Map(
+    containerRowIds.map((id, i) => [id, containerSpecs[i]]),
+  )
   // Deep-clone specs so we don't mutate the originals
   const clonedSpecs = containerSpecs.map((s) => {
     const spec = JSON.parse(JSON.stringify(s))
     if (spec.resources) {
       const r = spec.resources
       if (r.requests) {
-        if (r.requests.cpu != null) r.requests.cpu = normalizeQuantity(r.requests.cpu, 'cpu') || undefined
-        if (r.requests.memory != null) r.requests.memory = normalizeQuantity(r.requests.memory, 'memory') || undefined
-        if (!r.requests.cpu && !r.requests.memory) delete spec.resources.requests
+        if (r.requests.cpu != null)
+          r.requests.cpu = normalizeQuantity(r.requests.cpu, 'cpu') || undefined
+        if (r.requests.memory != null)
+          r.requests.memory =
+            normalizeQuantity(r.requests.memory, 'memory') || undefined
+        if (!r.requests.cpu && !r.requests.memory)
+          delete spec.resources.requests
       }
       if (r.limits) {
-        if (r.limits.cpu != null) r.limits.cpu = normalizeQuantity(r.limits.cpu, 'cpu') || undefined
-        if (r.limits.memory != null) r.limits.memory = normalizeQuantity(r.limits.memory, 'memory') || undefined
+        if (r.limits.cpu != null)
+          r.limits.cpu = normalizeQuantity(r.limits.cpu, 'cpu') || undefined
+        if (r.limits.memory != null)
+          r.limits.memory =
+            normalizeQuantity(r.limits.memory, 'memory') || undefined
         if (!r.limits.cpu && !r.limits.memory) delete spec.resources.limits
       }
     }
     // Pod Security Standards (issue #39): harden every container, preserving
     // any securityContext keys already present on the spec.
-    spec.securityContext = { ...CONTAINER_SECURITY_CONTEXT, ...(spec.securityContext || {}) }
+    spec.securityContext = {
+      ...CONTAINER_SECURITY_CONTEXT,
+      ...(spec.securityContext || {}),
+    }
     return spec
   })
-  const clonedIdToSpec = new Map(containerRowIds.map((id, i) => [id, clonedSpecs[i]]))
+  const clonedIdToSpec = new Map(
+    containerRowIds.map((id, i) => [id, clonedSpecs[i]]),
+  )
 
   for (const v of volumeDefs) {
     const spec = clonedIdToSpec.get(v.containerId)
@@ -234,7 +257,9 @@ export function buildManifests({
         name: appName,
         namespace: ns,
         labels: { app: appName, 'managed-by': 'portainer-run' },
-        ...(iClass ? { annotations: { 'kubernetes.io/ingress.class': iClass } } : {}),
+        ...(iClass
+          ? { annotations: { 'kubernetes.io/ingress.class': iClass } }
+          : {}),
       }
 
       manifests.push({

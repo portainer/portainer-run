@@ -22,7 +22,7 @@ import { resolvePortainerTarget } from '../resolve-portainer.js'
 export function portainerAuthHeaders(token) {
   return token.startsWith('ptr_')
     ? { 'X-API-Key': token }
-    : { 'Authorization': `Bearer ${token}` }
+    : { Authorization: `Bearer ${token}` }
 }
 
 /**
@@ -34,20 +34,30 @@ export function portainerAuthHeaders(token) {
 export function portainerGet(target, token, path) {
   return new Promise((resolve, reject) => {
     const mod = target.isHttps ? https : http
-    const req = mod.request({
-      hostname: target.host,
-      port: target.port,
-      path,
-      method: 'GET',
-      headers: { ...portainerAuthHeaders(token), 'Content-Type': 'application/json' },
-      rejectUnauthorized: false,
-    }, (res) => {
-      let body = ''
-      res.on('data', (c) => body += c)
-      res.on('end', () => {
-        try { resolve(JSON.parse(body)) } catch { reject(new Error('Invalid JSON from Portainer')) }
-      })
-    })
+    const req = mod.request(
+      {
+        hostname: target.host,
+        port: target.port,
+        path,
+        method: 'GET',
+        headers: {
+          ...portainerAuthHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        rejectUnauthorized: false,
+      },
+      (res) => {
+        let body = ''
+        res.on('data', (c) => (body += c))
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(body))
+          } catch {
+            reject(new Error('Invalid JSON from Portainer'))
+          }
+        })
+      },
+    )
     req.on('error', reject)
     req.end()
   })
