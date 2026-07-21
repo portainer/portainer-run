@@ -126,6 +126,7 @@ export function AppLayout() {
 
   const sections = useMemo(() => navSections(isAdmin), [isAdmin])
 
+  // this will all be removed when react-query handles loading states
   useEffect(() => {
     setProductsLoading(true)
     getAddons().then((addons) => {
