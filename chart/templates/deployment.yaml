@@ -31,7 +31,7 @@ spec:
       containers:
         - name: portainer-run
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: Always
+          imagePullPolicy: {{ .Values.image.pullPolicy | default "Always" }}
           # Note: no runAsNonRoot / drop-ALL-caps / readOnlyRootFilesystem — the
           # server binds a privileged port (80/443, needs CAP_NET_BIND_SERVICE)
           # and writes a self-signed cert to /app in TLS mode.
