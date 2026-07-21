@@ -129,6 +129,7 @@ export function AppLayout() {
   useEffect(() => {
     setProductsLoading(true)
     getAddons().then((addons) => {
+      console.log('a', addons)
       let productsList
       if (!addons) productsList = [selectedProduct]
       else productsList = [selectedProduct, ...addons]

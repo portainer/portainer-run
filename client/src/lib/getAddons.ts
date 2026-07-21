@@ -39,6 +39,7 @@ export function getAddons() {
   return apiFetch(null, '/addons')
     .then((response) => response.json())
     .then((response) => {
+      console.log(response)
       return (response.data.addons ?? [])
         .filter((a: AddonsAddonListItem) => a.id !== 'portainer-run')
         .map(addonToProduct)
