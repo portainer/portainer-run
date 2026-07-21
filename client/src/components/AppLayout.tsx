@@ -102,6 +102,7 @@ export function AppLayout() {
     description: 'Deploy and manage applications.',
     color: '#8b5cf6',
     available: true,
+    path: '/',
   }
   const navigate = useNavigate()
   const { pathname } = useLocation()

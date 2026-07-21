@@ -8,5 +8,6 @@ export function addonToProduct(addon: AddonsAddonListItem) {
     available: true,
     color: '#8b5cf6',
     logo: <img src={addon.icon} alt={addon.displayName} />,
+    path: addon.path!,
   }
 }
