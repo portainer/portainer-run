@@ -40,7 +40,7 @@ export function getAddons() {
     .then((response) => response.json())
     .then((response) => {
       console.log(response)
-      return (response.data.addons ?? [])
+      return (response.addons ?? [])
         .filter((a: AddonsAddonListItem) => a.id !== 'portainer-run')
         .map(addonToProduct)
     })
