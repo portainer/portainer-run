@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+  labels:
+    {{- include "portainer-run.labels" . | nindent 4 }}
+    # Marks this as a Portainer-managed system namespace so it's hidden from the
+    # regular namespace list and protected from user deletion. Must be set here,
+    # at creation: Helm's own CreateNamespace step (the install flow's fallback
+    # for charts without a namespace resource) only ever labels a bare "name",
+    # with no way to add custom labels through --create-namespace.
+    io.portainer.kubernetes.namespace.system: "true"
+  annotations:
+    # The install flow deliberately retains the addon namespace across
+    # `helm uninstall` (see portal-template/docs/addon-helm-chart-guidelines.md);
+    # this keeps that behavior now that the namespace is a release-owned resource.
+    helm.sh/resource-policy: keep
