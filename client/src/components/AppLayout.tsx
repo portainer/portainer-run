@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Box, Home, MessageSquare, type LucideIcon } from 'lucide-react'
 
@@ -28,6 +28,11 @@ import {
 import { SidebarLogo, SidebarLogoCollapsed } from './Logo'
 import { AccountMenuSlot } from './AccountMenuSlot'
 import { AssistantPanel } from './AssistantPanel'
+import {
+  ApplicationSwitcher,
+  ApplicationSwitcherProduct,
+} from '@ds/v3-templates/ApplicationSwitcher/ApplicationSwitcher.tsx'
+import { AddonsAddonListItem, getAddons } from '@/lib/getAddons.ts'
 
 interface EnvLike {
   Id: string | number
@@ -88,8 +93,22 @@ function useShellBreadcrumbs(): BreadcrumbItem[] {
 }
 
 export function AppLayout() {
+  const selectedProduct = {
+    id: 'portainer-run',
+    label: 'Portainer Run',
+    logo: (
+      <img src="/assets/addons/portainer-run.png" alt="portainer run logo" />
+    ),
+    description: 'Deploy and manage applications.',
+    color: '#8b5cf6',
+    available: true,
+  }
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  const [productsLoading, setProductsLoading] = useState<boolean>(true)
+  const [products, setProducts] = useState<ApplicationSwitcherProduct[]>([
+    selectedProduct,
+  ])
 
   const isAdmin = useAppStore((s) => s.isAdmin)
   const isAiAvailable = useAppStore((s) => s.isAiAvailable)
@@ -105,6 +124,17 @@ export function AppLayout() {
   const cacheStatus = useAppStore((s) => s.cacheStatus) as string
 
   const sections = useMemo(() => navSections(isAdmin), [isAdmin])
+
+  useEffect(() => {
+    setProductsLoading(true)
+    getAddons().then((addons) => {
+      let productsList
+      if (!addons) productsList = [selectedProduct]
+      else productsList = [selectedProduct, ...addons]
+      setProducts(productsList)
+      setProductsLoading(false)
+    })
+  }, [])
 
   // Command palette (⌘K): search deployed apps by name, plus quick navigation.
   const commandSections = useMemo<CommandSectionDef[]>(() => {
@@ -215,6 +245,13 @@ export function AppLayout() {
     if (item?.path) navigate(item.path)
   }
 
+  function handleAddonClick(id: string) {
+    const item: AddonsAddonListItem | undefined = products.find(
+      (i: AddonsAddonListItem) => i.id === id,
+    )
+    if (item && item.path) window.location.href = item.path
+  }
+
   return (
     <div
       className={currentApp ? undefined : 'pr-hide-fav-star'}
@@ -238,6 +275,17 @@ export function AppLayout() {
           onItemClick={handleNavClick}
           logo={<SidebarLogo />}
           collapsedLogo={<SidebarLogoCollapsed />}
+          productSlot={(collapsed) => (
+            <ApplicationSwitcher
+              products={products}
+              selected={products[0].id}
+              onChange={handleAddonClick}
+              sidebarMode
+              collapsed={collapsed}
+              onLogoClick={() => navigate('/')}
+              loading={productsLoading}
+            />
+          )}
           breadcrumbs={breadcrumbs}
           starred={starred}
           onStarToggle={
