@@ -1,51 +1,31 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+
+import { apiFetch } from '../lib/api.js'
+import { getCurrentUser, writeCurrentUser } from '../lib/currentUser.js'
 
 export type Theme = 'light' | 'dark' | 'system' | 'highcontrast'
 
-const STORAGE_KEY = 'portainer.current_user'
-
-interface StoredUser {
-  state?: {
-    user?: {
-      ThemeSettings?: {
-        color?: Theme
-      }
-      [key: string]: unknown
-    }
-    [key: string]: unknown
-  }
-  [key: string]: unknown
-}
-
-function readStoredUser(): StoredUser {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as StoredUser) : {}
-  } catch {
-    return {}
-  }
-}
-
 function readTheme(): Theme {
-  return readStoredUser().state?.user?.ThemeSettings?.color ?? 'system'
+  return getCurrentUser()?.ThemeSettings?.color ?? 'system'
 }
 
 function writeTheme(theme: Theme) {
-  const stored = readStoredUser()
-  const next: StoredUser = {
-    ...stored,
-    state: {
-      ...stored.state,
-      user: {
-        ...stored.state?.user,
-        ThemeSettings: {
-          ...stored.state?.user?.ThemeSettings,
-          color: theme,
-        },
-      },
-    },
+  const user = getCurrentUser()
+  writeCurrentUser({ ThemeSettings: { ...user?.ThemeSettings, color: theme } })
+}
+
+/** Best-effort sync to Portainer so the choice follows the user across devices. */
+async function persistThemeToApi(theme: Theme) {
+  const userId = getCurrentUser()?.Id
+  if (!userId) return
+  try {
+    await apiFetch(null, `/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ ThemeSettings: { color: theme } }),
+    })
+  } catch {
+    // local storage remains the source of truth if this fails
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
 }
 
 function resolvedTheme(theme: Theme): 'light' | 'dark' {
@@ -60,6 +40,7 @@ function resolvedTheme(theme: Theme): 'light' | 'dark' {
 
 export function useTheme() {
   const [theme, setThemeState] = useState<Theme>(readTheme)
+  const isFirstRun = useRef(true)
 
   useEffect(() => {
     const apply = () => {
@@ -72,6 +53,12 @@ export function useTheme() {
 
     apply()
     writeTheme(theme)
+
+    if (isFirstRun.current) {
+      isFirstRun.current = false
+    } else {
+      void persistThemeToApi(theme)
+    }
 
     // swallow highcontrast theme for now
     if (theme === 'system' || theme === 'highcontrast') {
