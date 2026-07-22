@@ -21,7 +21,7 @@ async function persistThemeToApi(theme: Theme) {
   try {
     await apiFetch(null, `/users/${userId}`, {
       method: 'PUT',
-      body: JSON.stringify({ ThemeSettings: { color: theme } }),
+      body: JSON.stringify({ theme: { color: theme } }),
     })
   } catch {
     // local storage remains the source of truth if this fails
