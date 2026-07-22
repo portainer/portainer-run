@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { apiFetch } from '../lib/api.js'
-import { getCurrentUser, writeCurrentUser } from '../lib/currentUser.js'
+import {
+  CURRENT_USER_STORAGE_KEY,
+  getCurrentUser,
+  writeCurrentUser,
+} from '../lib/currentUser.js'
 
 export type Theme = 'light' | 'dark' | 'system' | 'auto' | 'highcontrast'
 
@@ -67,6 +71,17 @@ export function useTheme() {
       return () => mq.removeEventListener('change', apply)
     }
   }, [theme])
+
+  // Pick up theme changes made in another tab.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== CURRENT_USER_STORAGE_KEY) return
+      const next = readTheme()
+      setThemeState((current) => (current === next ? current : next))
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
 
   return { theme, setTheme: setThemeState }
 }
