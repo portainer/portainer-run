@@ -1,5 +1,5 @@
 name: release
-run-name: '${{ github.event.inputs.version }} release'
+run-name: '${{ github.event.inputs.version }} pre-release'
 
 on:
   workflow_dispatch:
@@ -27,11 +27,35 @@ jobs:
       - name: '[validation] check server syntax'
         run: node --check server/server.js
 
-  release:
-    name: create a pre-release
+  validate-chart:
+    name: validate-chart
     runs-on: ubuntu-latest
-    needs: [validate]
     steps:
+      - name: '[preparation] checkout the current branch'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: '[preparation] set up helm'
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+
+      - name: '[validation] lint chart'
+        run: helm lint chart/
+
+      - name: '[validation] template chart (dry-run render)'
+        run: helm template portainer-run chart/ > /dev/null
+
+  create-release:
+    name: create-release
+    runs-on: ubuntu-latest
+    needs: [validate, validate-chart]
+    outputs:
+      version: ${{ steps.normalize.outputs.value }}
+    steps:
+      - name: '[preparation] normalize version'
+        id: normalize
+        run: |
+          version="${{ github.event.inputs.version }}"
+          echo "value=${version#v}" >> "$GITHUB_OUTPUT"
+
       - name: '[execution] create a pre-release'
         run: |
           gh release create \
@@ -44,10 +68,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  build:
-    name: build and push docker image
+  publish-images:
+    name: publish-images
     runs-on: ubuntu-latest
-    needs: [release]
+    needs: [create-release]
     steps:
       # Exchange the org's GitHub App credentials for a short-lived, narrowly
       # scoped installation token so checkout can pull the private design-system
@@ -89,42 +113,7 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           build-args: |
-            PORTAINER_RUN_VERSION=${{ github.event.inputs.version }}
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.event.inputs.version }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            PORTAINER_RUN_VERSION=${{ needs.create-release.outputs.version }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.create-release.outputs.version }}
           sbom: true
           provenance: mode=max
-
-  publish-chart:
-    name: publish helm chart
-    runs-on: ubuntu-latest
-    needs: [release]
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: '[preparation] checkout the current branch'
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: '[preparation] set up Helm'
-        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
-
-      - name: '[validation] lint chart'
-        run: helm lint chart/
-
-      - name: '[validation] template chart (dry-run render)'
-        run: helm template portainer-run chart/ > /dev/null
-
-      - name: '[execution] package chart'
-        run: |
-          helm package chart/ \
-            --version "${{ github.event.inputs.version }}" \
-            --app-version "${{ github.event.inputs.version }}" \
-            -d /tmp/chart-dist
-
-      - name: '[execution] log in to GHCR'
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
-
-      - name: '[execution] push chart'
-        run: helm push /tmp/chart-dist/portainer-run-*.tgz oci://ghcr.io/portainer/charts
