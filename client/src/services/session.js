@@ -1,4 +1,5 @@
 import { apiFetch, serverFetch } from '../lib/api.js'
+import { writeCurrentUser } from '../lib/currentUser.js'
 import { useAppStore, visibleDeployments } from '../store/useAppStore.js'
 import { loadServerConfig } from './config.js'
 import { loadDisabledEnvs } from './disabledEnvs.js'
@@ -55,6 +56,7 @@ export async function bootstrap() {
   st().setIsAdmin(me.Role === 1)
   st().setUserId(String(me.Id || ''))
   st().setUsername(me.Username || me.username || '')
+  writeCurrentUser(me)
 
   try {
     const epR = await apiFetch(null, '/endpoints')
