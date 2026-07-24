@@ -95,11 +95,11 @@ function useShellBreadcrumbs(): BreadcrumbItem[] {
 export function AppLayout() {
   const selectedProduct = {
     id: 'portainer-run',
-    label: 'Portainer Run',
+    label: 'Portainer-Run',
     logo: (
       <img src="/assets/addons/portainer-run.png" alt="portainer run logo" />
     ),
-    description: 'Deploy and manage applications.',
+    description: "Drag'n'drop deployment for Apps",
     color: '#8b5cf6',
     available: true,
     path: '/',
