@@ -3,6 +3,7 @@ import { apiFetch } from '@/lib/api'
 
 export type AddonsAddonListItem = {
   description?: string
+  shortDescription?: string
   displayName?: string
   healthMessage?: string
   healthStatus?: AddonHealthStatus
