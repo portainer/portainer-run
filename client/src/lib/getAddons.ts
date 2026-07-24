@@ -4,6 +4,7 @@ import { apiFetch } from '@/lib/api'
 export type AddonsAddonListItem = {
   description?: string
   displayName?: string
+  enabled?: boolean
   healthMessage?: string
   healthStatus?: AddonHealthStatus
   icon?: string
@@ -11,7 +12,6 @@ export type AddonsAddonListItem = {
   lifecycleStatus?: AddonLifecycleStatus
   lifecycleStatusMessage?: string
   path?: string
-  record?: { enabled: boolean }
 }
 
 export const AddonHealthStatus = {
@@ -40,7 +40,9 @@ export function getAddons() {
     .then((response) => response.json())
     .then((response) => {
       return (response.addons ?? [])
-        .filter((a: AddonsAddonListItem) => a.id !== 'portainer-run')
+        .filter(
+          (a: AddonsAddonListItem) => a.id !== 'portainer-run' && a.enabled,
+        )
         .map(addonToProduct)
     })
 }
