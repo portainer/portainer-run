@@ -7,10 +7,10 @@ import {
   writeCurrentUser,
 } from '../lib/currentUser.js'
 
-export type Theme = 'light' | 'dark' | 'system' | 'auto' | 'highcontrast'
+export type Theme = 'light' | 'dark' | 'auto' | 'highcontrast'
 
 function readTheme(): Theme {
-  return getCurrentUser()?.ThemeSettings?.color ?? 'system'
+  return getCurrentUser()?.ThemeSettings?.color ?? 'auto'
 }
 
 function writeTheme(theme: Theme) {
@@ -33,8 +33,8 @@ async function persistThemeToApi(theme: Theme) {
 }
 
 function resolvedTheme(theme: Theme): 'light' | 'dark' {
-  // swallow highcontrast theme for now
-  if (theme === 'system' || theme === 'auto' || theme === 'highcontrast') {
+  if (theme === 'highcontrast') return 'dark'
+  if (theme === 'auto') {
     return window.matchMedia('(prefers-color-scheme: dark)').matches
       ? 'dark'
       : 'light'
@@ -65,7 +65,7 @@ export function useTheme() {
     }
 
     // swallow highcontrast theme for now
-    if (theme === 'system' || theme === 'auto' || theme === 'highcontrast') {
+    if (theme === 'auto') {
       const mq = window.matchMedia('(prefers-color-scheme: dark)')
       mq.addEventListener('change', apply)
       return () => mq.removeEventListener('change', apply)
