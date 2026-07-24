@@ -95,7 +95,7 @@ function useShellBreadcrumbs(): BreadcrumbItem[] {
 export function AppLayout() {
   const selectedProduct = {
     id: 'portainer-run',
-    label: 'Portainer Run',
+    label: 'Portainer-Run',
     logo: (
       <img src="/assets/addons/portainer-run.png" alt="portainer run logo" />
     ),
