@@ -33,39 +33,13 @@ export function DropZone({
   const accent = 'var(--accent, #2e90fa)'
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onDragOver={(e) => {
-        e.preventDefault()
-        setDragging(true)
-      }}
-      onDragLeave={() => setDragging(false)}
-      onDrop={onDrop}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      onClick={() => folderRef.current?.click()}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          folderRef.current?.click()
-        }
-      }}
-      style={{
-        border: `1.5px dashed ${active ? accent : 'var(--border)'}`,
-        borderRadius: 12,
-        padding: '40px 24px',
-        textAlign: 'center',
-        cursor: 'pointer',
-        outline: 'none',
-        background: dragging
-          ? `color-mix(in srgb, ${accent} 8%, transparent)`
-          : hover
-            ? 'color-mix(in srgb, var(--text) 3%, transparent)'
-            : 'transparent',
-        transition: 'border-color 120ms ease, background-color 120ms ease',
-      }}
-    >
+    <>
+      {/* Hidden pickers live OUTSIDE the clickable dropzone below. A
+          programmatic `input.click()` dispatches a click event that bubbles;
+          if the input were nested in the dropzone, that event would reach the
+          dropzone's onClick and re-open the folder picker — so "Upload files"
+          would wrongly show the folder picker. Keeping them as siblings avoids
+          that. */}
       <input
         ref={folderRef}
         type="file"
@@ -89,56 +63,90 @@ export function DropZone({
         }}
       />
       <div
-        style={{
-          width: 52,
-          height: 52,
-          borderRadius: '50%',
-          margin: '0 auto 16px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: `color-mix(in srgb, ${accent} 12%, transparent)`,
-          color: accent,
-          transition: 'transform 120ms ease',
-          transform: active ? 'translateY(-2px)' : 'none',
+        role="button"
+        tabIndex={0}
+        onDragOver={(e) => {
+          e.preventDefault()
+          setDragging(true)
         }}
-      >
-        <Upload size={22} />
-      </div>
-      <div
-        style={{
-          fontSize: 15,
-          fontWeight: 600,
-          color: 'var(--text)',
-          marginBottom: 4,
-        }}
-      >
-        {dragging ? 'Drop to upload' : 'Drop your project folder here'}
-      </div>
-      <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 18 }}>
-        or browse below — we&rsquo;ll detect the runtime automatically
-      </div>
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-        <Button
-          variant="ghost"
-          onClick={(e) => {
-            e.stopPropagation()
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        onClick={() => folderRef.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
             folderRef.current?.click()
+          }
+        }}
+        style={{
+          border: `1.5px dashed ${active ? accent : 'var(--border)'}`,
+          borderRadius: 12,
+          padding: '40px 24px',
+          textAlign: 'center',
+          cursor: 'pointer',
+          outline: 'none',
+          background: dragging
+            ? `color-mix(in srgb, ${accent} 8%, transparent)`
+            : hover
+              ? 'color-mix(in srgb, var(--text) 3%, transparent)'
+              : 'transparent',
+          transition: 'border-color 120ms ease, background-color 120ms ease',
+        }}
+      >
+        <div
+          style={{
+            width: 52,
+            height: 52,
+            borderRadius: '50%',
+            margin: '0 auto 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: `color-mix(in srgb, ${accent} 12%, transparent)`,
+            color: accent,
+            transition: 'transform 120ms ease',
+            transform: active ? 'translateY(-2px)' : 'none',
           }}
         >
-          Upload folder
-        </Button>
-        <Button
-          variant="ghost"
-          onClick={(e) => {
-            e.stopPropagation()
-            filesRef.current?.click()
+          <Upload size={22} />
+        </div>
+        <div
+          style={{
+            fontSize: 15,
+            fontWeight: 600,
+            color: 'var(--text)',
+            marginBottom: 4,
           }}
         >
-          Upload files
-        </Button>
+          {dragging ? 'Drop to upload' : 'Drop your project folder here'}
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 18 }}>
+          or browse below — we&rsquo;ll detect the runtime automatically
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+          <Button
+            variant="ghost"
+            onClick={(e) => {
+              e.stopPropagation()
+              folderRef.current?.click()
+            }}
+          >
+            Upload folder
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={(e) => {
+              e.stopPropagation()
+              filesRef.current?.click()
+            }}
+          >
+            Upload files
+          </Button>
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 
