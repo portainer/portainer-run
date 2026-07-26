@@ -31,7 +31,7 @@ export function getBreadcrumbItems(pathname) {
   }
 
   const serviceMatch = matchPath(
-    { path: '/services/:envId/:namespace/:name/:tab', end: true },
+    { path: '/applications/:envId/:namespace/:name/:tab?', end: true },
     path,
   )
   if (serviceMatch) {

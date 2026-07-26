@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { forwardRef, useEffect, useMemo, useState } from 'react'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Box, Home, MessageSquare, type LucideIcon } from 'lucide-react'
 
 import { AppShell } from '@ds/v3-templates/AppShell/AppShell'
@@ -75,19 +75,37 @@ function appFromPath(pathname: string): Favorite | null {
   }
 }
 
+/**
+ * Link element the design-system shell (sidebar nav items + breadcrumbs)
+ * renders through its `as` prop. Passing a real anchor / router `Link` — rather
+ * than an `onClick` handler — is what gives these controls native
+ * cmd/ctrl/middle-click "open in new tab" behavior.
+ *
+ * Two modes, chosen per-item via `linkProps`:
+ *  - `{ to }`   → in-SPA navigation via react-router's `Link`.
+ *  - `{ href }` → a plain `<a>` for links that must bypass the SPA router
+ *                 (e.g. the "Portainer" item that returns to the host app root).
+ */
+const ShellLink = forwardRef<
+  HTMLAnchorElement,
+  { to?: string; href?: string } & React.AnchorHTMLAttributes<HTMLAnchorElement>
+>(function ShellLink({ to, href, ...rest }, ref) {
+  if (href != null) return <a ref={ref} href={href} {...rest} />
+  return <Link ref={ref} to={to ?? '#'} {...rest} />
+})
+
 function useShellBreadcrumbs(): BreadcrumbItem[] {
   const { pathname } = useLocation()
-  const navigate = useNavigate()
   const items = getBreadcrumbItems(pathname)
   return [
     {
       label: '',
       icon: <Home size={14} />,
-      onClick: () => navigate(ROUTES.dashboard),
+      linkProps: { to: ROUTES.dashboard },
     },
     ...items.map((item: { label: string; to?: string; current?: boolean }) => ({
       label: item.label,
-      onClick: item.to ? () => navigate(item.to as string) : undefined,
+      linkProps: item.to ? { to: item.to } : undefined,
     })),
   ]
 }
@@ -214,7 +232,14 @@ export function AppLayout() {
         id: item.id,
         label: item.label,
         icon: item.icon,
-        href: item.href,
+        // Internal routes navigate in-SPA (`to`); the external "Portainer"
+        // item bypasses the router with a plain `href`. Either way the shell
+        // renders a real link, so cmd/ctrl/middle-click opens a new tab.
+        linkProps: item.path
+          ? { to: item.path }
+          : item.href
+            ? { href: item.href }
+            : undefined,
       })),
     }))
 
@@ -228,12 +253,13 @@ export function AppLayout() {
         id: `fav:${favoriteKey(f)}`,
         label: f.name,
         icon: AppFavTag,
-        onClick: () =>
-          navigate(serviceDetailRootPath(f.envId, f.namespace, f.name)),
+        linkProps: {
+          to: serviceDetailRootPath(f.envId, f.namespace, f.name),
+        },
       })),
     }
     return [favoritesSection, ...navShellSections]
-  }, [sections, favorites, navigate])
+  }, [sections, favorites])
 
   const activeId =
     sections
@@ -241,11 +267,6 @@ export function AppLayout() {
       .find((item) => item.path && pathname.startsWith(item.path))?.id ?? ''
 
   const breadcrumbs = useShellBreadcrumbs()
-
-  function handleNavClick(id: string) {
-    const item = sections.flatMap((s) => s.items).find((i) => i.id === id)
-    if (item?.path) navigate(item.path)
-  }
 
   function handleAddonClick(id: string) {
     const item: AddonsAddonListItem | undefined = products.find(
@@ -274,7 +295,7 @@ export function AppLayout() {
         <AppShell
           sections={shellSections}
           activeId={activeId}
-          onItemClick={handleNavClick}
+          as={ShellLink}
           logo={<SidebarLogo />}
           collapsedLogo={<SidebarLogoCollapsed />}
           productSlot={(collapsed) => (
