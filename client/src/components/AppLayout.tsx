@@ -28,11 +28,29 @@ import {
 import { SidebarLogo, SidebarLogoCollapsed } from './Logo'
 import { AccountMenuSlot } from './AccountMenuSlot'
 import { AssistantPanel } from './AssistantPanel'
-import {
-  ApplicationSwitcher,
-  ApplicationSwitcherProduct,
-} from '@ds/v3-templates/ApplicationSwitcher/ApplicationSwitcher.tsx'
-import { AddonsAddonListItem, getAddons } from '@/lib/getAddons.ts'
+import { ApplicationSwitcher } from '@ds/v3-templates/ApplicationSwitcher/ApplicationSwitcher.tsx'
+import { getAddons } from '@/lib/getAddons.ts'
+import type { SwitcherProduct } from '@/lib/addonToProduct.tsx'
+
+/** This app's own entry in the switcher — always present, always the selected one. */
+const SELF_PRODUCT: SwitcherProduct = {
+  id: 'portainer-run',
+  label: 'Portainer-Run',
+  logo: <img src="/assets/addons/portainer-run.svg" alt="Portainer-Run logo" />,
+  description: "Drag'n'drop deployment for Apps",
+  available: true,
+  path: import.meta.env.BASE_URL,
+}
+
+/** Portainer itself — the way back out. Served same-origin, so `/` is Portainer. */
+const PORTAINER_OPS_PRODUCT: SwitcherProduct = {
+  id: 'portainer-ops',
+  label: 'Portainer Ops',
+  logo: <img src="/assets/addons/portainer-ops.svg" alt="Portainer Ops logo" />,
+  description: 'Infrastructure and cluster management',
+  available: true,
+  path: '/',
+}
 
 interface EnvLike {
   Id: string | number
@@ -77,20 +95,14 @@ function appFromPath(pathname: string): Favorite | null {
 
 /**
  * Link element the design-system shell (sidebar nav items + breadcrumbs)
- * renders through its `as` prop. Passing a real anchor / router `Link` — rather
- * than an `onClick` handler — is what gives these controls native
- * cmd/ctrl/middle-click "open in new tab" behavior.
- *
- * Two modes, chosen per-item via `linkProps`:
- *  - `{ to }`   → in-SPA navigation via react-router's `Link`.
- *  - `{ href }` → a plain `<a>` for links that must bypass the SPA router
- *                 (e.g. the "Portainer" item that returns to the host app root).
+ * renders through its `as` prop. Passing a real router `Link` — rather than an
+ * `onClick` handler — is what gives these controls native cmd/ctrl/middle-click
+ * "open in new tab" behavior.
  */
 const ShellLink = forwardRef<
   HTMLAnchorElement,
-  { to?: string; href?: string } & React.AnchorHTMLAttributes<HTMLAnchorElement>
->(function ShellLink({ to, href, ...rest }, ref) {
-  if (href != null) return <a ref={ref} href={href} {...rest} />
+  { to?: string } & React.AnchorHTMLAttributes<HTMLAnchorElement>
+>(function ShellLink({ to, ...rest }, ref) {
   return <Link ref={ref} to={to ?? '#'} {...rest} />
 })
 
@@ -111,25 +123,13 @@ function useShellBreadcrumbs(): BreadcrumbItem[] {
 }
 
 export function AppLayout() {
-  const selectedProduct = {
-    id: 'portainer-run',
-    label: 'Portainer-Run',
-    logo: (
-      <img src="/assets/addons/portainer-run.png" alt="portainer run logo" />
-    ),
-    description: "Drag'n'drop deployment for Apps",
-    color: '#8b5cf6',
-    available: true,
-    path: '/',
-  }
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const [productsLoading, setProductsLoading] = useState<boolean>(true)
-  const [products, setProducts] = useState<ApplicationSwitcherProduct[]>([
-    selectedProduct,
-  ])
+  const [addons, setAddons] = useState<SwitcherProduct[]>([])
+  const [addonsLoading, setAddonsLoading] = useState<boolean>(true)
 
   const isAdmin = useAppStore((s) => s.isAdmin)
+  const portainerAccessDenied = useAppStore((s) => s.portainerAccessDenied)
   const isAiAvailable = useAppStore((s) => s.isAiAvailable)
   const version = useAppStore((s) => s.version)
   const chatOpen = useAppStore((s) => s.chatOpen)
@@ -146,15 +146,19 @@ export function AppLayout() {
 
   // this will all be removed when react-query handles loading states
   useEffect(() => {
-    setProductsLoading(true)
-    getAddons().then((addons) => {
-      let productsList
-      if (!addons) productsList = [selectedProduct]
-      else productsList = [selectedProduct, ...addons]
-      setProducts(productsList)
-      setProductsLoading(false)
-    })
+    setAddonsLoading(true)
+    getAddons()
+      .then((list) => setAddons(list ?? []))
+      .catch(() => setAddons([]))
+      .finally(() => setAddonsLoading(false))
   }, [])
+
+  // Portainer Ops leads the list, mirroring Portainer's own switcher.
+  const products: SwitcherProduct[] = [
+    ...(portainerAccessDenied ? [] : [PORTAINER_OPS_PRODUCT]),
+    SELF_PRODUCT,
+    ...addons,
+  ]
 
   // Command palette (⌘K): search deployed apps by name, plus quick navigation.
   const commandSections = useMemo<CommandSectionDef[]>(() => {
@@ -187,10 +191,7 @@ export function AppLayout() {
           id: `nav:${item.id}`,
           label: item.label,
           icon: <Icon size={14} />,
-          onSelect: () => {
-            if (item.path) navigate(item.path)
-            else if (item.href) window.location.assign(item.href)
-          },
+          onSelect: () => navigate(item.path),
         }
       })
 
@@ -232,14 +233,7 @@ export function AppLayout() {
         id: item.id,
         label: item.label,
         icon: item.icon,
-        // Internal routes navigate in-SPA (`to`); the external "Portainer"
-        // item bypasses the router with a plain `href`. Either way the shell
-        // renders a real link, so cmd/ctrl/middle-click opens a new tab.
-        linkProps: item.path
-          ? { to: item.path }
-          : item.href
-            ? { href: item.href }
-            : undefined,
+        linkProps: { to: item.path },
       })),
     }))
 
@@ -264,15 +258,15 @@ export function AppLayout() {
   const activeId =
     sections
       .flatMap((s) => s.items)
-      .find((item) => item.path && pathname.startsWith(item.path))?.id ?? ''
+      .find((item) => pathname.startsWith(item.path))?.id ?? ''
 
   const breadcrumbs = useShellBreadcrumbs()
 
-  function handleAddonClick(id: string) {
-    const item: AddonsAddonListItem | undefined = products.find(
-      (i: AddonsAddonListItem) => i.id === id,
-    )
-    if (item && item.path) window.location.href = item.path
+  // Other products are separately served apps, not routes in this SPA.
+  function handleProductChange(id: string) {
+    if (id === SELF_PRODUCT.id) return
+    const product = products.find((p) => p.id === id)
+    if (product) window.location.href = product.path
   }
 
   return (
@@ -301,12 +295,12 @@ export function AppLayout() {
           productSlot={(collapsed) => (
             <ApplicationSwitcher
               products={products}
-              selected={products[0].id}
-              onChange={handleAddonClick}
+              selected={SELF_PRODUCT.id}
+              onChange={handleProductChange}
               sidebarMode
               collapsed={collapsed}
               onLogoClick={() => navigate('/')}
-              loading={productsLoading}
+              loading={addonsLoading}
             />
           )}
           breadcrumbs={breadcrumbs}
