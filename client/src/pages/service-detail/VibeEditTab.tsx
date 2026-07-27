@@ -2,12 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { FileText, Upload, X } from 'lucide-react'
 
 import { Button } from '@ds/v3-components/Button/Button'
-import {
-  FormControl,
-  Input,
-  NumberInput,
-} from '@ds/v3-components/FormField/FormField'
-import { Select } from '@ds/v3-components/Select/Select'
+import { FormControl, Input } from '@ds/v3-components/FormField/FormField'
 
 import { useAppStore } from '../../store/useAppStore.js'
 import { serverFetch } from '../../lib/api.js'
@@ -64,8 +59,9 @@ export function VibeEditTab({
   const folderRef = useRef<HTMLInputElement>(null)
   const filesRef = useRef<HTMLInputElement>(null)
 
-  // Exposure state — populated from git manifest on mount
-  const [exposeType, setExposeType] = useState('NodePort')
+  // Exposure state — populated from git manifest on mount.
+  // Exposure is always via a URL through the cluster ingress controller.
+  const exposeType = 'Ingress'
   const [svcPort, setSvcPort] = useState(80)
   const [ingHost, setIngHost] = useState('')
   const [ingPath, setIngPath] = useState('/')
@@ -100,7 +96,6 @@ export function VibeEditTab({
           } | null,
         ) => {
           if (!data) return
-          if (data.exposeType) setExposeType(data.exposeType)
           if (data.port) setSvcPort(data.port)
           if (data.ingHost) setIngHost(data.ingHost)
           if (data.ingPath) setIngPath(data.ingPath)
@@ -346,64 +341,24 @@ export function VibeEditTab({
       {/* Exposure */}
       <Section title="Exposure">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <FormControl label="Expose service as">
-            <Select
-              value={exposeType}
-              onChange={(e) => setExposeType(e.target.value)}
-              options={[
-                {
-                  value: 'NodePort',
-                  label:
-                    'Network Accessible - Default, use this unless advised otherwise',
-                },
-                {
-                  value: 'LoadBalancer',
-                  label: 'Network Accessible via dedicated IP',
-                },
-                { value: 'Ingress', label: 'Network Accessible via a URL' },
-              ]}
-            />
-          </FormControl>
-          {(exposeType === 'NodePort' || exposeType === 'LoadBalancer') && (
-            <FormControl label="Port">
-              <div style={{ width: 120 }}>
-                <NumberInput
-                  value={svcPort}
-                  onChange={(v) => setSvcPort(Number(v))}
-                />
-              </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <FormControl label="Hostname" style={{ flex: 1 }}>
+              <Input
+                type="text"
+                value={ingHost}
+                onChange={(e) => setIngHost(e.target.value)}
+                placeholder="app.example.com"
+              />
             </FormControl>
-          )}
-          {exposeType === 'Ingress' && (
-            <>
-              <FormControl label="Hostname">
-                <Input
-                  type="text"
-                  value={ingHost}
-                  onChange={(e) => setIngHost(e.target.value)}
-                  placeholder="app.example.com"
-                />
-              </FormControl>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <FormControl label="Path" style={{ flex: 1 }}>
-                  <Input
-                    type="text"
-                    value={ingPath}
-                    onChange={(e) => setIngPath(e.target.value)}
-                    placeholder="/"
-                  />
-                </FormControl>
-                <FormControl label="Ingress class" style={{ flex: 1 }}>
-                  <Input
-                    type="text"
-                    value={ingClass}
-                    onChange={(e) => setIngClass(e.target.value)}
-                    placeholder="nginx"
-                  />
-                </FormControl>
-              </div>
-            </>
-          )}
+            <FormControl label="Ingress class" style={{ flex: 1 }}>
+              <Input
+                type="text"
+                value={ingClass}
+                onChange={(e) => setIngClass(e.target.value)}
+                placeholder="nginx"
+              />
+            </FormControl>
+          </div>
           {exposureError && <div style={ERROR_TEXT}>{exposureError}</div>}
           <div>
             <Button

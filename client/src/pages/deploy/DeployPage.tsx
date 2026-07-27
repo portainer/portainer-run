@@ -161,7 +161,7 @@ export function VibeDeploy() {
   const [manualNsValue, setManualNsValue] = useState('')
   const [nsHint, setNsHint] = useState({ text: '', tone: 'dim' })
   const instances = 1
-  const [exposeType, setExposeType] = useState('NodePort')
+  const [exposeType, setExposeType] = useState('Ingress')
   const [svcPort] = useState('')
   const [ingHost, setIngHost] = useState('')
   const [ingPath] = useState('/')
@@ -359,13 +359,8 @@ export function VibeDeploy() {
           defaultIngressClass: defaultClass,
         }
         setEnvCapabilities(caps)
-        // Auto-set expose type: prefer Ingress when it is available on the cluster
-        setExposeType((prev) => {
-          if (prev === 'LoadBalancer' && !caps.lbOk) return 'NodePort'
-          if (prev === 'Ingress' && !caps.ingressOk) return 'NodePort'
-          if (caps.ingressOk) return 'Ingress'
-          return prev
-        })
+        // Exposure is always via a URL through the cluster ingress controller.
+        setExposeType('Ingress')
         // Auto-populate ingress class from cluster default
         if (defaultClass) setIngClass(defaultClass)
       })
@@ -857,7 +852,7 @@ export function VibeDeploy() {
     setAppName('')
     setEnvId('')
     setNamespace('')
-    setExposeType('NodePort')
+    setExposeType('Ingress')
     setIngHost('')
     setIngClass('')
     goTo('files')
@@ -1098,8 +1093,6 @@ export function VibeDeploy() {
                   nsStatusColor={nsStatusColor}
                   resolvedNs={resolvedNs}
                   perms={perms}
-                  exposeType={exposeType}
-                  setExposeType={setExposeType}
                   envCapabilities={envCapabilities}
                   ingHost={ingHost}
                   setIngHost={setIngHost}
