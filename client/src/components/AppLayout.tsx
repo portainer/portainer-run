@@ -38,7 +38,6 @@ const SELF_PRODUCT: SwitcherProduct = {
   label: 'Portainer-Run',
   logo: <img src="/assets/addons/portainer-run.png" alt="Portainer-Run logo" />,
   description: "Drag'n'drop deployment for Apps",
-  color: '#8b5cf6',
   available: true,
   path: import.meta.env.BASE_URL,
 }
@@ -49,7 +48,6 @@ const PORTAINER_OPS_PRODUCT: SwitcherProduct = {
   label: 'Portainer Ops',
   logo: <img src="/assets/addons/portainer-ops.svg" alt="Portainer Ops logo" />,
   description: 'Infrastructure and cluster management',
-  color: '#8b5cf6',
   available: true,
   path: '/',
 }
@@ -156,14 +154,11 @@ export function AppLayout() {
   }, [])
 
   // Portainer Ops leads the list, mirroring Portainer's own switcher.
-  const products = useMemo<SwitcherProduct[]>(
-    () => [
-      ...(portainerAccessDenied ? [] : [PORTAINER_OPS_PRODUCT]),
-      SELF_PRODUCT,
-      ...addons,
-    ],
-    [portainerAccessDenied, addons],
-  )
+  const products: SwitcherProduct[] = [
+    ...(portainerAccessDenied ? [] : [PORTAINER_OPS_PRODUCT]),
+    SELF_PRODUCT,
+    ...addons,
+  ]
 
   // Command palette (⌘K): search deployed apps by name, plus quick navigation.
   const commandSections = useMemo<CommandSectionDef[]>(() => {

@@ -135,7 +135,6 @@ export const useAppStore = create((set, _get) => ({
       isAdmin: false,
       userId: null,
       username: '',
-      userId: null,
       portainerAccessDenied: false,
       isAiAvailable: false,
       disabledEnvs: {},
