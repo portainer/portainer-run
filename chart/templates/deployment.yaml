@@ -6,6 +6,8 @@ metadata:
     {{- include "portainer-run.labels" . | nindent 4 }}
 spec:
   replicas: 1
+  # Prevents slow installs when something is failing
+  progressDeadlineSeconds: 180
   selector:
     matchLabels:
       {{- include "portainer-run.selectorLabels" . | nindent 6 }}
