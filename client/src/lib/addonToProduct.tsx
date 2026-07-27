@@ -1,6 +1,10 @@
+import type { ApplicationSwitcherProduct } from '@ds/v3-templates/ApplicationSwitcher/ApplicationSwitcher.tsx'
 import { AddonsAddonListItem } from '@/lib/getAddons.ts'
 
-export function addonToProduct(addon: AddonsAddonListItem) {
+/** An app-switcher entry, plus where selecting it navigates to. */
+export type SwitcherProduct = ApplicationSwitcherProduct & { path: string }
+
+export function addonToProduct(addon: AddonsAddonListItem): SwitcherProduct {
   return {
     id: addon.id!,
     label: addon.displayName!,

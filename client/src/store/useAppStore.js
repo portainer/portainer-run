@@ -18,6 +18,8 @@ export const useAppStore = create((set, _get) => ({
   isAdmin: false,
   userId: null,
   username: '',
+  /** True when a team the user belongs to denies access to Portainer itself. */
+  portainerAccessDenied: false,
   isAiAvailable: false,
   aiProvider: 'anthropic',
   baseDomain: '',
@@ -65,6 +67,7 @@ export const useAppStore = create((set, _get) => ({
   setIsAdmin: (v) => set({ isAdmin: v }),
   setUserId: (v) => set({ userId: v }),
   setUsername: (v) => set({ username: v }),
+  setPortainerAccessDenied: (v) => set({ portainerAccessDenied: Boolean(v) }),
   setAi: (isAiAvailable, aiProvider, baseDomain) =>
     set({ isAiAvailable, aiProvider, baseDomain: baseDomain || '' }),
   setConfigNamespace: (v) => set({ configNamespace: v || 'kube-system' }),
@@ -133,6 +136,7 @@ export const useAppStore = create((set, _get) => ({
       userId: null,
       username: '',
       userId: null,
+      portainerAccessDenied: false,
       isAiAvailable: false,
       disabledEnvs: {},
       cache: { ...initialCache },

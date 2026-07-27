@@ -56,6 +56,7 @@ export async function bootstrap() {
   st().setIsAdmin(me.Role === 1)
   st().setUserId(String(me.Id || ''))
   st().setUsername(me.Username || me.username || '')
+  st().setPortainerAccessDenied(me.PortainerAccessDenied)
   writeCurrentUser(me)
 
   try {
