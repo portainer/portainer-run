@@ -1,30 +1,15 @@
-// Sidebar logo slots — Portainer wordmark plus the RUN product badge.
+// Sidebar logo slots — the Portainer-Run brandmark, plus the Portainer wordmark.
 
-function RunBadge({ size = 'md' }: { size?: 'sm' | 'md' }) {
-  const square = size === 'md' ? 10 : 8
-  const font = size === 'md' ? 11 : 9
+const TILE_SIZE_EXPANDED = 32
+
+/** Sizing is left to the caller — the collapsed slot's host styles it. */
+function RunTile({ size }: { size?: number }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-      <span
-        style={{
-          width: square,
-          height: square,
-          borderRadius: 2,
-          background: 'var(--brand, #0ea5e9)',
-          display: 'inline-block',
-        }}
-      />
-      <span
-        style={{
-          fontWeight: 700,
-          fontSize: font,
-          letterSpacing: '0.18em',
-          color: 'var(--text, #111827)',
-        }}
-      >
-        RUN
-      </span>
-    </span>
+    <img
+      src={`${import.meta.env.BASE_URL}portainer-run.svg`}
+      alt="Portainer-Run"
+      style={size ? { width: size, height: size } : undefined}
+    />
   )
 }
 
@@ -56,20 +41,15 @@ function PortainerWordmark() {
 export function SidebarLogo() {
   return (
     <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'flex-start',
-        gap: 4,
-      }}
+      style={{ display: 'flex', alignItems: 'center', gap: 8 }}
       title="Portainer-Run — Dashboard"
     >
+      <RunTile size={TILE_SIZE_EXPANDED} />
       <PortainerWordmark />
-      <RunBadge />
     </div>
   )
 }
 
 export function SidebarLogoCollapsed() {
-  return <RunBadge size="sm" />
+  return <RunTile />
 }

@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   MonitorPlay,
   Settings,
   ShieldCheck,
@@ -13,10 +12,8 @@ export interface NavItem {
   id: string
   label: string
   icon: LucideIcon
-  /** Internal route path. Omitted for plain links (href). */
-  path?: string
-  /** External/plain link (bypasses the SPA router). */
-  href?: string
+  /** Internal route path. */
+  path: string
 }
 
 export interface NavSection {
@@ -60,7 +57,6 @@ const ADMIN_SECTION: NavSection = {
       icon: ShieldCheck,
       path: ROUTES.readiness,
     },
-    { id: 'portainer', label: 'Portainer', icon: ArrowLeft, href: '/' },
   ],
 }
 

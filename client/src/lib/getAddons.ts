@@ -1,4 +1,4 @@
-import { addonToProduct } from '@/lib/addonToProduct.tsx'
+import { addonToProduct, type SwitcherProduct } from '@/lib/addonToProduct.tsx'
 import { apiFetch } from '@/lib/api'
 
 export type AddonsAddonListItem = {
@@ -36,7 +36,7 @@ export const AddonLifecycleStatus = {
 export type AddonLifecycleStatus =
   (typeof AddonLifecycleStatus)[keyof typeof AddonLifecycleStatus]
 
-export function getAddons() {
+export function getAddons(): Promise<SwitcherProduct[]> {
   return apiFetch(null, '/addons')
     .then((response) => response.json())
     .then((response) => {
