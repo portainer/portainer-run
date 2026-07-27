@@ -36,7 +36,7 @@ import type { SwitcherProduct } from '@/lib/addonToProduct.tsx'
 const SELF_PRODUCT: SwitcherProduct = {
   id: 'portainer-run',
   label: 'Portainer-Run',
-  logo: <img src="/assets/addons/portainer-run.png" alt="Portainer-Run logo" />,
+  logo: <img src="/assets/addons/portainer-run.svg" alt="Portainer-Run logo" />,
   description: "Drag'n'drop deployment for Apps",
   available: true,
   path: import.meta.env.BASE_URL,
