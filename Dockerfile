@@ -1,20 +1,20 @@
 # Stage 1: Build the Vite client
-FROM oven/bun:1-alpine AS build-ui
+FROM node:24-alpine AS build-ui
 WORKDIR /build
 COPY client/package.json ./
-RUN bun install
+RUN npm install
 COPY client/ ./
-RUN bun run build
+RUN npm run build
 
 # Stage 2: Install server dependencies
-# bun:sqlite is built into Bun — no native build tools needed
-FROM oven/bun:1-alpine AS build-server
+# node:sqlite is built into Node — no native build tools needed
+FROM node:24-alpine AS build-server
 WORKDIR /deps
 COPY server/package.json ./
-RUN bun install --production
+RUN npm install --omit=dev
 
 # Stage 3: Slim runtime image
-FROM oven/bun:1-alpine AS runtime
+FROM node:24-alpine AS runtime
 RUN apk add --no-cache openssl
 WORKDIR /app
 
@@ -42,4 +42,4 @@ ENV NODE_ENV=production
 ARG PORTAINER_RUN_VERSION=dev
 ENV PORTAINER_RUN_VERSION=$PORTAINER_RUN_VERSION
 
-CMD ["bun", "run", "server/server.js"]
+CMD ["node", "server/server.js"]
