@@ -5,7 +5,7 @@
   "version": "0.0.0",
   "scripts": {
     "dev": "bun run --cwd client dev",
-    "start": "bun run server/server.js",
+    "start": "node server/server.js",
     "build": "bun run --cwd client build",
     "preview": "bun run --cwd client preview",
     "docker:run": "bash scripts/docker-run.sh",
