@@ -18,8 +18,10 @@ const PANEL_SIDE_OFFSET = 8
 
 /**
  * App-owned account menu: user card, appearance toggle, log out.
- * The design-system AccountMenu is not used because it hard-codes extra
- * items (language, settings, help, test connection) we don't want, and the
+ * The design-system AccountMenu is not used because it renders Settings and
+ * Help unconditionally and requires a user email, none of which we want. Its
+ * `hideLanguage`/`hideServerConnection` props cover the other two extra items,
+ * so revisit this if Settings/Help ever become optional upstream; the
  * design-system submodule is read-only. Radix Popover provides the open/close,
  * outside-click, Escape, focus management, and positioning behaviour; styling
  * lives in styles/global.css under `.acm-*`.
