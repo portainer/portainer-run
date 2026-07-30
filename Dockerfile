@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 # Stage 1: Build the Vite client
 FROM node:24-alpine AS build-ui
 WORKDIR /build
