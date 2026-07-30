@@ -2,31 +2,13 @@
 
 A self-service deployment portal for Kubernetes, backed by the Portainer API. Portainer-Run sits between people who can build applications with AI coding tools and the Kubernetes infrastructure those applications need to run on.
 
+Full documentation — requirements, installation, usage, and architecture — is published at **[docs.portainer.ai](https://docs.portainer.ai/)**. This README covers repo-level and contributor-facing detail; treat the docs site as the source of truth for installing and operating Portainer-Run.
+
 ## Quick start
 
-Deploy Portainer-Run then access it at `https://your-ip-address/`.
+Portainer-Run installs as an add-on from within Portainer Business Edition — there is no standalone Docker or Kubernetes-manifest deployment. An administrator installs it via **Administration → Add-ons** in the Portainer UI. See [docs.portainer.ai/requirements](https://docs.portainer.ai/requirements) and [docs.portainer.ai/quick-start](https://docs.portainer.ai/quick-start) for the full prerequisites and install steps.
 
-### Kubernetes
-
-Refer to [deploy/kubernetes.yaml](deploy/kubernetes.yaml).
-
-### Docker Run
-
-```bash
-docker run -d \
-  -p 443:443 \
-  -p 80:80 \
-  -v portainer-run-data:/app/data \
-  -e PORTAINER_URL=https://portainer.example.com:9443 \
-  -e ENCRYPTION_KEY=$(openssl rand -hex 32) \
-  -e ANTHROPIC_API_KEY=your-anthropic-api-key-here \
-  --name portainer-run \
-  portainer/portainer-run:latest
-```
-
-### Docker Compose
-
-Refer to [deploy/docker-compose.yml](deploy/docker-compose.yml).
+Once installed, see [Connecting](#connecting) below for how to reach it.
 
 ## Why this exists
 
@@ -176,19 +158,7 @@ HTTPS runs on port 443 with a self-signed certificate by default. Port 80 redire
 
 ### Session cache and data persistence
 
-The server maintains a SQLite database at `data/portainer-run.db` for git target storage and a file-backed cache at `data/cache.json` for deployment state. Both live under `/app/data` inside the container.
-
-Mount a named Docker volume at `/app/data` to persist data across restarts:
-
-```yaml
-volumes:
-  - portainer-run-data:/app/data
-
-volumes:
-  portainer-run-data:
-```
-
-Do not mount to `/app`: that would override the application itself.
+The server maintains a SQLite database at `data/portainer-run.db` for git target storage and a file-backed cache at `data/cache.json` for deployment state. Both live under `/app/data` inside the container, which the addon system persists across restarts.
 
 `ENCRYPTION_KEY` must be set to the same value on every deploy. Git target credentials are encrypted with this key at rest. A different or missing key on redeploy means existing targets cannot be decrypted and will appear gone.
 
@@ -205,65 +175,9 @@ The container image builds and runs on Node instead (see the `Dockerfile`), so t
 server code stays free of Bun-specific APIs — SQLite comes from `node:sqlite`. Node 22.5
 or newer is required to run `server/server.js` directly.
 
-## Deployment
-
-### Build
-
-```bash
-DOCKER_BUILDKIT=0 docker build -t portainer-run .
-```
-
-### Run examples
-
-Minimal (Anthropic, self-signed certificate, persistent data):
-
-```bash
-docker run -d \
-  -p 443:443 \
-  -p 80:80 \
-  -v portainer-run-data:/app/data \
-  -e PORTAINER_URL=https://portainer.example.com:9443 \
-  -e ENCRYPTION_KEY=change-me-to-a-rand-32-string \
-  -e ANTHROPIC_API_KEY=sk-ant-... \
-  --name portainer-run \
-  portainer/portainer-run:latest
-```
-
-Real TLS certificates:
-
-```bash
-docker run -d \
-  -p 443:443 \
-  -p 80:80 \
-  -v portainer-run-data:/app/data \
-  -v /etc/letsencrypt/live/portainer-run.example.com:/certs:ro \
-  -e PORTAINER_URL=https://portainer.example.com:9443 \
-  -e ENCRYPTION_KEY=change-me-to-a-rand-32-string \
-  -e ANTHROPIC_API_KEY=sk-ant-... \
-  -e SSL_CERT=/certs/fullchain.pem \
-  -e SSL_KEY=/certs/privkey.pem \
-  --name portainer-run \
-  portainer/portainer-run:latest
-```
-
-Custom ports:
-
-```bash
-docker run -d \
-  -p 8443:8443 \
-  -p 8080:8080 \
-  -v portainer-run-data:/app/data \
-  -e PORTAINER_URL=https://portainer.example.com:9443 \
-  -e ENCRYPTION_KEY=change-me-to-a-rand-32-string \
-  -e PORT=8443 \
-  -e HTTP_PORT=8080 \
-  --name portainer-run \
-  portainer/portainer-run:latest
-```
-
-If the container cannot resolve your Portainer hostname (error: `EAI_AGAIN`), add `--dns 8.8.8.8` to the run command.
-
 ## Environment variables
+
+When installed as a Portainer add-on, most of these are populated for you by the Add-ons setup screen (encryption key, API keys, image repository/tag, storage class) — see [docs.portainer.ai/quick-start](https://docs.portainer.ai/quick-start). The table below documents what each variable does at the container level, for anyone customizing the chart or running the server directly.
 
 `PORTAINER_URL` and `ENCRYPTION_KEY` are required. All others are optional.
 
