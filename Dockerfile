@@ -42,4 +42,18 @@ ENV NODE_ENV=production
 ARG PORTAINER_RUN_VERSION=dev
 ENV PORTAINER_RUN_VERSION=$PORTAINER_RUN_VERSION
 
+# Build metadata, supplied by CI (--build-arg GIT_COMMIT=... BUILD_DATE=...).
+ARG GIT_COMMIT=unspecified
+ARG BUILD_DATE=unspecified
+LABEL git_commit=$GIT_COMMIT \
+  org.opencontainers.image.revision=$GIT_COMMIT \
+  org.opencontainers.image.created=$BUILD_DATE \
+  org.opencontainers.image.version=$PORTAINER_RUN_VERSION \
+  org.opencontainers.image.title="Portainer Run" \
+  org.opencontainers.image.description="Portainer Run - a self-service deployment portal for Kubernetes, backed by the Portainer API." \
+  org.opencontainers.image.vendor="Portainer.io" \
+  org.opencontainers.image.url="https://www.portainer.io" \
+  org.opencontainers.image.documentation="https://docs.portainer.io" \
+  io.portainer.portainer-run="true"
+
 CMD ["node", "server/server.js"]

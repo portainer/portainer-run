@@ -92,6 +92,14 @@ jobs:
           submodules: recursive
           token: ${{ steps.fetch-token.outputs.token }}
 
+      - name: '[preparation] capture git commit'
+        id: git-info
+        run: echo "sha=$(git log -1 --format=%h)" >> "$GITHUB_OUTPUT"
+
+      - name: '[preparation] generate build date'
+        id: build-date
+        run: echo "date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+
       - name: '[preparation] set up QEMU'
         uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
 
@@ -114,6 +122,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: |
             PORTAINER_RUN_VERSION=${{ needs.create-release.outputs.version }}
+            GIT_COMMIT=${{ steps.git-info.outputs.sha }}
+            BUILD_DATE=${{ steps.build-date.outputs.date }}
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.create-release.outputs.version }}
           sbom: true
           provenance: mode=max
