@@ -163,12 +163,12 @@ The server exposes a `/env-status/:envId` endpoint that fans out to Kubernetes i
 ## Architecture
 
 ```
-Browser → Bun HTTPS server (server.js) → Portainer API
+Browser → Node HTTPS server (server.js) → Portainer API
                                         → Anthropic API  (if configured)
                                         → OpenAI API     (if configured)
 ```
 
-Portainer-Run is a React and Vite frontend served by a Bun HTTPS server. The server forwards Kubernetes API calls to Portainer (bypassing browser CORS), relays AI requests to the configured provider (keeping the API key server-side), serves the aggregated `/env-status/` endpoint, exposes the `/mcp` MCP endpoint, and maintains a file-backed session cache.
+Portainer-Run is a React and Vite frontend served by a Node HTTPS server. The server forwards Kubernetes API calls to Portainer (bypassing browser CORS), relays AI requests to the configured provider (keeping the API key server-side), serves the aggregated `/env-status/` endpoint, exposes the `/mcp` MCP endpoint, and maintains a file-backed session cache.
 
 User credentials never appear in server logs. AI API keys never reach the browser.
 
@@ -200,6 +200,10 @@ The repo uses [Bun](https://bun.sh) for installs, scripts, and the Vite build.
 bun install
 bun run dev
 ```
+
+The container image builds and runs on Node instead (see the `Dockerfile`), so the
+server code stays free of Bun-specific APIs — SQLite comes from `node:sqlite`. Node 22.5
+or newer is required to run `server/server.js` directly.
 
 ## Deployment
 

@@ -1,4 +1,4 @@
-import { Database } from 'bun:sqlite'
+import { DatabaseSync } from 'node:sqlite'
 import path from 'node:path'
 import fs from 'node:fs'
 import { projectRoot } from '../config.js'
@@ -10,7 +10,10 @@ if (!fs.existsSync(DB_DIR)) {
   fs.mkdirSync(DB_DIR, { recursive: true })
 }
 
-const db = new Database(DB_PATH, { create: true })
+// node:sqlite creates the file if it does not exist. Rows come back as
+// null-prototype objects, so read columns directly — no Object.prototype
+// helpers (hasOwnProperty and friends) on a row.
+const db = new DatabaseSync(DB_PATH)
 
 // Enable WAL mode for better concurrent read performance
 db.exec('PRAGMA journal_mode = WAL')
