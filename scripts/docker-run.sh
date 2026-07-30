@@ -6,9 +6,8 @@ cd "$ROOT"
 
 IMAGE="${IMAGE:-portainer-run:local}"
 NAME="${NAME:-portainer-run}"
-# Host ports default to non-privileged values; override e.g. HOST_HTTPS=443 HOST_HTTP=80
-HOST_HTTPS="${HOST_HTTPS:-9443}"
-HOST_HTTP="${HOST_HTTP:-9080}"
+# Host port for the container's plain-HTTP listener; override e.g. HOST_PORT=3000
+HOST_PORT="${HOST_PORT:-8080}"
 ENV_FILE="${ENV_FILE:-$ROOT/.env}"
 
 echo "Building ${IMAGE}…"
@@ -17,7 +16,7 @@ docker build -t "$IMAGE" .
 echo "Removing existing container ${NAME} (if any)…"
 docker rm -f "$NAME" 2>/dev/null || true
 
-echo "Starting ${NAME} (https://localhost:${HOST_HTTPS}/)…"
+echo "Starting ${NAME} (http://localhost:${HOST_PORT}/)…"
 ENV_FILE_ARGS=()
 if [[ -f "$ENV_FILE" ]]; then
   echo "Using --env-file ${ENV_FILE}"
@@ -28,8 +27,7 @@ fi
 # shellcheck disable=SC2086
 docker run -d \
   --name "$NAME" \
-  -p "${HOST_HTTPS}:443" \
-  -p "${HOST_HTTP}:80" \
+  -p "${HOST_PORT}:8080" \
   "${ENV_FILE_ARGS[@]}" \
   ${DOCKER_RUN_EXTRA:-} \
   "$IMAGE"

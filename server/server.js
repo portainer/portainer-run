@@ -1,19 +1,12 @@
 import http from 'node:http'
-import https from 'node:https'
 import {
-  ANTHROPIC_KEY,
   AI_PROVIDER,
   CACHE_FILE,
-  HTTP_PORT,
-  OPENAI_KEY,
   PORT,
   PORTAINER_URL,
-  SERVE_HTTP,
-  SSL_CERT_PATH,
   BASE_DOMAIN,
 } from './config.js'
 import { handleRequest } from './handler.js'
-import { loadTlsOptions } from './tls.js'
 
 function onError(e) {
   const err = e
@@ -34,63 +27,21 @@ function onError(e) {
   process.exit(1)
 }
 
-if (SERVE_HTTP) {
-  // Addon-gateway mode: TLS terminates at the gateway; we serve plain HTTP.
-  const httpServer = http.createServer(handleRequest)
-  httpServer.listen(PORT, () => {
-    console.log('\n✅  Portainer-Run started (HTTP addon mode)')
-    console.log(`    UI:        http://localhost:${PORT}`)
-    console.log(`    Portainer: ${PORTAINER_URL}`)
-    console.log(
-      `    AI triage: ${AI_PROVIDER ? AI_PROVIDER + ' ✓' : '✗ not set'}`,
-    )
-    console.log(`    Cache:     ${CACHE_FILE}`)
-    console.log(
-      `    Domain:    ${BASE_DOMAIN || '(not set — NodePort fallback)'}\n`,
-    )
-  })
-  httpServer.on('error', onError)
-} else {
-  const tlsOptions = loadTlsOptions()
-  const httpsServer = https.createServer(tlsOptions, handleRequest)
+// TLS terminates at the proxy in front of us (the Portainer addon gateway in
+// production), which forwards plain HTTP, so this server never speaks HTTPS.
+const httpServer = http.createServer(handleRequest)
 
-  httpsServer.listen(PORT, () => {
-    console.log('\n✅  Portainer-Run started')
-    console.log(
-      `    UI:        https://localhost${PORT !== 443 ? ':' + PORT : ''}`,
-    )
-    console.log(`    Portainer: ${PORTAINER_URL}`)
-    console.log(
-      `    AI triage: ${AI_PROVIDER ? AI_PROVIDER + ' ✓' : '✗ not set (set ANTHROPIC_API_KEY or OPENAI_API_KEY)'}`,
-    )
-    console.log(
-      `    TLS:       ${SSL_CERT_PATH ? 'provided certs' : 'self-signed (portainer-run.crt)'}`,
-    )
-    console.log(`    Cache:     ${CACHE_FILE}`)
-    console.log(
-      `    Domain:    ${BASE_DOMAIN || '(not set — NodePort fallback)'}`,
-    )
-    if (HTTP_PORT > 0) {
-      console.log(`    HTTP ${HTTP_PORT} → redirecting to HTTPS\n`)
-    } else {
-      console.log('    HTTP redirect: disabled (HTTP_PORT=0)\n')
-    }
-  })
+httpServer.listen(PORT, () => {
+  console.log('\n✅  Portainer-Run started')
+  console.log(`    UI:        http://localhost:${PORT}`)
+  console.log(`    Portainer: ${PORTAINER_URL}`)
+  console.log(
+    `    AI triage: ${AI_PROVIDER ? AI_PROVIDER + ' ✓' : '✗ not set (set ANTHROPIC_API_KEY or OPENAI_API_KEY)'}`,
+  )
+  console.log(`    Cache:     ${CACHE_FILE}`)
+  console.log(
+    `    Domain:    ${BASE_DOMAIN || '(not set — NodePort fallback)'}\n`,
+  )
+})
 
-  httpsServer.on('error', onError)
-
-  if (HTTP_PORT > 0) {
-    const redirectServer = http.createServer((req, res) => {
-      const host = (req.headers.host || 'localhost').replace(/:\d+$/, '')
-      const target = `https://${host}${PORT !== 443 ? ':' + PORT : ''}${req.url || '/'}`
-      res.writeHead(301, { Location: target })
-      res.end()
-    })
-    redirectServer.listen(HTTP_PORT, () => {})
-    redirectServer.on('error', (e) => {
-      console.warn(
-        `⚠️   HTTP redirect on port ${HTTP_PORT} unavailable: ${e.message}`,
-      )
-    })
-  }
-}
+httpServer.on('error', onError)

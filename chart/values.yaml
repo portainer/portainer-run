@@ -14,7 +14,7 @@ storageClass: '' # Optional. StorageClass for the session-cache PVC. Empty uses 
 # container via envFrom. The MCP config flow reads this ConfigMap by that fixed
 # name through the Portainer API, so keep any keys you add here as env keys.
 #
-# PORTAINER_URL, PORT, HTTP_PORT and SERVE_HTTP are baked into the templates
+# PORTAINER_URL and PORT are baked into the templates
 # (chart/templates/_helpers.tpl) with in-cluster defaults, so they're kept out
 # of this list. Override any of them — or set any other env key — with
 # `--set configMap.<KEY>=...` (or an overrides file) without a template change.

@@ -23,7 +23,6 @@ FROM node:24-alpine AS runtime
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-v* \
       /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg
 
-RUN apk add --no-cache openssl
 WORKDIR /app
 
 # Client build artifacts
@@ -40,8 +39,8 @@ COPY --from=build-server /deps/node_modules ./server/node_modules
 #   -v portainer-run-data:/app/data
 RUN mkdir -p /app/data
 
-EXPOSE 443
-EXPOSE 80
+# Plain HTTP only — TLS terminates at the proxy in front of this container.
+EXPOSE 8080
 
 ENV NODE_ENV=production
 

@@ -145,16 +145,22 @@ The server exposes a `/env-status/:envId` endpoint that fans out to Kubernetes i
 ## Architecture
 
 ```
-Browser → Node HTTPS server (server.js) → Portainer API
-                                        → Anthropic API  (if configured)
-                                        → OpenAI API     (if configured)
+Browser → TLS-terminating proxy → Node HTTP server (server.js) → Portainer API
+                                                               → Anthropic API  (if configured)
+                                                               → OpenAI API     (if configured)
 ```
 
-Portainer-Run is a React and Vite frontend served by a Node HTTPS server. The server forwards Kubernetes API calls to Portainer (bypassing browser CORS), relays AI requests to the configured provider (keeping the API key server-side), serves the aggregated `/env-status/` endpoint, exposes the `/mcp` MCP endpoint, and maintains a file-backed session cache.
+Portainer-Run is a React and Vite frontend served by a Node HTTP server. The server forwards Kubernetes API calls to Portainer (bypassing browser CORS), relays AI requests to the configured provider (keeping the API key server-side), serves the aggregated `/env-status/` endpoint, exposes the `/mcp` MCP endpoint, and maintains a file-backed session cache.
 
 User credentials never appear in server logs. AI API keys never reach the browser.
 
-HTTPS runs on port 443 with a self-signed certificate by default. Port 80 redirects to HTTPS. Real certificates can be provided at runtime.
+### TLS
+
+The server speaks plain HTTP only, on port `8080` by default. It never terminates TLS and holds no certificates or private keys.
+
+HTTPS is the responsibility of whatever sits in front of it — the Portainer addon gateway, which terminates TLS and proxies plain HTTP to this container.
+
+The default port is deliberately unprivileged so the container can run as a non-root user.
 
 ### Session cache and data persistence
 
@@ -191,11 +197,7 @@ When installed as a Portainer add-on, most of these are populated for you by the
 | `OPENAI_MODEL`      | `gpt-4o`   | OpenAI model override.                                                                                                                             |
 | `BASE_DOMAIN`       | (none)     | Base domain for Ingress exposure. If set, the deploy flow defaults the Ingress host to `appname.BASE_DOMAIN`.                                      |
 | `GATEWAY_URL`       | (none)     | File relay gateway for staged uploads. When set, large deploy uploads use the gateway instead of inline MCP transfer.                              |
-| `PORT`              | `443`      | HTTPS listen port inside the container.                                                                                                            |
-| `HTTP_PORT`         | `80`       | HTTP redirect port inside the container.                                                                                                           |
-| `SSL_CERT`          | (none)     | Path to TLS certificate file. Uses self-signed if not set.                                                                                         |
-| `SSL_KEY`           | (none)     | Path to TLS private key file. Uses self-signed if not set.                                                                                         |
-| `SSL_CERT_DIR`      | `/app`     | Directory for self-signed certificate storage.                                                                                                     |
+| `PORT`              | `8080`     | Plain-HTTP listen port inside the container. TLS terminates at the proxy in front of it.                                                           |
 
 `PORTAINER_RUN_VERSION` is not a runtime setting. It is a Docker build argument, set by the CI and release workflows at image build time, and surfaced read-only in the sidebar. Local builds default it to `dev`.
 

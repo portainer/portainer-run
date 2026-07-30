@@ -9,10 +9,8 @@ spec:
   selector:
     {{- include "portainer-run.selectorLabels" . | nindent 4 }}
   ports:
-    - name: https
-      port: 443
-      targetPort: https
-      protocol: TCP
+    # Service port stays 80 so the addon gateway's target is unchanged; the
+    # container itself listens on the unprivileged containerPort behind it.
     - name: http
       port: 80
       targetPort: http

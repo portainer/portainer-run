@@ -32,12 +32,9 @@ export const AI_PROVIDER =
   process.env.AI_PROVIDER ||
   (ANTHROPIC_KEY ? 'anthropic' : OPENAI_KEY ? 'openai' : '')
 export const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o'
-export const PORT = parseInt(process.env.PORT || '443', 10)
-export const HTTP_PORT = parseInt(process.env.HTTP_PORT || '80', 10)
-export const SERVE_HTTP = process.env.SERVE_HTTP === '1'
-export const SSL_CERT_PATH = process.env.SSL_CERT || ''
-export const SSL_KEY_PATH = process.env.SSL_KEY || ''
-export const CERT_DIR = process.env.SSL_CERT_DIR || projectRoot
+// Plain HTTP only — TLS terminates at the proxy in front of us. Defaults to an
+// unprivileged port so the container can run as a non-root user.
+export const PORT = parseInt(process.env.PORT || '8080', 10)
 export const CACHE_DIR = process.env.CACHE_DIR || path.join(projectRoot, 'data')
 export const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || ''
 
