@@ -82,6 +82,10 @@ export async function handleVibe(req, res, pathname) {
     return handleVibeDeleteManifest(req, res)
   }
 
+  if (pathname === '/api/vibe/delete-stack' && req.method === 'POST') {
+    return handleVibeDeleteStack(req, res)
+  }
+
   return null
 }
 
@@ -1665,5 +1669,68 @@ async function handleVibeDeleteManifest(req, res) {
   } catch (err) {
     console.error('[vibe delete-manifest error]', err.message || err)
     return json(res, 502, { error: err.message || 'Delete failed' })
+  }
+}
+
+/**
+ * Delete the Portainer stack that owns an app, which tears down every resource
+ * declared in its manifest (Deployment, Service, Ingress, PVC).
+ *
+ * This is the counterpart to createPortainerGitOpsStack. Deleting only the
+ * Kubernetes resources used to leave the stack record behind, still polling git
+ * on its auto-update interval: because that poll compares the branch head
+ * against the stack's last deployed commit, the next deploy of any *other* app
+ * moved the shared manifests branch and the orphaned stack re-applied the
+ * manifest of the app that had been deleted.
+ *
+ * `external=false` is required — `external=true` means "external Swarm stack"
+ * and takes an entirely different code path. `endpointId` is mandatory.
+ */
+async function handleVibeDeleteStack(req, res) {
+  const body = await readBody(req)
+  const data = parseJson(body)
+  if (!data) return json(res, 400, { error: 'Invalid request body' })
+
+  const { envId, stackId } = data
+  if (!envId || !stackId) {
+    return json(res, 400, { error: 'envId and stackId are required' })
+  }
+  // Portainer stamps the id on the resource as a string label; keep it numeric
+  // so a malformed value can't be interpolated into the request path.
+  const numericStackId = parseInt(String(stackId), 10)
+  const numericEnvId = parseInt(String(envId), 10)
+  if (!Number.isInteger(numericStackId) || numericStackId <= 0) {
+    return json(res, 400, { error: `Invalid stackId: ${stackId}` })
+  }
+  if (!Number.isInteger(numericEnvId) || numericEnvId <= 0) {
+    return json(res, 400, { error: `Invalid envId: ${envId}` })
+  }
+
+  const target = resolvePortainerTarget()
+  if (!target)
+    return json(res, 502, { error: 'Cannot resolve Portainer target' })
+
+  try {
+    await portainerRequest(
+      target,
+      extractToken(req),
+      'DELETE',
+      `/api/stacks/${numericStackId}?endpointId=${numericEnvId}&external=false`,
+    )
+    return json(res, 200, { ok: true })
+  } catch (err) {
+    // 404 means the stack is already gone — the caller's goal is met.
+    if (err?.status === 404)
+      return json(res, 200, { ok: true, alreadyGone: true })
+    console.error('[vibe delete-stack error]', {
+      message: err?.message || String(err),
+      status: err?.status,
+      stackId: numericStackId,
+      envId: numericEnvId,
+    })
+    return json(res, 502, {
+      error: err?.message || 'Stack deletion failed',
+      status: err?.status || null,
+    })
   }
 }

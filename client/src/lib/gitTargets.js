@@ -122,3 +122,26 @@ export function deleteAppPaths({ gitTargetId, branch, paths, appName }) {
     body: JSON.stringify({ gitTargetId, branch, paths, appName }),
   })
 }
+
+/**
+ * Delete the Portainer stack that owns an app. Portainer's own teardown removes
+ * every resource declared in the stack's manifest, so this replaces deleting
+ * those resources one by one through the Kubernetes API.
+ *
+ * @param {{ envId: string|number, stackId: string|number }} args
+ */
+export async function deleteAppStack({ envId, stackId }) {
+  const data = await serverFetch('/api/vibe/delete-stack', {
+    method: 'POST',
+    body: JSON.stringify({ envId: String(envId), stackId: String(stackId) }),
+  })
+  // A 200 is not sufficient proof the stack was deleted. Unknown backend routes
+  // fall through to the SPA's index.html, which is also served with a 200 — so a
+  // missing or misrouted endpoint parses as {} and would otherwise read as
+  // success, silently skipping teardown while the caller reports the app gone.
+  if (data?.ok !== true) {
+    throw new Error(
+      'Unexpected response from delete-stack — the endpoint may be missing or misrouted',
+    )
+  }
+}

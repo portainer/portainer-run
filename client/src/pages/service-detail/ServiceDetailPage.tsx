@@ -30,6 +30,7 @@ import { patchDeploymentReplicas } from '../../lib/patchDeploymentReplicas.js'
 import { restartDeployment } from '../../lib/restartDeployment.js'
 import { checkEnvPermissions } from '../../lib/envPermissions.js'
 import { refreshCache } from '../../services/refreshDeployments.js'
+import { STACK_ID_LABEL } from '../../services/deleteApp.js'
 import { errMessage } from '../../lib/errors'
 import { MONO_FONT, TabPanel } from './detailUi'
 import { ServiceDetailLogsTab } from './ServiceDetailLogsTab'
@@ -432,6 +433,9 @@ export function ServiceDetailPage() {
                       envId: String(envId),
                       ns: namespace,
                       name,
+                      // Stamped by Portainer on everything it deploys through a
+                      // stack, so this resolves for pre-existing apps too.
+                      stackId: d?.metadata?.labels?.[STACK_ID_LABEL] || null,
                       gitTargetId:
                         d?.metadata?.annotations?.[
                           'portainer-run/git-target-id'
