@@ -15,6 +15,12 @@ RUN npm install --omit=dev
 
 # Stage 3: Slim runtime image
 FROM node:24-alpine AS runtime
+
+# Not needed at runtime (only used to install deps during the build stages) — strip them to
+# shrink the image and reduce CVE surface.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-v* \
+      /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg
+
 RUN apk add --no-cache openssl
 WORKDIR /app
 
