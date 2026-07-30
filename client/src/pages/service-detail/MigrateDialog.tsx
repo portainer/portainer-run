@@ -13,24 +13,13 @@ import { Select } from '@ds/v3-components/Select/Select'
 
 import { useAppStore } from '../../store/useAppStore.js'
 import { serviceDetailPath } from '../../lib/routes.js'
-import { kubeFetch } from '../../lib/api.js'
 import { refreshCache } from '../../services/refreshDeployments.js'
-import { loadDeployFormFromCluster } from '../../lib/deployFormLoadFromCluster.js'
-import {
-  buildK8sContainer,
-  executeDeploy,
-  fetchNamespaceOptions,
-  readVolumeDefForDeploy,
-} from '../../lib/deployK8s.js'
-import { withDefaultCnames } from '../../lib/deployFormModel.js'
+import { fetchNamespaceOptions } from '../../lib/deployK8s.js'
+import { getGitTarget, migrateApp } from '../../lib/gitTargets.js'
+import { STACK_ID_LABEL } from '../../services/deleteApp.js'
 import { MONO_FONT } from './detailUi'
 import { errMessage } from '../../lib/errors'
-
-/** Deploy-form container model produced by the JS deploy pipeline. */
-interface DeployFormContainer {
-  id: string
-  [key: string]: unknown
-}
+import type { Deployment } from '../../types/k8s'
 
 interface MigrateDialogProps {
   open: boolean
@@ -41,6 +30,12 @@ interface MigrateDialogProps {
   namespace: string
   name: string
   visEnvs: { Id: number; Name: string }[]
+  /**
+   * The source app's live Deployment. Migrate reads its GitOps annotations and
+   * Portainer's stack-id label from here, so it can recreate the app as a stack
+   * rather than as loose Kubernetes resources.
+   */
+  deployment: Deployment | null
 }
 
 /**
@@ -55,9 +50,20 @@ export function MigrateDialog({
   namespace,
   name,
   visEnvs,
+  deployment,
 }: MigrateDialogProps) {
   const navigate = useNavigate()
   const pushToast = useAppStore((s) => s.pushToast)
+
+  const ann = deployment?.metadata?.annotations || {}
+  const gitTargetId = ann['portainer-run/git-target-id'] || ''
+  const gitBranch = ann['portainer-run/git-branch'] || ''
+  const gitPath = ann['portainer-run/git-path'] || ''
+  const vibeSourcePath = ann['portainer-run/vibe-source-path'] || null
+  const stackId = deployment?.metadata?.labels?.[STACK_ID_LABEL] || null
+  // Only GitOps-deployed apps can be migrated as stacks. Anything else has no
+  // manifest to copy, so there is nothing to recreate in the target.
+  const canMigrate = Boolean(gitTargetId && gitBranch && gitPath)
 
   const [migrateEnvId, setMigrateEnvId] = useState(String(envId || ''))
   const [migrateNamespace, setMigrateNamespace] = useState('')
@@ -163,66 +169,45 @@ export function MigrateDialog({
         pushToast('Pick a different environment and/or namespace', 'err')
         return
       }
+      if (!canMigrate) {
+        pushToast(
+          'This app has no GitOps manifest, so it cannot be migrated',
+          'err',
+        )
+        return
+      }
       setMigratePending(true)
       try {
-        const loaded = await loadDeployFormFromCluster(
-          token,
-          String(envId),
-          namespace,
-          name,
-        )
-        const forBuild: DeployFormContainer[] = withDefaultCnames(
-          loaded.containers || [],
-        )
-        const pairs = forBuild
-          .map((c) => {
-            const spec = buildK8sContainer(c)
-            return spec ? { id: c.id, spec } : null
-          })
-          .filter((p): p is { id: string; spec: object } => p !== null)
-        if (!pairs.length) throw new Error('No containers found to migrate')
-        const volDefs = forBuild
-          .map((c) => readVolumeDefForDeploy(c))
-          .filter((v): v is NonNullable<typeof v> => v !== null)
-        const servicePorts = (loaded.svcPorts || [])
-          .map((p: unknown) => parseInt(String(p), 10))
-          .filter((n: number) => n > 0)
-        const deployOptions = {
-          envId: targetEnv,
-          ns: targetNs,
-          appName: name,
-          instances: Math.max(
-            0,
-            Math.min(100, parseInt(String(loaded.instances), 10) || 1),
-          ),
-          containerSpecs: pairs.map((p) => p.spec),
-          containerRowIds: pairs.map((p) => p.id),
-          volumeDefs: volDefs,
-          exposeType: loaded.exposeType || 'none',
-          servicePorts,
-          ingress: {
-            host: (loaded.ingHost || '').trim(),
-            path: (loaded.ingPath || '/').trim() || '/',
-            port: loaded.ingPort || 80,
-            ingressClass: (loaded.ingClass || '').trim(),
-          },
-        }
-        await executeDeploy(token, deployOptions)
-        if (mode === 'move') {
-          const del = await kubeFetch(
-            token,
-            String(envId),
-            `/apis/apps/v1/namespaces/${namespace}/deployments/${name}`,
-            { method: 'DELETE' },
-          )
-          if (!del.ok && del.status !== 404) {
-            throw new Error(
-              'Cloned successfully, but delete failed (HTTP ' +
-                del.status +
-                ')',
-            )
+        // The manifest path is built from the git target's configured prefix, the
+        // same way the deploy flow builds it.
+        const targetName =
+          visEnvs.find((e) => String(e.Id) === targetEnv)?.Name || targetEnv
+        let pathPrefix = ''
+        try {
+          const t = (await getGitTarget(gitTargetId)) as {
+            connection?: { payload?: { pathPrefix?: string } }
           }
+          pathPrefix = t?.connection?.payload?.pathPrefix || ''
+        } catch {
+          /* non-fatal — an empty prefix matches the default deploy layout */
         }
+
+        await migrateApp({
+          mode,
+          gitTargetId,
+          branch: gitBranch,
+          pathPrefix,
+          pollInterval: '5m',
+          source: {
+            envId: String(envId),
+            ns: namespace,
+            appName: name,
+            gitPath,
+            vibeSourcePath,
+            stackId,
+          },
+          target: { envId: targetEnv, envName: targetName, ns: targetNs },
+        })
         onClose()
         await refreshCache(false)
         pushToast(
@@ -257,6 +242,13 @@ export function MigrateDialog({
       pushToast,
       navigate,
       onClose,
+      canMigrate,
+      gitTargetId,
+      gitBranch,
+      gitPath,
+      vibeSourcePath,
+      stackId,
+      visEnvs,
     ],
   )
 
@@ -267,9 +259,23 @@ export function MigrateDialog({
         <div style={{ display: 'grid', gap: 12 }}>
           <div style={{ color: 'var(--muted)', fontSize: 13 }}>
             You can <strong>clone</strong> this stack to a new location, or{' '}
-            <strong>move</strong> it. Moving may have downtime because the
-            source deployment is removed after the target is created.
+            <strong>move</strong> it. Either way the app is recreated as a stack
+            in the target, with its own copy of the source. Moving removes the
+            source stack and its Git entries once the target exists, so there
+            may be downtime.
           </div>
+          {!canMigrate && (
+            <div
+              style={{
+                fontSize: 13,
+                color: 'var(--status-danger, #f04438)',
+              }}
+            >
+              This app has no GitOps manifest, so there is nothing to recreate
+              in the target. Migrate is only available for apps deployed through
+              the Deploy flow.
+            </div>
+          )}
           <FormControl label="Target environment">
             <Select
               value={migrateEnvId}
@@ -342,14 +348,14 @@ export function MigrateDialog({
         </Button>
         <Button
           onClick={() => void runMigrate('clone')}
-          disabled={migratePending}
+          disabled={migratePending || !canMigrate}
         >
           {migratePending ? 'Working…' : 'Clone'}
         </Button>
         <Button
           color="danger"
           onClick={() => void runMigrate('move')}
-          disabled={migratePending}
+          disabled={migratePending || !canMigrate}
         >
           {migratePending ? 'Working…' : 'Move'}
         </Button>

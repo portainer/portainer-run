@@ -6,6 +6,7 @@ import {
   ensureBranch,
   buildRepoHttpsUrl,
   fetchFile,
+  listFiles,
   deleteFile,
   deleteDirectory,
   deletePaths,
@@ -84,6 +85,10 @@ export async function handleVibe(req, res, pathname) {
 
   if (pathname === '/api/vibe/delete-stack' && req.method === 'POST') {
     return handleVibeDeleteStack(req, res)
+  }
+
+  if (pathname === '/api/vibe/migrate' && req.method === 'POST') {
+    return handleVibeMigrate(req, res)
   }
 
   return null
@@ -1706,22 +1711,13 @@ async function handleVibeDeleteStack(req, res) {
     return json(res, 400, { error: `Invalid envId: ${envId}` })
   }
 
-  const target = resolvePortainerTarget()
-  if (!target)
-    return json(res, 502, { error: 'Cannot resolve Portainer target' })
-
   try {
-    await portainerRequest(
-      target,
-      extractToken(req),
-      'DELETE',
-      `/api/stacks/${numericStackId}?endpointId=${numericEnvId}&external=false`,
-    )
-    return json(res, 200, { ok: true })
+    const alreadyGone = await deletePortainerStack(req, {
+      envId: numericEnvId,
+      stackId: numericStackId,
+    })
+    return json(res, 200, { ok: true, ...(alreadyGone ? { alreadyGone } : {}) })
   } catch (err) {
-    // 404 means the stack is already gone — the caller's goal is met.
-    if (err?.status === 404)
-      return json(res, 200, { ok: true, alreadyGone: true })
     console.error('[vibe delete-stack error]', {
       message: err?.message || String(err),
       status: err?.status,
@@ -1732,5 +1728,368 @@ async function handleVibeDeleteStack(req, res) {
       error: err?.message || 'Stack deletion failed',
       status: err?.status || null,
     })
+  }
+}
+
+/**
+ * Delete a Portainer stack, whose teardown removes every resource declared in
+ * its manifest.
+ *
+ * `external=false` is required — `external=true` means "external Swarm stack"
+ * and takes an entirely different code path. `endpointId` is mandatory.
+ *
+ * @returns {Promise<boolean>} true when the stack was already gone (404)
+ */
+async function deletePortainerStack(req, { envId, stackId }) {
+  const target = resolvePortainerTarget()
+  if (!target) throw new Error('Cannot resolve Portainer target')
+  try {
+    await portainerRequest(
+      target,
+      extractToken(req),
+      'DELETE',
+      `/api/stacks/${stackId}?endpointId=${envId}&external=false`,
+    )
+    return false
+  } catch (err) {
+    // 404 means the stack is already gone — the caller's goal is met.
+    if (err?.status === 404) return true
+    throw err
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Migrate (clone / move an app to another environment or namespace)
+// ---------------------------------------------------------------------------
+
+/**
+ * Read a Kubernetes Secret's data map (base64 values decoded to plain strings).
+ * Returns null when the Secret does not exist.
+ */
+async function readKubernetesSecret(req, { envId, ns, name }) {
+  const target = resolvePortainerTarget()
+  if (!target) throw new Error('Cannot resolve Portainer target')
+  try {
+    const secret = await portainerRequest(
+      target,
+      extractToken(req),
+      'GET',
+      `/api/endpoints/${envId}/kubernetes/api/v1/namespaces/${ns}/secrets/${name}`,
+    )
+    const data = secret?.data || {}
+    const out = {}
+    for (const [k, v] of Object.entries(data)) {
+      out[k] = Buffer.from(String(v), 'base64').toString('utf8')
+    }
+    return Object.keys(out).length ? out : null
+  } catch (err) {
+    if (err?.status === 404) return null
+    throw err
+  }
+}
+
+/**
+ * Recursively read every file under `dirPath` in the repo.
+ *
+ * File contents come back as utf8 strings, matching how the deploy flow commits
+ * them — binary files in a source tree are not preserved.
+ *
+ * @returns {Promise<{path: string, content: string}[]>} paths relative to dirPath
+ */
+async function readGitTree(payload, branch, dirPath, prefix = '') {
+  const entries = await listFiles(payload, branch, dirPath)
+  const out = []
+  for (const entry of entries) {
+    const childRepoPath = `${dirPath}/${entry.path}`
+    const childRelPath = prefix ? `${prefix}/${entry.path}` : entry.path
+    if (entry.type === 'dir') {
+      out.push(
+        ...(await readGitTree(payload, branch, childRepoPath, childRelPath)),
+      )
+    } else {
+      out.push({
+        path: childRelPath,
+        content: await fetchFile(payload, branch, childRepoPath),
+      })
+    }
+  }
+  return out
+}
+
+/**
+ * Point a committed manifest at a new namespace and source path.
+ *
+ * The manifest is edited structurally rather than rebuilt from deploy params:
+ * rebuilding would mean recovering every field (resources, secretKeyRefs,
+ * security contexts, ingress config) from cluster state and silently dropping
+ * anything not modelled. Only what must change is touched.
+ *
+ * @param {string} yamlContent  the source app's committed manifest
+ * @param {{ns: string, manifestPath: string, sourcePath: string, oldSourcePath: string}} to
+ * @returns {object[]} manifest documents ready for serializeManifests
+ */
+function retargetManifest(yamlContent, to) {
+  const docs = yaml.loadAll(yamlContent).filter(Boolean)
+  if (docs.length === 0) throw new Error('Source manifest is empty')
+
+  for (const doc of docs) {
+    if (doc?.metadata) doc.metadata.namespace = to.ns
+
+    const ann = doc?.metadata?.annotations
+    if (ann) {
+      if (ann['portainer-run/git-path']) {
+        ann['portainer-run/git-path'] = to.manifestPath
+      }
+      if (ann['portainer-run/vibe-source-path']) {
+        ann['portainer-run/vibe-source-path'] = to.sourcePath
+      }
+    }
+
+    // The clone init container copies the source tree out of the cloned repo by
+    // literal path (`cp -r /tmp/repo/<sourcePath>/. <workDir>/`), so it has to
+    // follow the source to its new location.
+    const initContainers = doc?.spec?.template?.spec?.initContainers
+    if (Array.isArray(initContainers) && to.oldSourcePath) {
+      for (const ic of initContainers) {
+        if (!Array.isArray(ic?.command)) continue
+        ic.command = ic.command.map((part) =>
+          typeof part === 'string'
+            ? part
+                .split(`/tmp/repo/${to.oldSourcePath}/`)
+                .join(`/tmp/repo/${to.sourcePath}/`)
+            : part,
+        )
+      }
+    }
+  }
+
+  return docs
+}
+
+/**
+ * POST /api/vibe/migrate
+ *
+ * Clone or move an app to another environment/namespace as a Portainer stack.
+ *
+ * Migrate used to write a Deployment, PVCs and a Service straight to the
+ * Kubernetes API, so the result had no stack, no committed manifest and none of
+ * the portainer-run annotations — invisible to Portainer as an application and
+ * unusable by the Edit tab. It now copies the source tree and manifest into the
+ * target's git location and creates a real stack there, so a migrated app is
+ * indistinguishable from a freshly deployed one.
+ *
+ * Body: {
+ *   mode: 'clone' | 'move',
+ *   gitTargetId, branch, pathPrefix?, pollInterval?,
+ *   source: { envId, ns, appName, gitPath, vibeSourcePath?, stackId? },
+ *   target: { envId, envName, ns }
+ * }
+ */
+async function handleVibeMigrate(req, res) {
+  const body = await readBody(req)
+  const data = parseJson(body)
+  if (!data) return json(res, 400, { error: 'Invalid request body' })
+
+  const {
+    mode,
+    gitTargetId,
+    branch,
+    pathPrefix,
+    pollInterval,
+    source,
+    target,
+  } = data
+
+  if (mode !== 'clone' && mode !== 'move') {
+    return json(res, 400, { error: "mode must be 'clone' or 'move'" })
+  }
+  if (!gitTargetId || !branch || !source || !target) {
+    return json(res, 400, {
+      error: 'gitTargetId, branch, source and target are required',
+    })
+  }
+  if (!source.appName || !source.ns || !source.envId || !source.gitPath) {
+    return json(res, 400, {
+      error:
+        'source.appName, source.ns, source.envId and source.gitPath are required',
+    })
+  }
+  if (!target.envId || !target.ns) {
+    return json(res, 400, { error: 'target.envId and target.ns are required' })
+  }
+  if (
+    String(source.envId) === String(target.envId) &&
+    source.ns === target.ns
+  ) {
+    return json(res, 400, {
+      error: 'Target must differ from the source environment/namespace',
+    })
+  }
+
+  const conn = getConnectionById(gitTargetId)
+  if (!conn) return json(res, 404, { error: 'Git target not found' })
+  const caller = await resolveCallerIdentity(req)
+  if (
+    !caller?.isAdmin &&
+    conn.owner_id !== (caller?.userId || '_unknown') &&
+    !conn.shared
+  ) {
+    return json(res, 403, { error: 'Forbidden — git target not accessible' })
+  }
+
+  const safeApp = sanitizeStackName(source.appName)
+  const safeSourceNs = source.ns
+  const safeTargetNs = target.ns
+  const oldSourcePath = sanitizeGitPath(source.vibeSourcePath || '')
+  const oldManifestPath = sanitizeGitPath(source.gitPath)
+
+  // Target paths mirror the deploy flow: <prefix>/<envName>/<ns>/<app>.yaml and
+  // <prefix>/<envName>/<ns>/<app>/src/
+  const envPrefix = [
+    sanitizeGitPath(pathPrefix || ''),
+    sanitizeStackName(target.envName || String(target.envId)),
+  ]
+    .filter(Boolean)
+    .join('/')
+  const newManifestPath = sanitizeGitPath(
+    buildManifestPath({
+      pathPrefix: envPrefix,
+      ns: safeTargetNs,
+      appName: safeApp,
+    }),
+  )
+  const newSourcePath = sanitizeGitPath(
+    [envPrefix, safeTargetNs, safeApp, 'src'].filter(Boolean).join('/'),
+  )
+
+  if (newManifestPath === oldManifestPath) {
+    return json(res, 400, {
+      error: `Target resolves to the same manifest path as the source (${newManifestPath})`,
+    })
+  }
+
+  try {
+    await ensureBranch(conn.payload, branch)
+
+    // 1. Read the source manifest — the source of truth for what to recreate.
+    const sourceYaml = await fetchFile(conn.payload, branch, oldManifestPath)
+
+    // 2. Copy the source tree so the clone owns its own files and editing one
+    //    app's source never changes the other.
+    const commits = []
+    if (oldSourcePath) {
+      const tree = await readGitTree(conn.payload, branch, oldSourcePath)
+      for (const f of tree) {
+        commits.push({ path: `${newSourcePath}/${f.path}`, content: f.content })
+      }
+    }
+
+    // 3. Retarget and commit the manifest alongside the copied source, in a
+    //    single commit so the stack never sees a manifest without its source.
+    const docs = retargetManifest(sourceYaml, {
+      ns: safeTargetNs,
+      manifestPath: newManifestPath,
+      sourcePath: oldSourcePath ? newSourcePath : '',
+      oldSourcePath,
+    })
+    commits.push({
+      path: newManifestPath,
+      content: serializeManifests(docs),
+    })
+
+    await commitFiles(
+      conn.payload,
+      branch,
+      `vibe: ${mode} ${safeApp} to ${safeTargetNs}`,
+      commits,
+    )
+
+    // 4. Recreate the out-of-band Secrets in the target namespace. They are
+    //    deliberately not in the manifest (a git token must never be committed),
+    //    so without this the clone's init container cannot fetch its source and
+    //    any secretKeyRef env var fails to resolve.
+    const carriedSecrets = []
+    for (const suffix of ['git-credentials', 'app-secrets']) {
+      const secretName = `${safeApp}-${suffix}`
+      const existing = await readKubernetesSecret(req, {
+        envId: source.envId,
+        ns: safeSourceNs,
+        name: secretName,
+      })
+      if (existing) {
+        await createKubernetesSecret(req, {
+          envId: target.envId,
+          ns: safeTargetNs,
+          name: secretName,
+          data: existing,
+        })
+        carriedSecrets.push(secretName)
+      }
+    }
+
+    // 5. Create the stack in the target environment.
+    const stackResult = await createPortainerGitOpsStack(req, {
+      envId: target.envId,
+      appName: safeApp,
+      ns: safeTargetNs,
+      repoUrl: buildRepoHttpsUrl(conn.payload),
+      branch,
+      filePath: newManifestPath,
+      username: conn.payload.username || '',
+      token: conn.payload.token || '',
+      authType: conn.payload.authType || 'pat',
+      pollInterval: sanitizePollInterval(pollInterval),
+    })
+
+    // 6. For a move, tear the source down only after the target exists. Deleting
+    //    the stack (not just its resources) matters twice over: it stops the
+    //    source's auto-update poll re-applying the manifest we are about to
+    //    remove, and it clears the stack record from Portainer.
+    let sourceRemoved = false
+    if (mode === 'move') {
+      if (source.stackId) {
+        const numericStackId = parseInt(String(source.stackId), 10)
+        const numericEnvId = parseInt(String(source.envId), 10)
+        if (Number.isInteger(numericStackId) && numericStackId > 0) {
+          await deletePortainerStack(req, {
+            envId: numericEnvId,
+            stackId: numericStackId,
+          })
+          sourceRemoved = true
+        }
+      }
+      const pathsToRemove = [oldManifestPath]
+      if (oldSourcePath) pathsToRemove.push(oldSourcePath)
+      await deletePaths(
+        conn.payload,
+        branch,
+        pathsToRemove,
+        `vibe: remove ${safeApp} after move to ${safeTargetNs}`,
+      )
+    }
+
+    return json(res, 200, {
+      ok: true,
+      mode,
+      appName: safeApp,
+      ns: safeTargetNs,
+      envId: String(target.envId),
+      manifestPath: newManifestPath,
+      sourcePath: oldSourcePath ? newSourcePath : null,
+      stackId: stackResult?.Id || stackResult?.id || null,
+      carriedSecrets,
+      sourceRemoved,
+    })
+  } catch (err) {
+    console.error('[vibe migrate error]', {
+      message: err?.message || String(err),
+      status: err?.status,
+      mode,
+      appName: safeApp,
+      from: `${source.envId}/${safeSourceNs}`,
+      to: `${target.envId}/${safeTargetNs}`,
+      stack: err?.stack,
+    })
+    return json(res, 502, { error: err?.message || `${mode} failed` })
   }
 }

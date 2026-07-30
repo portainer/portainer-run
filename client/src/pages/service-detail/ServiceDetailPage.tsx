@@ -564,6 +564,7 @@ export function ServiceDetailPage() {
         namespace={namespace}
         name={name}
         visEnvs={visEnvs}
+        deployment={d}
       />
     </div>
   )
