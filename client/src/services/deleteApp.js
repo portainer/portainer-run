@@ -17,13 +17,52 @@ export function appDeleteKey(envId, ns, name) {
 export const STACK_ID_LABEL = 'io.portainer.kubernetes.application.stackid'
 
 /**
- * Resources the deploy flow creates directly through the Kubernetes API rather
- * than declaring in the committed manifest, so that a git token never reaches
- * the repository (see server/routes/vibe.js). Stack teardown cannot know about
- * them, so they are cleaned up here.
+ * Delete the Secrets the deploy flow creates directly through the Kubernetes API
+ * rather than declaring in the committed manifest, so that a git token never
+ * reaches the repository (see server/routes/vibe.js). Stack teardown cannot know
+ * about them, so they are cleaned up here.
+ *
+ * Which ones exist depends on how the app was deployed: `-git-credentials` only
+ * when the init container has a repo to clone, `-app-secrets` only when the app
+ * has sensitive env vars. The namespace is listed first so we only issue deletes
+ * for Secrets that are actually there — blindly deleting both logged a 404 in the
+ * browser's network panel on most deletes, which reads as a failure and has
+ * already caused one misdiagnosis.
+ *
+ * Listing can require broader permissions than deleting a known name, so a failed
+ * list falls back to attempting both. Correctness beats a clean network panel.
  */
-function unmanagedSecretNames(name) {
-  return [`${name}-git-credentials`, `${name}-app-secrets`]
+async function deleteUnmanagedSecrets(token, envId, ns, name) {
+  const candidates = [`${name}-git-credentials`, `${name}-app-secrets`]
+  let targets = candidates
+
+  try {
+    const r = await kubeFetch(token, envId, `/api/v1/namespaces/${ns}/secrets`)
+    if (r.ok) {
+      const present = new Set(
+        ((await r.json()).items || [])
+          .map((s) => s?.metadata?.name)
+          .filter(Boolean),
+      )
+      targets = candidates.filter((n) => present.has(n))
+    }
+  } catch {
+    /* keep the blind-delete fallback */
+  }
+
+  if (targets.length === 0) return
+  await Promise.allSettled(
+    targets.map((secretName) =>
+      kubeFetch(
+        token,
+        envId,
+        `/api/v1/namespaces/${ns}/secrets/${secretName}`,
+        {
+          method: 'DELETE',
+        },
+      ),
+    ),
+  )
 }
 
 /**
@@ -98,6 +137,11 @@ async function deleteResourcesDirectly(token, envId, ns, name) {
  * shares one manifests branch, the next deploy of any other app moved that head
  * and the orphaned stack re-applied the deleted app's manifest.
  *
+ * Ordering is deliberate — git, then stack, then Secrets — so the step that
+ * cannot be retried runs before the steps that can. Anything that fails leaves
+ * the app in a state a second attempt can finish: the git delete is idempotent,
+ * a missing stack reports success, and absent Secrets are skipped.
+ *
  * @param {object} target  { envId, ns, name, stackId?, gitTargetId?, gitBranch?, gitPath?, vibeSourcePath? }
  * @param {object} [opts]
  * @param {boolean} [opts.deleteManifest]  also remove GitOps manifest/source from git
@@ -125,35 +169,23 @@ export async function deleteApp(target, { deleteManifest = false } = {}) {
   st().markAppDeleting(key)
 
   try {
-    // 1. Remove the owning stack first, so its auto-update poll cannot race the
-    //    cleanup and re-apply what we are deleting.
-    if (stackId) {
-      await deleteAppStack({ envId, stackId })
-    } else {
-      await deleteResourcesDirectly(token, envId, ns, name)
-    }
-
-    // 2. Secrets are created directly against the Kubernetes API and never
-    //    committed, so no stack owns them. Best-effort — an app without
-    //    sensitive env vars or a git source has neither.
-    await Promise.allSettled(
-      unmanagedSecretNames(name).map((secretName) =>
-        kubeFetch(
-          token,
-          envId,
-          `/api/v1/namespaces/${ns}/secrets/${secretName}`,
-          { method: 'DELETE' },
-        ),
-      ),
-    )
-
-    // 3. Optionally delete git entries — manifest file and source directory
-    //    removed in a SINGLE commit to avoid a non-fast-forward race between
-    //    two sequential commits against the same branch.
+    // 1. Git entries first, when requested. This is the only step with no way
+    //    back: once the stack and resources are gone the app disappears from the
+    //    UI, so a failure here used to strand the manifest in git with nothing
+    //    left to retry from. Running it before anything irreversible means a
+    //    failure aborts the whole delete with the app still intact, and the user
+    //    can simply try again.
+    //
+    //    Removing the manifest ahead of the stack is safe: the stack is deleted
+    //    moments later, and in the interim a missing manifest cannot be
+    //    re-applied by its auto-update poll.
+    //
+    //    Both paths go in a SINGLE commit to avoid a non-fast-forward race
+    //    between two sequential commits against the same branch.
     if (isGitOps && deleteManifest) {
+      const paths = [gitPath]
+      if (vibeSourcePath) paths.push(vibeSourcePath)
       try {
-        const paths = [gitPath]
-        if (vibeSourcePath) paths.push(vibeSourcePath)
         await deleteAppPaths({
           gitTargetId,
           branch: gitBranch,
@@ -161,12 +193,24 @@ export async function deleteApp(target, { deleteManifest = false } = {}) {
           appName: name,
         })
       } catch (e) {
-        st().pushToast(
-          `Deployment deleted but Git cleanup failed: ${e?.message || 'unknown error'} — check the token has write access to the repository`,
-          'warn',
+        // Rethrow so the outer handler aborts: nothing has been destroyed yet.
+        throw new Error(
+          `Git cleanup failed, so nothing was deleted: ${e?.message || 'unknown error'} — check the token has write access to the repository, then retry`,
         )
       }
     }
+
+    // 2. Remove the owning stack, whose teardown removes every resource its
+    //    manifest declares. Done before the Secrets so its auto-update poll
+    //    cannot race the cleanup and re-apply what we are deleting.
+    if (stackId) {
+      await deleteAppStack({ envId, stackId })
+    } else {
+      await deleteResourcesDirectly(token, envId, ns, name)
+    }
+
+    // 3. Secrets no stack owns. Best-effort, and safe to retry.
+    await deleteUnmanagedSecrets(token, envId, ns, name)
 
     st().pushToast(`Deployment "${name}" deleted`, 'ok')
     await refreshCache(false)
