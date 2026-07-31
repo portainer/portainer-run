@@ -1334,9 +1334,7 @@ async function handleVibeManifestExposure(req, res) {
     if (!content) return json(res, 404, { error: 'Manifest not found' })
 
     // Parse every YAML document and locate the Service / Ingress objects.
-    const docs = yaml
-      .loadAll(content)
-      .filter((d) => d && typeof d === 'object')
+    const docs = yaml.loadAll(content).filter((d) => d && typeof d === 'object')
     const svc = docs.find((d) => d.kind === 'Service')
     const ing = docs.find((d) => d.kind === 'Ingress')
 
