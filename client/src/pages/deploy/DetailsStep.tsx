@@ -95,6 +95,10 @@ export function DetailsStep({
   const singleEnv = availableEnvs.length === 1
   const singleNs = nsList.length === 1 && !nsLoading && !manualNs
   const activeBaseDomain = ingressHostMap[ingClass] || ''
+  // Apps are only exposed via Ingress, so a hostname is required to reach one.
+  // With a base domain the host is derived from the app name and is only blank
+  // while the name is; typed free-form it has to be filled in.
+  const hostMissing = !ingHost.trim()
 
   return (
     <div>
@@ -241,7 +245,16 @@ export function DetailsStep({
 
         <div style={{ display: 'flex', gap: 12 }}>
           <div style={{ flex: 1 }}>
-            <FormControl label="Hostname">
+            <FormControl
+              label="Hostname (required)"
+              hint={
+                hostMissing
+                  ? activeBaseDomain
+                    ? 'Enter an app name above to build the hostname'
+                    : 'Required — the address your app will be reachable at'
+                  : undefined
+              }
+            >
               {activeBaseDomain ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
                   <Input
