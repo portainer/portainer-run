@@ -467,6 +467,22 @@ function buildVibeManifests({
       command: ['sh', '-c', installCmd],
       resources: INIT_INSTALL_RESOURCES,
       volumeMounts: [{ name: 'app-data', mountPath: workDirSafe }],
+      // When a dependency ships no prebuilt binary for the runtime's ABI, the
+      // package manager compiles it from source. node-gyp first extracts the
+      // Node headers tarball, and tar preserves ownership whenever the process
+      // runs as uid 0, which every official runtime image does. With ALL
+      // capabilities dropped each fchown returns EPERM, the extraction fails,
+      // and npm rolls the whole install back, so the app never starts. The
+      // chown is a no-op here (every file is already root-owned) but it has to
+      // be permitted for the extraction to complete. Granting CHOWN to this
+      // container only, in the same spirit as the php exception above.
+      //
+      // harden() merges a container's own securityContext over the shared base,
+      // so this keeps allowPrivilegeEscalation: false and the RuntimeDefault
+      // seccomp profile while overriding capabilities alone.
+      securityContext: {
+        capabilities: { drop: ['ALL'], add: ['CHOWN'] },
+      },
     })
   }
 
