@@ -65,11 +65,6 @@ export const CONFIG_NAMESPACE = resolveConfigNamespace()
 export const CACHE_FILE = path.join(CACHE_DIR, 'cache.json')
 
 export const DIST_DIR = path.join(projectRoot, 'client', 'dist')
-export const LEGACY_HTML = path.join(
-  projectRoot,
-  'old-implementation',
-  'portainer-run.html',
-)
 
 if (PORTAINER_URL) {
   let _valid = true

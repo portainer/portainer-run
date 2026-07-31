@@ -2,7 +2,6 @@ import { readBody } from '../lib/http.js'
 import { CORS } from '../lib/cors.js'
 import {
   createConnection,
-  getAllConnections,
   getConnectionById,
   getConnectionsForUser,
   updateConnection,
@@ -14,11 +13,7 @@ import {
   listFiles,
   githubApiBase,
 } from '../proxy/git.js'
-import {
-  resolveCallerIdentity,
-  portainerGet,
-  extractToken,
-} from '../lib/identity.js'
+import { resolveCallerIdentity, extractToken } from '../lib/identity.js'
 import https from 'node:https'
 import http from 'node:http'
 

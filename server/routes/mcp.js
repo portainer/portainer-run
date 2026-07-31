@@ -17,7 +17,7 @@
 
 import { readBody } from '../lib/http.js'
 import { CORS } from '../lib/cors.js'
-import { BASE_DOMAIN, CONFIG_NAMESPACE, GATEWAY_URL } from '../config.js'
+import { BASE_DOMAIN, CONFIG_NAMESPACE } from '../config.js'
 import { requestUploadSession, fetchStagedFiles } from '../lib/gateway.js'
 import {
   resolveCallerIdentity,

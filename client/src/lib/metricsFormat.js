@@ -40,21 +40,3 @@ export function barColor(p) {
   if (p > 60) return 'var(--amber)'
   return 'var(--green)'
 }
-
-export function sparklinePoints(cpuPts) {
-  if (cpuPts.length < 2) return ''
-  const W = 260
-  const H = 48
-  const pad = 2
-  const tMin = cpuPts[0].t
-  const tMax = cpuPts[cpuPts.length - 1].t
-  const vMax = Math.max(1, ...cpuPts.map((p) => p.v))
-  const toX = (t) => pad + ((t - tMin) / (tMax - tMin + 0.0001)) * (W - pad * 2)
-  const toY = (v) => H - pad - (v / vMax) * (H - pad * 2)
-  return cpuPts
-    .map(
-      (p, i) =>
-        `${i === 0 ? 'M' : 'L'}${toX(p.t).toFixed(1)} ${toY(p.v).toFixed(1)}`,
-    )
-    .join(' ')
-}
