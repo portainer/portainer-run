@@ -1325,40 +1325,37 @@ async function handleVibeManifestExposure(req, res) {
     const content = await fetchFile(conn.payload, branch, gitPath)
     if (!content) return json(res, 404, { error: 'Manifest not found' })
 
-    // Find the Service document
-    const docs = content
-      .split(/^---\s*$/m)
-      .map((d) => d.trim())
-      .filter(Boolean)
-    const svcDoc = docs.find((d) => /^kind:\s*Service/m.test(d))
-    const ingDoc = docs.find((d) => /^kind:\s*Ingress/m.test(d))
+    // Parse every YAML document and locate the Service / Ingress objects.
+    const docs = yaml
+      .loadAll(content)
+      .filter((d) => d && typeof d === 'object')
+    const svc = docs.find((d) => d.kind === 'Service')
+    const ing = docs.find((d) => d.kind === 'Ingress')
 
-    if (!svcDoc) return json(res, 200, { exposeType: 'none' })
+    if (!svc) return json(res, 200, { exposeType: 'none' })
 
-    // Parse type and port from the Service doc using regex (no YAML parser needed)
-    const typeMatch = svcDoc.match(/^\s+type:\s*(\S+)/m)
-    const portMatch = svcDoc.match(/^\s+port:\s*(\d+)/m)
-    const svcType = typeMatch ? typeMatch[1] : 'ClusterIP'
-    const port = portMatch ? Number(portMatch[1]) : 80
+    const svcType = svc.spec?.type || 'ClusterIP'
+    const port = svc.spec?.ports?.[0]?.port ?? 80
 
     let exposeType = 'none'
     if (svcType === 'NodePort') exposeType = 'NodePort'
     else if (svcType === 'LoadBalancer') exposeType = 'LoadBalancer'
-    else if (svcType === 'ClusterIP' && ingDoc) exposeType = 'Ingress'
+    else if (svcType === 'ClusterIP' && ing) exposeType = 'Ingress'
 
     const result = { exposeType, port }
 
-    if (ingDoc) {
-      const hostMatch = ingDoc.match(/^\s+host:\s*(\S+)/m)
-      const pathMatch = ingDoc.match(/^\s+path:\s*(\S+)/m)
+    if (ing) {
+      const rule = ing.spec?.rules?.[0]
+      const host = rule?.host
+      const path = rule?.http?.paths?.[0]?.path
       // Prefer spec.ingressClassName; fall back to the legacy annotation for
       // manifests written before the switch.
-      const classMatch =
-        ingDoc.match(/^\s+ingressClassName:\s*(\S+)/m) ||
-        ingDoc.match(/kubernetes\.io\/ingress\.class:\s*(\S+)/m)
-      if (hostMatch) result.ingHost = hostMatch[1]
-      if (pathMatch) result.ingPath = pathMatch[1]
-      if (classMatch) result.ingClass = classMatch[1]
+      const ingClass =
+        ing.spec?.ingressClassName ||
+        ing.metadata?.annotations?.['kubernetes.io/ingress.class']
+      if (host) result.ingHost = host
+      if (path) result.ingPath = path
+      if (ingClass) result.ingClass = ingClass
     }
 
     return json(res, 200, result)

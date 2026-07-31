@@ -56,8 +56,6 @@ interface DetailsStepProps {
   nsStatusColor: string
   resolvedNs: string
   perms: DeployPerms | null
-  exposeType: string
-  setExposeType: Dispatch<SetStateAction<string>>
   envCapabilities: EnvCapabilities
   ingHost: string
   setIngHost: Dispatch<SetStateAction<string>>
@@ -87,8 +85,6 @@ export function DetailsStep({
   nsStatusColor,
   resolvedNs,
   perms,
-  exposeType,
-  setExposeType,
   envCapabilities,
   ingHost,
   setIngHost,
@@ -243,140 +239,81 @@ export function DetailsStep({
           />
         )}
 
-        <div style={{ maxWidth: 420 }}>
-          <FormControl label="Expose as">
-            <div>
-              <Select
-                value={exposeType}
-                onChange={(e) => setExposeType(e.target.value)}
-                disabled={envCapabilities.probing}
-                options={[
-                  {
-                    value: 'NodePort',
-                    label:
-                      'Network Accessible - Default, use this unless advised otherwise',
-                  },
-                  ...(envCapabilities.probing || envCapabilities.lbOk !== false
-                    ? [
-                        {
-                          value: 'LoadBalancer',
-                          label: 'Network Accessible via dedicated IP',
-                        },
-                      ]
-                    : []),
-                  ...(envCapabilities.probing ||
-                  envCapabilities.ingressOk !== false
-                    ? [
-                        {
-                          value: 'Ingress',
-                          label: 'Network Accessible via a URL',
-                        },
-                      ]
-                    : []),
-                ]}
-              />
-              {!envCapabilities.probing &&
-                envId &&
-                (envCapabilities.lbOk === false ||
-                  envCapabilities.ingressOk === false) && (
-                  <div style={{ ...HINT_STYLE, marginTop: 4 }}>
-                    {[
-                      envCapabilities.lbOk === false && 'LoadBalancer',
-                      envCapabilities.ingressOk === false && 'Ingress',
-                    ]
-                      .filter(Boolean)
-                      .join(' and ')}{' '}
-                    not detected on this cluster — option
-                    {envCapabilities.lbOk === false &&
-                    envCapabilities.ingressOk === false
-                      ? 's'
-                      : ''}{' '}
-                    hidden
-                  </div>
-                )}
-            </div>
-          </FormControl>
-        </div>
-
-        {exposeType === 'Ingress' && (
-          <div style={{ display: 'flex', gap: 12 }}>
-            <div style={{ flex: 1 }}>
-              <FormControl label="Hostname">
-                {activeBaseDomain ? (
-                  <div
-                    style={{ display: 'flex', alignItems: 'center', gap: 0 }}
-                  >
-                    <Input
-                      type="text"
-                      value={appName}
-                      onChange={(e) =>
-                        setAppName(
-                          e.target.value
-                            .replace(/[^a-z0-9-]/gi, '-')
-                            .toLowerCase(),
-                        )
-                      }
-                      style={{
-                        borderRadius: '6px 0 0 6px',
-                        borderRight: 'none',
-                        flex: '0 0 auto',
-                        width: 140,
-                      }}
-                    />
-                    <span
-                      style={{
-                        padding: '8px 12px',
-                        background: 'var(--bg)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '0 6px 6px 0',
-                        fontFamily: MONO_FONT,
-                        fontSize: 13,
-                        color: 'var(--muted)',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      .{activeBaseDomain}
-                    </span>
-                  </div>
-                ) : (
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <FormControl label="Hostname">
+              {activeBaseDomain ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
                   <Input
                     type="text"
-                    value={ingHost}
-                    onChange={(e) => setIngHost(e.target.value)}
-                    placeholder="app.example.com"
-                  />
-                )}
-              </FormControl>
-            </div>
-            <div style={{ flex: 1 }}>
-              <FormControl label="Ingress class">
-                {envCapabilities.ingressClasses.length > 1 ? (
-                  <Select
-                    value={ingClass}
-                    onChange={(e) => setIngClass(e.target.value)}
-                    options={envCapabilities.ingressClasses.map((c) => ({
-                      value: c.name,
-                      label: `${c.name}${c.isDefault ? ' (default)' : ''}`,
-                    }))}
-                  />
-                ) : (
-                  <Input
-                    type="text"
-                    value={ingClass}
-                    onChange={(e) => setIngClass(e.target.value)}
-                    placeholder="nginx"
-                    readOnly={envCapabilities.ingressClasses.length === 1}
-                    style={
-                      envCapabilities.ingressClasses.length === 1
-                        ? { opacity: 0.6, cursor: 'default' }
-                        : {}
+                    value={appName}
+                    onChange={(e) =>
+                      setAppName(
+                        e.target.value
+                          .replace(/[^a-z0-9-]/gi, '-')
+                          .toLowerCase(),
+                      )
                     }
+                    style={{
+                      borderRadius: '6px 0 0 6px',
+                      borderRight: 'none',
+                      flex: '0 0 auto',
+                      width: 140,
+                    }}
                   />
-                )}
-              </FormControl>
-            </div>
+                  <span
+                    style={{
+                      padding: '8px 12px',
+                      background: 'var(--bg)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '0 6px 6px 0',
+                      fontFamily: MONO_FONT,
+                      fontSize: 13,
+                      color: 'var(--muted)',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    .{activeBaseDomain}
+                  </span>
+                </div>
+              ) : (
+                <Input
+                  type="text"
+                  value={ingHost}
+                  onChange={(e) => setIngHost(e.target.value)}
+                  placeholder="app.example.com"
+                />
+              )}
+            </FormControl>
           </div>
-        )}
+          <div style={{ flex: 1 }}>
+            <FormControl label="Ingress class">
+              {envCapabilities.ingressClasses.length > 1 ? (
+                <Select
+                  value={ingClass}
+                  onChange={(e) => setIngClass(e.target.value)}
+                  options={envCapabilities.ingressClasses.map((c) => ({
+                    value: c.name,
+                    label: `${c.name}${c.isDefault ? ' (default)' : ''}`,
+                  }))}
+                />
+              ) : (
+                <Input
+                  type="text"
+                  value={ingClass}
+                  onChange={(e) => setIngClass(e.target.value)}
+                  placeholder="nginx"
+                  readOnly={envCapabilities.ingressClasses.length === 1}
+                  style={
+                    envCapabilities.ingressClasses.length === 1
+                      ? { opacity: 0.6, cursor: 'default' }
+                      : {}
+                  }
+                />
+              )}
+            </FormControl>
+          </div>
+        </div>
 
         {(!appName || !envId || !resolvedNs) && (
           <div

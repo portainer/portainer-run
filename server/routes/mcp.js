@@ -54,7 +54,7 @@ const SERVER_INSTRUCTIONS = [
   '2. Namespace — call list_namespaces. If more than one is returned, ask which to use.',
   '3. Git target — call list_git_targets. If none exist, tell the user to create one in the Portainer-Run UI (git targets cannot be created via MCP) and stop. If several exist, ask which.',
   '4. App name — propose one and confirm it with the user.',
-  '5. Exposure — decide how the app should be reachable: none, NodePort, LoadBalancer, or Ingress. Call list_ingress_classes first to inform the choice: if it reports a baseDomain (ingressHostRequired is false), PREFER Ingress so the app gets a real URL — do NOT use NodePort when a base domain is available unless the user explicitly asks for NodePort. If there is no base domain, NodePort is the usual default. When in doubt, ask the user.',
+  '5. Exposure — apps are always exposed at a URL through the cluster ingress controller. Call list_ingress_classes to inform the ingress settings: it reports a baseDomain (when ingressHostRequired is false the host is derived) and the available ingress classes.',
   '6. Ingress (when chosen) — from list_ingress_classes, if ingressHostRequired is true ask the user for the full hostname (otherwise the host is derived as <appName>.<baseDomain>). Confirm which ingress class to use, or let it default to the cluster default.',
   '7. Environment variables / secrets — if the app needs any, list them and ask the user for values.',
   '',
@@ -64,7 +64,7 @@ const SERVER_INSTRUCTIONS = [
   '',
   'Always show a summary of the chosen settings and get explicit confirmation before calling deploy_app.',
   '',
-  'After deploying, report the access URL to the user. The deploy result has a "url" field; if it is null (NodePort/LoadBalancer addresses are assigned asynchronously), call get_app_status after a short wait to retrieve the URL.',
+  'After deploying, report the access URL to the user. The deploy result has a "url" field; if it is null, call get_app_status after a short wait to retrieve the URL.',
 ].join('\n')
 
 // ---------------------------------------------------------------------------
@@ -108,7 +108,7 @@ function buildTools() {
     name: 'list_ingress_classes',
     description:
       'List the IngressClasses defined in a Kubernetes environment, including which one is the cluster default. ' +
-      'Call this when deploying with exposeType "Ingress" to choose the correct ingress class. If you omit ' +
+      'Call this when deploying to choose the correct ingress class. If you omit ' +
       'ingressClass on deploy_app, the cluster default (if any) is applied automatically. ' +
       'The response also reports baseDomain and ingressHostRequired: when ingressHostRequired is true there is ' +
       'no base domain to derive a hostname from, so you must supply a full ingress.host — ask the user for it.',
@@ -197,21 +197,15 @@ function buildTools() {
             },
           },
         },
-        exposeType: {
-          type: 'string',
-          enum: ['none', 'NodePort', 'LoadBalancer', 'Ingress'],
-          description:
-            'How to expose the app externally. Default: Ingress when the server has a base domain configured (a hostname can be derived), otherwise NodePort.',
-        },
         ingress: {
           type: 'object',
           description:
-            'Ingress settings, used only when exposeType is "Ingress". If host is omitted and a base domain is configured, defaults to <appName>.<baseDomain>.',
+            'Ingress settings. The app is always exposed at a URL through the cluster ingress controller. If host is omitted and a base domain is configured, defaults to <appName>.<baseDomain>.',
           properties: {
             host: {
               type: 'string',
               description:
-                'Full ingress hostname, e.g. my-app.example.com. Required when exposeType is "Ingress" unless the server has a base domain configured (check list_ingress_classes — ingressHostRequired). If no base domain is configured, ask the user for the hostname.',
+                'Full ingress hostname, e.g. my-app.example.com. Required unless the server has a base domain configured (check list_ingress_classes — ingressHostRequired). If no base domain is configured, ask the user for the hostname.',
             },
             path: { type: 'string', description: 'Ingress path. Default: /' },
             ingressClass: {
@@ -698,31 +692,23 @@ async function toolDeployVibeApp(req, args, caller) {
     )
   }
 
-  // Default exposure: when a base domain is configured we can derive a real
-  // hostname, so default to Ingress; otherwise fall back to NodePort.
-  const exposeType = args.exposeType || (BASE_DOMAIN ? 'Ingress' : 'NodePort')
+  // Apps are always exposed at a URL through the cluster ingress controller.
+  const exposeType = 'Ingress'
 
   const safeAppName = appName.toLowerCase().replace(/[^a-z0-9-]/g, '-')
 
-  // Resolve ingress settings. When exposing via Ingress without an explicit host,
-  // fall back to <appName>.<BASE_DOMAIN> if a base domain is configured — mirroring
-  // the template/UI default. Without a host, buildVibeManifests skips the Ingress.
-  const resolvedIngress =
-    exposeType === 'Ingress'
-      ? {
-          host:
-            ingress.host ||
-            (BASE_DOMAIN ? `${safeAppName}.${BASE_DOMAIN}` : ''),
-          path: ingress.path || '/',
-          ...(ingress.ingressClass
-            ? { ingressClass: ingress.ingressClass }
-            : {}),
-        }
-      : {}
+  // Resolve ingress settings. Without an explicit host, fall back to
+  // <appName>.<BASE_DOMAIN> if a base domain is configured — mirroring the
+  // template/UI default.
+  const resolvedIngress = {
+    host: ingress.host || (BASE_DOMAIN ? `${safeAppName}.${BASE_DOMAIN}` : ''),
+    path: ingress.path || '/',
+    ...(ingress.ingressClass ? { ingressClass: ingress.ingressClass } : {}),
+  }
 
-  if (exposeType === 'Ingress' && !resolvedIngress.host) {
+  if (!resolvedIngress.host) {
     throw new Error(
-      'exposeType "Ingress" requires ingress.host (or a configured BASE_DOMAIN)',
+      'An ingress host is required (provide ingress.host or configure BASE_DOMAIN)',
     )
   }
 
@@ -730,7 +716,7 @@ async function toolDeployVibeApp(req, args, caller) {
   // claimed by a controller: prefer the cluster default, else use the only class
   // if there is exactly one (the common single-controller, e.g. nginx, case).
   // Best effort — if the lookup fails or it's ambiguous, deploy without a class.
-  if (exposeType === 'Ingress' && !resolvedIngress.ingressClass) {
+  if (!resolvedIngress.ingressClass) {
     try {
       const target = resolvePortainerTarget()
       if (target) {
@@ -872,12 +858,10 @@ async function toolDeployVibeApp(req, args, caller) {
   }
   const deployedName = data.appName || safeAppName
 
-  // Resolve an access URL for the response. Ingress hosts are known immediately;
-  // NodePort/LoadBalancer addresses are assigned asynchronously so we poll briefly.
+  // Resolve an access URL for the response. Ingress hosts are known immediately.
   let access = null
   try {
-    const target = resolvePortainerTarget()
-    if (exposeType === 'Ingress' && resolvedIngress.host) {
+    if (resolvedIngress.host) {
       const p =
         resolvedIngress.path && resolvedIngress.path !== '/'
           ? resolvedIngress.path
@@ -887,18 +871,6 @@ async function toolDeployVibeApp(req, args, caller) {
         label: resolvedIngress.host,
         type: 'ingress',
       }
-    } else if (
-      target &&
-      (exposeType === 'NodePort' || exposeType === 'LoadBalancer')
-    ) {
-      access = await resolveAppAccessUrl(
-        target,
-        token,
-        envId,
-        namespace,
-        deployedName,
-        { attempts: 4, delayMs: 1500 },
-      )
     }
   } catch {
     /* best effort — URL is a convenience */
@@ -910,10 +882,9 @@ async function toolDeployVibeApp(req, args, caller) {
     if (access.type === 'ingress')
       message +=
         ' (ensure DNS for the host points to your ingress controller; served over HTTP unless TLS is configured)'
-  } else if (exposeType === 'none') {
-    message += ' It is not exposed externally (exposeType "none").'
   } else {
-    message += ` The ${exposeType} address is still being assigned — call get_app_status shortly, or check the Applications page, for the URL.`
+    message +=
+      ' The URL is still being assigned — call get_app_status shortly, or check the Applications page, for the URL.'
   }
 
   return {
