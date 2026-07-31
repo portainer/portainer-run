@@ -177,7 +177,22 @@ function getInstallCommand(runtime, workDir) {
   switch (runtime) {
     case 'node':
       // npm installs node_modules into the working directory, which is on the PV.
-      return `cd ${workDir} && if [ -f package.json ]; then npm install --production 2>&1; fi`
+      //
+      // When a dependency has no prebuilt binary for this runtime's ABI, npm
+      // compiles it with node-gyp, which by default downloads the Node headers
+      // tarball and extracts it. That extraction is the fragile step: tar
+      // preserves ownership and mtime when running as uid 0, and both need
+      // capabilities this pod deliberately drops. Pointing node-gyp at headers
+      // already present in the image makes it skip the download and extraction
+      // altogether, which also removes a build-time dependency on reaching
+      // nodejs.org (relevant for air-gapped clusters). Official images ship the
+      // headers under /usr/local/include/node; the guard means any image that
+      // does not simply falls back to the download path.
+      return (
+        `cd ${workDir} && if [ -f package.json ]; then ` +
+        `if [ -f /usr/local/include/node/common.gypi ]; then export npm_config_nodedir=/usr/local; fi; ` +
+        `npm install --omit=dev 2>&1; fi`
+      )
     case 'python':
       // pip's default target is the image's system site-packages, which live
       // OUTSIDE the shared PV and so are lost when this init container exits.
@@ -467,21 +482,27 @@ function buildVibeManifests({
       command: ['sh', '-c', installCmd],
       resources: INIT_INSTALL_RESOURCES,
       volumeMounts: [{ name: 'app-data', mountPath: workDirSafe }],
-      // When a dependency ships no prebuilt binary for the runtime's ABI, the
-      // package manager compiles it from source. node-gyp first extracts the
-      // Node headers tarball, and tar preserves ownership whenever the process
-      // runs as uid 0, which every official runtime image does. With ALL
-      // capabilities dropped each fchown returns EPERM, the extraction fails,
-      // and npm rolls the whole install back, so the app never starts. The
-      // chown is a no-op here (every file is already root-owned) but it has to
-      // be permitted for the extraction to complete. Granting CHOWN to this
-      // container only, in the same spirit as the php exception above.
+      // Fallback for runtime images that do not ship Node's headers, where
+      // node-gyp has to download and extract the headers tarball (see the node
+      // case in getInstallCommand). Running as uid 0, which every official
+      // runtime image does, tar preserves both ownership and mtime from the
+      // archive. The chown needs CHOWN. The chown then hands the file to the
+      // archive's uid, and because tar issues the chown and the utimes
+      // concurrently, any file whose chown lands first can no longer have its
+      // timestamp set by root without FOWNER, which also covers the mode fixups
+      // tar applies on the way out. Missing either one aborts the extraction and
+      // npm rolls the whole install back, so the app never starts.
+      //
+      // Both are no-ops in practice (every file here is already root-owned) and
+      // are scoped to this container, in the same spirit as the php exception
+      // above. Where the headers are present in the image neither is exercised,
+      // because no extraction happens at all.
       //
       // harden() merges a container's own securityContext over the shared base,
       // so this keeps allowPrivilegeEscalation: false and the RuntimeDefault
       // seccomp profile while overriding capabilities alone.
       securityContext: {
-        capabilities: { drop: ['ALL'], add: ['CHOWN'] },
+        capabilities: { drop: ['ALL'], add: ['CHOWN', 'FOWNER'] },
       },
     })
   }
