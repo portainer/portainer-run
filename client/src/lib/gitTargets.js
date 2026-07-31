@@ -95,24 +95,6 @@ export function listRepoDir(id, branch, path = '') {
 // --- App manifest cleanup ---
 
 /**
- * Delete a manifest file or source directory from the Git repo.
- * Used during application deletion to clean up Git.
- *
- * @param {object} p
- * @param {string} p.gitTargetId
- * @param {string} p.branch
- * @param {string} p.gitPath
- * @param {string} [p.appName]
- * @returns {Promise<{ ok: boolean }>}
- */
-export function deleteAppManifest({ gitTargetId, branch, gitPath, appName }) {
-  return serverFetch('/api/vibe/delete-manifest', {
-    method: 'POST',
-    body: JSON.stringify({ gitTargetId, branch, gitPath, appName }),
-  })
-}
-
-/**
  * Remove multiple paths (manifest file + source directory) in a single commit.
  * Avoids the non-fast-forward race of two sequential delete commits.
  */
@@ -121,38 +103,6 @@ export function deleteAppPaths({ gitTargetId, branch, paths, appName }) {
     method: 'POST',
     body: JSON.stringify({ gitTargetId, branch, paths, appName }),
   })
-}
-
-/**
- * Clone or move an app to another environment/namespace as a Portainer stack.
- *
- * The server copies the app's source tree and manifest to the target's git
- * location and creates a stack there, so the result is indistinguishable from a
- * freshly deployed app. For 'move' it then tears down the source stack and
- * removes its git entries.
- *
- * @param {object} args
- * @param {'clone'|'move'} args.mode
- * @param {string} args.gitTargetId
- * @param {string} args.branch
- * @param {string} [args.pathPrefix]
- * @param {string} [args.pollInterval]
- * @param {{envId: string, ns: string, appName: string, gitPath: string, vibeSourcePath?: string|null, stackId?: string|null}} args.source
- * @param {{envId: string, envName: string, ns: string}} args.target
- */
-export async function migrateApp(args) {
-  const data = await serverFetch('/api/vibe/migrate', {
-    method: 'POST',
-    body: JSON.stringify(args),
-  })
-  // As with delete-stack: a 200 alone proves nothing, because an unknown backend
-  // route falls through to the SPA's index.html, which is also a 200.
-  if (data?.ok !== true) {
-    throw new Error(
-      'Unexpected response from migrate — the endpoint may be missing or misrouted',
-    )
-  }
-  return data
 }
 
 /**
