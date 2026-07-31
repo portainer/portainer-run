@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { Button } from '@ds/v3-components/Button/Button'
@@ -17,6 +17,15 @@ import { refreshCache } from '../../services/refreshDeployments.js'
 import { fetchNamespaceOptions } from '../../lib/deployK8s.js'
 import { getGitTarget, migrateApp } from '../../lib/gitTargets.js'
 import { STACK_ID_LABEL } from '../../services/deleteApp.js'
+import { kubeFetch, serverFetch } from '../../lib/api.js'
+import {
+  STARTUP_POLL_MS,
+  STARTUP_TIMEOUT_MS,
+  isBlockingReason,
+  sanitizeAppName,
+} from '../deploy/startup'
+import { MigrateProgress } from './MigrateProgress'
+import type { MigrateFailStage, MigratePhase } from './MigrateProgress'
 import { MONO_FONT } from './detailUi'
 import { errMessage } from '../../lib/errors'
 import type { Deployment } from '../../types/k8s'
@@ -79,16 +88,37 @@ export function MigrateDialog({
   }>({ text: '', tone: 'dim' })
   const [migratePending, setMigratePending] = useState(false)
 
-  // Reset target selection each time the dialog opens.
+  // Progress state. While `phase` is set the dialog shows the timeline instead of
+  // the target picker, so a migrate that takes minutes does not look hung.
+  const [phase, setPhase] = useState<MigratePhase | null>(null)
+  const [progressMode, setProgressMode] = useState<'clone' | 'move'>('clone')
+  const [progressNs, setProgressNs] = useState('')
+  const [progressEnv, setProgressEnv] = useState('')
+  const [reason, setReason] = useState<string | null>(null)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [failStage, setFailStage] = useState<MigrateFailStage>(null)
+  const [sourceRemoved, setSourceRemoved] = useState(false)
+  const cancelRef = useRef(false)
+
+  // Reset target selection and progress each time the dialog opens.
   useEffect(() => {
     if (!open) return
+    cancelRef.current = false
     setMigrateEnvId(String(envId || ''))
     setMigrateNamespace('')
     setMigrateManualNs(false)
     setMigrateManualNsValue(namespace || '')
     setMigrateNsList([])
     setMigrateNsStatus({ text: '', tone: 'dim' })
+    setPhase(null)
+    setReason(null)
+    setErrorMsg(null)
+    setFailStage(null)
+    setSourceRemoved(false)
   }, [open, envId, namespace])
+
+  // Stop polling if the dialog unmounts mid-flight.
+  useEffect(() => () => void (cancelRef.current = true), [])
 
   const loadMigrateNamespaces = useCallback(
     async (targetEnv: string) => {
@@ -147,8 +177,74 @@ export function MigrateDialog({
 
   useEffect(() => {
     if (!open) return
+    if (phase) return // target already chosen; the timeline owns the dialog now
     void loadMigrateNamespaces(migrateEnvId)
-  }, [open, migrateEnvId, loadMigrateNamespaces])
+  }, [open, migrateEnvId, loadMigrateNamespaces, phase])
+
+  /**
+   * Poll the target app until it is running. Mirrors the deploy wizard's
+   * post-deploy wait: readiness comes from the Deployment, and the human-readable
+   * reason from the same /env-status feed the Applications page uses, so the
+   * timeline can explain what it is waiting on.
+   */
+  const waitForTargetReady = useCallback(
+    async (targetEnv: string, targetNs: string, appName: string) => {
+      const safeApp = sanitizeAppName(appName)
+      const deadline = Date.now() + STARTUP_TIMEOUT_MS
+
+      while (!cancelRef.current && Date.now() < deadline) {
+        let nextReason: string | null = null
+        try {
+          const r = await serverFetch(
+            `/env-status/${targetEnv}?ns=${encodeURIComponent(targetNs)}`,
+          )
+          if (r.ok) {
+            const j = await r.json()
+            nextReason = j?.data?.[safeApp]?.statusReason ?? null
+          }
+        } catch {
+          /* transient — keep polling */
+        }
+
+        let ready = false
+        try {
+          const dr = await kubeFetch(
+            token,
+            targetEnv,
+            `/apis/apps/v1/namespaces/${targetNs}/deployments/${safeApp}`,
+          )
+          if (dr.ok) {
+            const dep = await dr.json()
+            const readyReplicas = dep?.status?.readyReplicas || 0
+            const desired = dep?.spec?.replicas ?? 0
+            ready = desired > 0 && readyReplicas >= desired
+          }
+        } catch {
+          /* transient — keep polling */
+        }
+
+        if (cancelRef.current) return
+
+        if (ready) {
+          setReason(null)
+          setPhase('ready')
+          void refreshCache(false)
+          return
+        }
+        if (isBlockingReason(nextReason)) {
+          setReason(nextReason)
+          setFailStage('start')
+          setPhase('error')
+          return
+        }
+        setReason(nextReason)
+        await new Promise((r) => setTimeout(r, STARTUP_POLL_MS))
+      }
+
+      if (!cancelRef.current) setPhase('timeout')
+    },
+    [token],
+  )
 
   const runMigrate = useCallback(
     async (mode: 'clone' | 'move') => {
@@ -177,6 +273,16 @@ export function MigrateDialog({
         return
       }
       setMigratePending(true)
+      // Switch the dialog to the timeline before the request goes out, so the
+      // wait is visible from the first moment rather than behind a button label.
+      setProgressMode(mode)
+      setProgressNs(targetNs)
+      setProgressEnv(targetEnv)
+      setReason(null)
+      setErrorMsg(null)
+      setFailStage(null)
+      setSourceRemoved(false)
+      setPhase('copying')
       try {
         // The manifest path is built from the git target's configured prefix, the
         // same way the deploy flow builds it.
@@ -192,7 +298,7 @@ export function MigrateDialog({
           /* non-fatal — an empty prefix matches the default deploy layout */
         }
 
-        await migrateApp({
+        const result = await migrateApp({
           mode,
           gitTargetId,
           branch: gitBranch,
@@ -208,7 +314,7 @@ export function MigrateDialog({
           },
           target: { envId: targetEnv, envName: targetName, ns: targetNs },
         })
-        onClose()
+        setSourceRemoved(Boolean(result?.sourceRemoved))
         await refreshCache(false)
         pushToast(
           mode === 'move'
@@ -216,14 +322,16 @@ export function MigrateDialog({
             : `Cloned “${name}” to ${targetNs} on ${targetEnv}`,
           'ok',
         )
-        if (mode === 'move') {
-          navigate(serviceDetailPath(targetEnv, targetNs, name, 'overview'), {
-            replace: true,
-          })
-        }
+        // The stack exists; the app itself still has to come up in the target.
+        setPhase('starting')
+        await waitForTargetReady(targetEnv, targetNs, name)
       } catch (e: unknown) {
+        const msg = errMessage(e) || 'Unknown error'
+        setErrorMsg(msg)
+        setFailStage('copy')
+        setPhase('error')
         pushToast(
-          (mode === 'move' ? 'Move' : 'Clone') + ' failed: ' + errMessage(e),
+          (mode === 'move' ? 'Move' : 'Clone') + ' failed: ' + msg,
           'err',
         )
       } finally {
@@ -240,8 +348,6 @@ export function MigrateDialog({
       migrateManualNs,
       migrateManualNsValue,
       pushToast,
-      navigate,
-      onClose,
       canMigrate,
       gitTargetId,
       gitBranch,
@@ -249,8 +355,81 @@ export function MigrateDialog({
       vibeSourcePath,
       stackId,
       visEnvs,
+      waitForTargetReady,
     ],
   )
+
+  /** Closing mid-flight stops the poll but leaves the migrate itself running. */
+  function handleClose() {
+    if (migratePending) return
+    cancelRef.current = true
+    onClose()
+  }
+
+  function goToApp() {
+    cancelRef.current = true
+    onClose()
+    navigate(serviceDetailPath(progressEnv, progressNs, name, 'overview'), {
+      replace: progressMode === 'move',
+    })
+  }
+
+  if (phase) {
+    const title =
+      phase === 'ready'
+        ? progressMode === 'move'
+          ? 'Move complete'
+          : 'Clone complete'
+        : progressMode === 'move'
+          ? 'Moving stack'
+          : 'Cloning stack'
+    return (
+      <Dialog open={open} onClose={handleClose} width={480}>
+        <DialogHeader title={title} onClose={handleClose} />
+        <DialogBody>
+          <MigrateProgress
+            mode={progressMode}
+            phase={phase}
+            targetNs={progressNs}
+            reason={reason}
+            errorMsg={errorMsg}
+            failStage={failStage}
+            sourceRemoved={sourceRemoved}
+          />
+        </DialogBody>
+        <DialogFooter>
+          {phase === 'ready' || phase === 'error' ? (
+            <>
+              <Button variant="ghost" onClick={handleClose}>
+                Close
+              </Button>
+              {phase === 'ready' && (
+                <Button onClick={goToApp}>Go to app</Button>
+              )}
+            </>
+          ) : phase === 'timeout' ? (
+            <>
+              <Button variant="ghost" onClick={handleClose}>
+                Close
+              </Button>
+              <Button
+                onClick={() => {
+                  setPhase('starting')
+                  void waitForTargetReady(progressEnv, progressNs, name)
+                }}
+              >
+                Keep waiting
+              </Button>
+            </>
+          ) : (
+            <Button variant="ghost" onClick={handleClose} disabled>
+              Working…
+            </Button>
+          )}
+        </DialogFooter>
+      </Dialog>
+    )
+  }
 
   return (
     <Dialog open={open} onClose={onClose} width={480}>
