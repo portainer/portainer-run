@@ -203,8 +203,17 @@ export async function deleteApp(target, { deleteManifest = false } = {}) {
     // 2. Remove the owning stack, whose teardown removes every resource its
     //    manifest declares. Done before the Secrets so its auto-update poll
     //    cannot race the cleanup and re-apply what we are deleting.
+    //
+    //    A 404 from Portainer means there was no such stack, so no teardown ran
+    //    and the resources are still there — the stack-id label can outlive the
+    //    stack, for instance if it was removed outside Portainer-Run. Treating
+    //    that as done would report success over a still-running app, so fall
+    //    back to removing the resources directly.
     if (stackId) {
-      await deleteAppStack({ envId, stackId })
+      const { alreadyGone } = await deleteAppStack({ envId, stackId })
+      if (alreadyGone) {
+        await deleteResourcesDirectly(token, envId, ns, name)
+      }
     } else {
       await deleteResourcesDirectly(token, envId, ns, name)
     }

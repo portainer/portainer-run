@@ -111,6 +111,9 @@ export function deleteAppPaths({ gitTargetId, branch, paths, appName }) {
  * those resources one by one through the Kubernetes API.
  *
  * @param {{ envId: string|number, stackId: string|number }} args
+ * @returns {Promise<{alreadyGone: boolean}>} `alreadyGone` when Portainer had no
+ *   such stack (404). No teardown ran in that case, so the caller must not treat
+ *   it as the resources having been removed.
  */
 export async function deleteAppStack({ envId, stackId }) {
   const data = await serverFetch('/api/vibe/delete-stack', {
@@ -126,4 +129,5 @@ export async function deleteAppStack({ envId, stackId }) {
       'Unexpected response from delete-stack — the endpoint may be missing or misrouted',
     )
   }
+  return { alreadyGone: data.alreadyGone === true }
 }

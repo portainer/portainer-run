@@ -407,13 +407,22 @@ export function ServiceDetailPage() {
                   variant="light"
                   color="danger"
                   leftSection={<Trash2 size={13} />}
-                  disabled={!perms?.canDelete}
+                  // Gated on `d` as well as permissions, like Restart/Start/Stop.
+                  // `perms` is cached in the store from the Applications page, so
+                  // without the `d` check the button is live on first paint and
+                  // after a failed load(). Every target field below is read off
+                  // `d`, so a null `d` would build an all-null target: no stackId
+                  // means the direct-resource path runs and orphans the stack, no
+                  // git annotations means no cleanup and no checkbox, and the
+                  // delete still reports success.
+                  disabled={!d || !perms?.canDelete}
                   title={
                     !perms?.canDelete
                       ? 'You do not have permission to delete workloads in this environment'
                       : undefined
                   }
                   onClick={() =>
+                    d &&
                     perms?.canDelete &&
                     setDeleteTarget({
                       envId: String(envId),
