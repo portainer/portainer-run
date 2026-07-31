@@ -12,7 +12,6 @@ import {
   deletePaths,
 } from '../proxy/git.js'
 import {
-  buildManifests,
   serializeManifests,
   buildManifestPath,
 } from '../lib/manifestSerialize.js'
