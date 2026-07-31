@@ -11,7 +11,6 @@ import {
   deletePaths,
 } from '../proxy/git.js'
 import {
-  buildManifests,
   serializeManifests,
   buildManifestPath,
 } from '../lib/manifestSerialize.js'
@@ -80,6 +79,10 @@ export async function handleVibe(req, res, pathname) {
 
   if (pathname === '/api/vibe/delete-manifest' && req.method === 'POST') {
     return handleVibeDeleteManifest(req, res)
+  }
+
+  if (pathname === '/api/vibe/delete-stack' && req.method === 'POST') {
+    return handleVibeDeleteStack(req, res)
   }
 
   return null
@@ -1326,9 +1329,7 @@ async function handleVibeManifestExposure(req, res) {
     if (!content) return json(res, 404, { error: 'Manifest not found' })
 
     // Parse every YAML document and locate the Service / Ingress objects.
-    const docs = yaml
-      .loadAll(content)
-      .filter((d) => d && typeof d === 'object')
+    const docs = yaml.loadAll(content).filter((d) => d && typeof d === 'object')
     const svc = docs.find((d) => d.kind === 'Service')
     const ing = docs.find((d) => d.kind === 'Ingress')
 
@@ -1665,5 +1666,86 @@ async function handleVibeDeleteManifest(req, res) {
   } catch (err) {
     console.error('[vibe delete-manifest error]', err.message || err)
     return json(res, 502, { error: err.message || 'Delete failed' })
+  }
+}
+
+/**
+ * Delete the Portainer stack that owns an app, which tears down every resource
+ * declared in its manifest (Deployment, Service, Ingress, PVC).
+ *
+ * This is the counterpart to createPortainerGitOpsStack. Deleting only the
+ * Kubernetes resources used to leave the stack record behind, still polling git
+ * on its auto-update interval: because that poll compares the branch head
+ * against the stack's last deployed commit, the next deploy of any *other* app
+ * moved the shared manifests branch and the orphaned stack re-applied the
+ * manifest of the app that had been deleted.
+ *
+ * `external=false` is required — `external=true` means "external Swarm stack"
+ * and takes an entirely different code path. `endpointId` is mandatory.
+ */
+async function handleVibeDeleteStack(req, res) {
+  const body = await readBody(req)
+  const data = parseJson(body)
+  if (!data) return json(res, 400, { error: 'Invalid request body' })
+
+  const { envId, stackId } = data
+  if (!envId || !stackId) {
+    return json(res, 400, { error: 'envId and stackId are required' })
+  }
+  // Portainer stamps the id on the resource as a string label; keep it numeric
+  // so a malformed value can't be interpolated into the request path.
+  const numericStackId = parseInt(String(stackId), 10)
+  const numericEnvId = parseInt(String(envId), 10)
+  if (!Number.isInteger(numericStackId) || numericStackId <= 0) {
+    return json(res, 400, { error: `Invalid stackId: ${stackId}` })
+  }
+  if (!Number.isInteger(numericEnvId) || numericEnvId <= 0) {
+    return json(res, 400, { error: `Invalid envId: ${envId}` })
+  }
+
+  try {
+    const alreadyGone = await deletePortainerStack(req, {
+      envId: numericEnvId,
+      stackId: numericStackId,
+    })
+    return json(res, 200, { ok: true, ...(alreadyGone ? { alreadyGone } : {}) })
+  } catch (err) {
+    console.error('[vibe delete-stack error]', {
+      message: err?.message || String(err),
+      status: err?.status,
+      stackId: numericStackId,
+      envId: numericEnvId,
+    })
+    return json(res, 502, {
+      error: err?.message || 'Stack deletion failed',
+      status: err?.status || null,
+    })
+  }
+}
+
+/**
+ * Delete a Portainer stack, whose teardown removes every resource declared in
+ * its manifest.
+ *
+ * `external=false` is required — `external=true` means "external Swarm stack"
+ * and takes an entirely different code path. `endpointId` is mandatory.
+ *
+ * @returns {Promise<boolean>} true when the stack was already gone (404)
+ */
+async function deletePortainerStack(req, { envId, stackId }) {
+  const target = resolvePortainerTarget()
+  if (!target) throw new Error('Cannot resolve Portainer target')
+  try {
+    await portainerRequest(
+      target,
+      extractToken(req),
+      'DELETE',
+      `/api/stacks/${stackId}?endpointId=${envId}&external=false`,
+    )
+    return false
+  } catch (err) {
+    // 404 means the stack is already gone — the caller's goal is met.
+    if (err?.status === 404) return true
+    throw err
   }
 }

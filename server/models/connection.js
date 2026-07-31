@@ -90,16 +90,6 @@ export function getConnectionsForUser(userId) {
 }
 
 /**
- * Returns ALL connections regardless of ownership — admin use only.
- */
-export function getAllConnections() {
-  const rows = db
-    .prepare('SELECT * FROM connections ORDER BY created_at ASC')
-    .all()
-  return rows.map(rowToConn)
-}
-
-/**
  * @param {string} id
  * @param {string} name
  * @param {object} payload

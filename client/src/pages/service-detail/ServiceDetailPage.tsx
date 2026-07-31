@@ -19,7 +19,7 @@ import { Button } from '@ds/v3-components/Button/Button'
 import { Tabs } from '@ds/v3-components/Tabs/Tabs'
 import type { TabItem } from '@ds/v3-components/Tabs/Tabs'
 
-import { useAppStore, visibleEnvironments } from '../../store/useAppStore.js'
+import { useAppStore } from '../../store/useAppStore.js'
 import {
   useEnvStatusOnDeployments,
   getExtraForApp,
@@ -30,6 +30,7 @@ import { patchDeploymentReplicas } from '../../lib/patchDeploymentReplicas.js'
 import { restartDeployment } from '../../lib/restartDeployment.js'
 import { checkEnvPermissions } from '../../lib/envPermissions.js'
 import { refreshCache } from '../../services/refreshDeployments.js'
+import { STACK_ID_LABEL } from '../../services/deleteApp.js'
 import { errMessage } from '../../lib/errors'
 import { MONO_FONT, TabPanel } from './detailUi'
 import { ServiceDetailLogsTab } from './ServiceDetailLogsTab'
@@ -38,7 +39,6 @@ import { ServiceDetailRevisionsTab } from './ServiceDetailRevisionsTab'
 import { ServiceDetailEditTab } from './ServiceDetailEditTab'
 import { SimpleOverview } from './SimpleOverviewTab'
 import { ServiceInternalsTab } from './ServiceInternalsTab'
-import { MigrateDialog } from './MigrateDialog'
 import { headerStatusFromDeployment } from './deploymentStatus'
 import { isDeployment } from '../../types/k8s'
 import type { Deployment } from '../../types/k8s'
@@ -81,15 +81,12 @@ export function ServiceDetailPage() {
   const { envId = '', namespace = '', name = '', tab: tabParam } = useParams()
   const navigate = useNavigate()
   const token = useAppStore((s) => s.token)
-  const environments = useAppStore((s) => s.environments)
-  const disabledEnvs = useAppStore((s) => s.disabledEnvs)
   const setDeleteTarget = useAppStore((s) => s.setDeleteTarget)
   const pushToast = useAppStore((s) => s.pushToast)
   const envPermissions = useAppStore((s) => s.envPermissions)
 
   const [d, setD] = useState<Deployment | null>(null)
   const [err, setErr] = useState('')
-  const [migrateOpen, setMigrateOpen] = useState(false)
   const [refreshPending, setRefreshPending] = useState(false)
   const [restartPending, setRestartPending] = useState(false)
   const [scalePending, setScalePending] = useState(false)
@@ -142,11 +139,6 @@ export function ServiceDetailPage() {
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [envId, namespace])
-
-  const visEnvs = useMemo(
-    () => visibleEnvironments({ environments, disabledEnvs }),
-    [environments, disabledEnvs],
-  )
 
   const load = useCallback(async () => {
     if (!token || !envId || !namespace || !name) return
@@ -411,27 +403,34 @@ export function ServiceDetailPage() {
           secondaryActions={
             actionBarBusy ? null : (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {technical && (
-                  <Button variant="light" onClick={() => setMigrateOpen(true)}>
-                    Migrate
-                  </Button>
-                )}
                 <Button
                   variant="light"
                   color="danger"
                   leftSection={<Trash2 size={13} />}
-                  disabled={!perms?.canDelete}
+                  // Gated on `d` as well as permissions, like Restart/Start/Stop.
+                  // `perms` is cached in the store from the Applications page, so
+                  // without the `d` check the button is live on first paint and
+                  // after a failed load(). Every target field below is read off
+                  // `d`, so a null `d` would build an all-null target: no stackId
+                  // means the direct-resource path runs and orphans the stack, no
+                  // git annotations means no cleanup and no checkbox, and the
+                  // delete still reports success.
+                  disabled={!d || !perms?.canDelete}
                   title={
                     !perms?.canDelete
                       ? 'You do not have permission to delete workloads in this environment'
                       : undefined
                   }
                   onClick={() =>
+                    d &&
                     perms?.canDelete &&
                     setDeleteTarget({
                       envId: String(envId),
                       ns: namespace,
                       name,
+                      // Stamped by Portainer on everything it deploys through a
+                      // stack, so this resolves for pre-existing apps too.
+                      stackId: d?.metadata?.labels?.[STACK_ID_LABEL] || null,
                       gitTargetId:
                         d?.metadata?.annotations?.[
                           'portainer-run/git-target-id'
@@ -551,16 +550,6 @@ export function ServiceDetailPage() {
           )}
         </div>
       </div>
-
-      <MigrateDialog
-        open={migrateOpen}
-        onClose={() => setMigrateOpen(false)}
-        token={token}
-        envId={String(envId)}
-        namespace={namespace}
-        name={name}
-        visEnvs={visEnvs}
-      />
     </div>
   )
 }

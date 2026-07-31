@@ -1,34 +1,6 @@
 import { useAppStore, visibleDeployments } from '../../store/useAppStore.js'
 
 /**
- * @param {object} cfg — deploy-config JSON
- * @returns {string} markdown
- */
-export function buildDeployPreview(cfg) {
-  const ctrs = cfg.containers || []
-  let p = `**Deployment preview: ${cfg.name || 'unnamed'}**\n\n`
-  p += `**Namespace:** ${cfg.namespace || 'default'} | **Instances:** ${cfg.instances || 1}`
-  if (cfg.exposure) {
-    p += ` | **Exposure:** ${cfg.exposure.type}${
-      cfg.exposure.ports ? ' on port ' + cfg.exposure.ports.join(', ') : ''
-    }`
-  }
-  p += '\n\n**Containers:**\n\n'
-  ctrs.forEach((ct, i) => {
-    p += `- ${i === 0 ? 'Primary' : 'Sidecar'}: **${ct.name}** (${ct.image})`
-    if (ct.env?.length) p += ` — ${ct.env.map((e) => e.name).join(', ')}`
-    if (ct.storage) {
-      p += ` — ${ct.storage.size} at ${ct.storage.mountPath} (vol: ${
-        cfg.name + '-' + (ct.storage.name || ct.name + '-data')
-      })`
-    }
-    p += '\n'
-  })
-  if (cfg.warnings?.length) p += '\n**Notes:** ' + cfg.warnings.join(' · ')
-  return p
-}
-
-/**
  * @param {string} text
  * @returns {null | { serviceName: string, envId: string, namespace: string, instances: number }}
  */

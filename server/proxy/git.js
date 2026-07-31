@@ -448,6 +448,32 @@ async function deleteFileGitHub(payload, branch, filePath, message) {
   return { ok: true }
 }
 
+/**
+ * Whether a single file exists on `branch`. Used to keep a delete commit free of
+ * actions targeting absent files, which GitLab rejects with a 400 for the whole
+ * commit rather than skipping.
+ *
+ * A failure other than "missing" is also reported as absent: the caller only uses
+ * this to decide whether to include a delete action, and omitting one leaves the
+ * file in place, which is the safe direction.
+ */
+async function fileExistsGitLab(payload, branch, filePath) {
+  const { repo } = payload
+  const base = gitlabApiBase(payload)
+  const encoded = encodeURIComponent(repo)
+  const encodedPath = encodeURIComponent(filePath)
+  try {
+    await request(
+      'GET',
+      `${base}/api/v4/projects/${encoded}/repository/files/${encodedPath}?ref=${branch}`,
+      buildHeaders(payload),
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
 async function deleteFileGitLab(payload, branch, filePath, message) {
   const { repo } = payload
   const base = gitlabApiBase(payload)
@@ -644,11 +670,17 @@ async function deletePathsGitLab(payload, branch, paths, message) {
     )
     if (blobs.length > 0) {
       for (const b of blobs) fileSet.add(b.path)
-    } else {
-      // Not a directory (or empty) — treat as a single file path.
-      fileSet.add(p)
+      continue
     }
+    // Not a directory (or empty) — treat as a single file, but only if it is
+    // actually there. GitLab rejects the whole commit with a 400 when an action
+    // targets a nonexistent file, so a path that is already gone would make this
+    // permanently unretryable. GitHub and Gitea no-op in that case because they
+    // diff against the existing tree; this keeps GitLab consistent with them.
+    if (await fileExistsGitLab(payload, branch, p)) fileSet.add(p)
   }
+  // Nothing left to remove — already in the desired state, so report success
+  // rather than failing a retry.
   if (fileSet.size === 0) return { ok: true, deleted: 0 }
 
   await request(

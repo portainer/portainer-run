@@ -28,7 +28,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: BASE,
-    // The Portainer Run backend runs in-process (same port as the SPA);
+    // The Portainer-Run backend runs in-process (same port as the SPA);
     // no separate server process or proxy needed in dev.
     plugins: [react(), tailwindcss(), addonServerPlugin(BASE)],
     resolve: {

@@ -2,7 +2,7 @@ Portainer-Run has been deployed as release "{{ .Release.Name }}" in namespace "{
 
 In-cluster Service (ClusterIP):
     {{ include "portainer-run.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
-    ports: 443 (https), 80 (http)
+    port: 80 (http — TLS terminates at the proxy in front of the addon)
 
 {{- if not .Values.secret.ENCRYPTION_KEY }}
 

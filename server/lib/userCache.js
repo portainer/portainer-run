@@ -19,7 +19,3 @@ export function getCachedUser(token) {
 export function setCachedUser(token, userId, isAdmin) {
   cache.set(token, { userId, isAdmin, expiresAt: Date.now() + TTL_MS })
 }
-
-export function evictUser(token) {
-  cache.delete(token)
-}

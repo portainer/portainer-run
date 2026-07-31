@@ -602,6 +602,12 @@ export function VibeDeploy() {
       pushToast('Select or enter a project space', 'err')
       return
     }
+    // Apps are only ever exposed via Ingress, so without a hostname there is no
+    // way to reach the app once it is running.
+    if (!ingHost.trim()) {
+      pushToast('A hostname is required', 'err')
+      return
+    }
 
     // Build deploy params for GitOpsStep dry-run + actual deploy
     // Priority: user-entered svcPort > PORT env var > runtime default
@@ -956,7 +962,13 @@ export function VibeDeploy() {
             <div className="msw-footer-right">
               <Button
                 onClick={() => confirmDeployConfig(ctx)}
-                disabled={!appName || !envId || !resolvedNs || !canProceed}
+                disabled={
+                  !appName ||
+                  !envId ||
+                  !resolvedNs ||
+                  !ingHost.trim() ||
+                  !canProceed
+                }
               >
                 {gitTargetsList.length === 1 ? 'Deploy →' : 'Next →'}
               </Button>

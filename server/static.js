@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { DIST_DIR, LEGACY_HTML } from './config.js'
+import { DIST_DIR } from './config.js'
 
 const contentTypes = {
   '.html': 'text/html; charset=utf-8',
@@ -19,7 +19,7 @@ const contentTypes = {
 }
 
 /**
- * Serves the Vite build from client/dist, or old-implementation/portainer-run.html as fallback.
+ * Serves the Vite build from client/dist.
  * @returns {boolean} true if a response was sent
  */
 export function tryServeStatic(pathname, res) {
@@ -52,11 +52,6 @@ export function tryServeStatic(pathname, res) {
     }
   }
 
-  if (pathname === '/' || pathname === '/index.html') {
-    if (fs.existsSync(LEGACY_HTML)) {
-      return serveFile(LEGACY_HTML, res, 'text/html; charset=utf-8')
-    }
-  }
   return false
 }
 

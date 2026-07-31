@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url'
 import type { Plugin } from 'vite'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
-// Portainer Run backend route prefixes, as the server sees them (i.e. after
+// Portainer-Run backend route prefixes, as the server sees them (i.e. after
 // the addon gateway strips the base path in production).
 const BACKEND_ROUTES = ['api', 'ai', 'config', 'cache', 'env-status', 'mcp']
 
@@ -13,7 +13,7 @@ type RequestHandler = (
 ) => Promise<void>
 
 /**
- * Runs the Portainer Run backend inside the Vite dev server process (same
+ * Runs the Portainer-Run backend inside the Vite dev server process (same
  * origin/port as the SPA), mirroring the addon gateway: backend routes under
  * the addon base are prefix-stripped and handed to the server's request
  * handler. Requires running Vite under Bun (`bun --bun vite`) for bun:sqlite.

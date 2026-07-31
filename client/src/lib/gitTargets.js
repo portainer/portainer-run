@@ -95,24 +95,6 @@ export function listRepoDir(id, branch, path = '') {
 // --- App manifest cleanup ---
 
 /**
- * Delete a manifest file or source directory from the Git repo.
- * Used during application deletion to clean up Git.
- *
- * @param {object} p
- * @param {string} p.gitTargetId
- * @param {string} p.branch
- * @param {string} p.gitPath
- * @param {string} [p.appName]
- * @returns {Promise<{ ok: boolean }>}
- */
-export function deleteAppManifest({ gitTargetId, branch, gitPath, appName }) {
-  return serverFetch('/api/vibe/delete-manifest', {
-    method: 'POST',
-    body: JSON.stringify({ gitTargetId, branch, gitPath, appName }),
-  })
-}
-
-/**
  * Remove multiple paths (manifest file + source directory) in a single commit.
  * Avoids the non-fast-forward race of two sequential delete commits.
  */
@@ -121,4 +103,31 @@ export function deleteAppPaths({ gitTargetId, branch, paths, appName }) {
     method: 'POST',
     body: JSON.stringify({ gitTargetId, branch, paths, appName }),
   })
+}
+
+/**
+ * Delete the Portainer stack that owns an app. Portainer's own teardown removes
+ * every resource declared in the stack's manifest, so this replaces deleting
+ * those resources one by one through the Kubernetes API.
+ *
+ * @param {{ envId: string|number, stackId: string|number }} args
+ * @returns {Promise<{alreadyGone: boolean}>} `alreadyGone` when Portainer had no
+ *   such stack (404). No teardown ran in that case, so the caller must not treat
+ *   it as the resources having been removed.
+ */
+export async function deleteAppStack({ envId, stackId }) {
+  const data = await serverFetch('/api/vibe/delete-stack', {
+    method: 'POST',
+    body: JSON.stringify({ envId: String(envId), stackId: String(stackId) }),
+  })
+  // A 200 is not sufficient proof the stack was deleted. Unknown backend routes
+  // fall through to the SPA's index.html, which is also served with a 200 — so a
+  // missing or misrouted endpoint parses as {} and would otherwise read as
+  // success, silently skipping teardown while the caller reports the app gone.
+  if (data?.ok !== true) {
+    throw new Error(
+      'Unexpected response from delete-stack — the endpoint may be missing or misrouted',
+    )
+  }
+  return { alreadyGone: data.alreadyGone === true }
 }

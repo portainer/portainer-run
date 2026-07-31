@@ -4,8 +4,7 @@
   "type": "module",
   "version": "1.0.0",
   "scripts": {
-    "start": "bun run server.js",
-    "start:node": "node server.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "js-yaml": "^4.1.0"

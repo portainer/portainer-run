@@ -1,10 +1,3 @@
-export function esc(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-}
-
 export function age(ts) {
   if (!ts) return '—'
   const s = Math.floor((Date.now() - new Date(ts)) / 1000)
