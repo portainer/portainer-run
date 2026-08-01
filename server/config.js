@@ -39,6 +39,14 @@ export const CACHE_DIR = process.env.CACHE_DIR || path.join(projectRoot, 'data')
 export const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || ''
 
 export const BASE_DOMAIN = process.env.BASE_DOMAIN || ''
+// When set, app hostnames are joined to BASE_DOMAIN with '-' instead of '.'
+// (appName-baseDomain instead of appName.baseDomain) — keeps the hostname a
+// single DNS label deeper than BASE_DOMAIN itself, so a single-level wildcard
+// cert scoped to BASE_DOMAIN's own parent zone still covers it. Off by default
+// to preserve the existing nested-subdomain behavior.
+export const FLAT_INGRESS_HOSTNAMES = /^true$/i.test(
+  process.env.FLAT_INGRESS_HOSTNAMES || '',
+)
 export const GATEWAY_URL = (process.env.GATEWAY_URL || '').replace(/\/$/, '')
 
 /** Release version, baked in at Docker build time. 'dev' for local/non-release builds. */

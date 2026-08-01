@@ -101,6 +101,8 @@ export function VibeDeploy() {
   const envPermissions = useAppStore((s) => s.envPermissions)
   const patchEnvPermissions = useAppStore((s) => s.patchEnvPermissions)
   const pushToast = useAppStore((s) => s.pushToast)
+  const flatIngressHostnames = useAppStore((s) => s.flatIngressHostnames)
+  const hostSeparator = flatIngressHostnames ? '-' : '.'
   const [ingressHostMap, setIngressHostMap] = useState<Record<string, string>>(
     {},
   )
@@ -378,8 +380,12 @@ export function VibeDeploy() {
 
   // Fetch ingresses already deployed in the selected namespace to derive the base domain per class.
   // Admin-configured ingresses (no managed-by=portainer-run label) are used as-is — their host IS
-  // the base domain. App-deployed ingresses (managed-by=portainer-run) have host={appName}.{base},
-  // so we strip the first segment. Admin ingresses take priority; managed ones are the fallback.
+  // the base domain. App-deployed ingresses (managed-by=portainer-run) have
+  // host={appName}{hostSeparator}{base}, so in the default '.' scheme we can recover the base by
+  // stripping the first segment. In the flat '-' scheme that reversal is ambiguous — appName and
+  // base domain share one DNS label, and either can itself legitimately contain hyphens — so
+  // managed ingresses are not used as a fallback source at all in that mode; only an actual
+  // admin-created ingress can supply the base domain.
   useEffect(() => {
     if (!envId || !resolvedNs || !token) {
       setIngressHostMap({})
@@ -401,10 +407,16 @@ export function VibeDeploy() {
           (item: { metadata?: { labels?: Record<string, string> } }) =>
             item.metadata?.labels?.['managed-by'] !== 'portainer-run',
         )
-        // Prefer admin-configured ingresses as the source of truth.
-        // Fall back to managed ingresses only if no admin ones exist yet.
-        const sources = adminIngresses.length > 0 ? adminIngresses : items
-        const usingManaged = adminIngresses.length === 0
+        // Prefer admin-configured ingresses as the source of truth. Fall back to managed ingresses
+        // only if no admin ones exist yet — and only when the base domain can be safely recovered
+        // by stripping (i.e. not in flat mode; see comment above).
+        const sources =
+          adminIngresses.length > 0
+            ? adminIngresses
+            : flatIngressHostnames
+              ? []
+              : items
+        const usingManaged = adminIngresses.length === 0 && !flatIngressHostnames
         const map: Record<string, string> = {}
         for (const item of sources) {
           const cls =
@@ -421,14 +433,14 @@ export function VibeDeploy() {
         setIngressHostMap(map)
       })
       .catch(() => setIngressHostMap({}))
-  }, [envId, resolvedNs, token])
+  }, [envId, resolvedNs, token, flatIngressHostnames])
 
   // Re-derive ingress host when appName or active ingress class changes
   useEffect(() => {
     if (exposeType !== 'Ingress' || !appName) return
     const base = ingressHostMap[ingClass] || ''
-    if (base) setIngHost(`${appName}.${base}`)
-  }, [appName, exposeType, ingClass, ingressHostMap])
+    if (base) setIngHost(`${appName}${hostSeparator}${base}`)
+  }, [appName, exposeType, ingClass, ingressHostMap, hostSeparator])
 
   useEffect(() => {
     if (!envId || !token) {
@@ -1111,6 +1123,7 @@ export function VibeDeploy() {
                   ingClass={ingClass}
                   setIngClass={setIngClass}
                   ingressHostMap={ingressHostMap}
+                  hostSeparator={hostSeparator}
                 />
               )
             case 'storage':

@@ -23,6 +23,7 @@ export const useAppStore = create((set, _get) => ({
   isAiAvailable: false,
   aiProvider: 'anthropic',
   baseDomain: '',
+  flatIngressHostnames: false,
   configNamespace: 'kube-system',
   version: 'dev',
   /** @type {Record<string, { reason?: string, disabledAt?: string }>} */
@@ -70,6 +71,7 @@ export const useAppStore = create((set, _get) => ({
   setPortainerAccessDenied: (v) => set({ portainerAccessDenied: Boolean(v) }),
   setAi: (isAiAvailable, aiProvider, baseDomain) =>
     set({ isAiAvailable, aiProvider, baseDomain: baseDomain || '' }),
+  setFlatIngressHostnames: (v) => set({ flatIngressHostnames: Boolean(v) }),
   setConfigNamespace: (v) => set({ configNamespace: v || 'kube-system' }),
   setVersion: (v) => set({ version: v || 'dev' }),
   setDisabledEnvs: (disabledEnvs) => set({ disabledEnvs }),

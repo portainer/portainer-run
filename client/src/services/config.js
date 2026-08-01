@@ -24,6 +24,7 @@ export async function loadServerConfig() {
         d.aiProvider || 'anthropic',
         d.baseDomain || '',
       )
+      st().setFlatIngressHostnames(!!d.flatIngressHostnames)
       if (d.configNamespace) st().setConfigNamespace(d.configNamespace)
       st().setVersion(d.version || 'dev')
     } catch (e) {
@@ -32,6 +33,7 @@ export async function loadServerConfig() {
         'API proxy not reachable — is the portainer-run server running?',
       )
       st().setAi(false, 'anthropic', '')
+      st().setFlatIngressHostnames(false)
     }
   })
 }

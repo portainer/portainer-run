@@ -62,6 +62,9 @@ interface DetailsStepProps {
   ingClass: string
   setIngClass: Dispatch<SetStateAction<string>>
   ingressHostMap: Record<string, string>
+  /** Separator between the app name and the base domain in the auto-filled hostname — '.' by
+   * default, '-' when the server has FLAT_INGRESS_HOSTNAMES enabled. */
+  hostSeparator?: string
 }
 
 /** Third wizard step: app name, target environment/namespace, and exposure. */
@@ -91,6 +94,7 @@ export function DetailsStep({
   ingClass,
   setIngClass,
   ingressHostMap,
+  hostSeparator = '.',
 }: DetailsStepProps) {
   const singleEnv = availableEnvs.length === 1
   const singleNs = nsList.length === 1 && !nsLoading && !manualNs
@@ -286,7 +290,8 @@ export function DetailsStep({
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    .{activeBaseDomain}
+                    {hostSeparator}
+                    {activeBaseDomain}
                   </span>
                 </div>
               ) : (

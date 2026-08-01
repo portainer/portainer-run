@@ -17,7 +17,11 @@
 
 import { readBody } from '../lib/http.js'
 import { CORS } from '../lib/cors.js'
-import { BASE_DOMAIN, CONFIG_NAMESPACE } from '../config.js'
+import {
+  BASE_DOMAIN,
+  FLAT_INGRESS_HOSTNAMES,
+  CONFIG_NAMESPACE,
+} from '../config.js'
 import { requestUploadSession, fetchStagedFiles } from '../lib/gateway.js'
 import {
   resolveCallerIdentity,
@@ -55,7 +59,7 @@ const SERVER_INSTRUCTIONS = [
   '3. Git target — call list_git_targets. If none exist, tell the user to create one in the Portainer-Run UI (git targets cannot be created via MCP) and stop. If several exist, ask which.',
   '4. App name — propose one and confirm it with the user.',
   '5. Exposure — apps are always exposed at a URL through the cluster ingress controller. Call list_ingress_classes to inform the ingress settings: it reports a baseDomain (when ingressHostRequired is false the host is derived) and the available ingress classes.',
-  '6. Ingress (when chosen) — from list_ingress_classes, if ingressHostRequired is true ask the user for the full hostname (otherwise the host is derived as <appName>.<baseDomain>). Confirm which ingress class to use, or let it default to the cluster default.',
+  '6. Ingress (when chosen) — from list_ingress_classes, if ingressHostRequired is true ask the user for the full hostname (otherwise the host is derived as <appName><hostSeparator><baseDomain>, where hostSeparator is reported alongside baseDomain — usually "." but may be "-"). Confirm which ingress class to use, or let it default to the cluster default.',
   '7. Environment variables / secrets — if the app needs any, list them and ask the user for values.',
   '',
   'Static sites: if the app is plain HTML/CSS/JS with no server-side logic, deploy it as a static site — send only the static files (index.html, css, js, assets) and set runtime to "nginx". Do NOT scaffold a Node/Express (or any) server to serve static files; adding a package.json would make it deploy as a Node app instead of nginx.',
@@ -200,7 +204,7 @@ function buildTools() {
         ingress: {
           type: 'object',
           description:
-            'Ingress settings. The app is always exposed at a URL through the cluster ingress controller. If host is omitted and a base domain is configured, defaults to <appName>.<baseDomain>.',
+            'Ingress settings. The app is always exposed at a URL through the cluster ingress controller. If host is omitted and a base domain is configured, defaults to <appName><hostSeparator><baseDomain> (see list_ingress_classes for the active hostSeparator).',
           properties: {
             host: {
               type: 'string',
@@ -398,6 +402,7 @@ async function toolListIngressClasses(req, args) {
   return {
     classes,
     baseDomain: BASE_DOMAIN || null,
+    hostSeparator: FLAT_INGRESS_HOSTNAMES ? '-' : '.',
     ingressHostRequired: !BASE_DOMAIN,
   }
 }
@@ -698,10 +703,14 @@ async function toolDeployVibeApp(req, args, caller) {
   const safeAppName = appName.toLowerCase().replace(/[^a-z0-9-]/g, '-')
 
   // Resolve ingress settings. Without an explicit host, fall back to
-  // <appName>.<BASE_DOMAIN> if a base domain is configured — mirroring the
-  // template/UI default.
+  // <appName>.<BASE_DOMAIN> (or <appName>-<BASE_DOMAIN> when
+  // FLAT_INGRESS_HOSTNAMES is set) if a base domain is configured — mirroring
+  // the template/UI default.
+  const hostSeparator = FLAT_INGRESS_HOSTNAMES ? '-' : '.'
   const resolvedIngress = {
-    host: ingress.host || (BASE_DOMAIN ? `${safeAppName}.${BASE_DOMAIN}` : ''),
+    host:
+      ingress.host ||
+      (BASE_DOMAIN ? `${safeAppName}${hostSeparator}${BASE_DOMAIN}` : ''),
     path: ingress.path || '/',
     ...(ingress.ingressClass ? { ingressClass: ingress.ingressClass } : {}),
   }
