@@ -12,6 +12,10 @@ import { addonServerPlugin } from './vite.addonServerPlugin'
 // and the router basename so the browser requests everything under the prefix.
 const BASE = process.env.ADDON_BASE_PATH || '/addons/portainer-run/'
 
+// Local dev server port. Override (VITE_DEV_PORT) when running several add-ons
+// at once so each gets its own port; the HMR socket must target the same port.
+const devPort = Number(process.env.VITE_DEV_PORT) || 5173
+
 export default defineConfig(({ mode }) => {
   // Root .env holds the server config (PORTAINER_URL, etc.); reuse it here so
   // dev needs a single env file.
@@ -43,8 +47,11 @@ export default defineConfig(({ mode }) => {
     },
     build: { outDir: 'dist', assetsDir: 'assets' },
     server: {
-      port: 5173,
+      port: devPort,
       strictPort: true,
+      // The addon page loads from Portainer's dev server (:8999) while Vite runs
+      // here; point the HMR socket straight at Vite so reload works across origins.
+      hmr: { protocol: 'ws', host: 'localhost', clientPort: devPort },
       // The design system ships TypeScript source directly; allow Vite to
       // transform it even though it lives outside the project root.
       fs: {

@@ -31,7 +31,7 @@ spec:
       containers:
         - name: portainer-run
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: Always
+          imagePullPolicy: {{ .Values.image.pullPolicy | default "Always" }}
           securityContext:
             allowPrivilegeEscalation: false
           ports:

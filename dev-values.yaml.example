@@ -1,0 +1,21 @@
+# Local dev overrides, merged over the GUI install request (these win).
+#
+#   cp dev-values.yaml.example dev-values.yaml
+#   DEV_ADDON_VALUES=portainer-run=/abs/path/to/portainer-run/dev-values.yaml
+#
+# `bun run redeploy` reads image.repository and image.tag from here, so the tag it
+# builds is the one the release runs. See
+# portal-template/docs/developing-inside-portainer.md.
+image:
+  repository: portainer-run
+  tag: dev
+  # Use the node-loaded image; never reach a registry.
+  pullPolicy: IfNotPresent
+# This add-on's server calls Portainer, which in the dev rig runs on your host — so
+# the chart default (portainer.portainer.svc.cluster.local) points at nothing. Reach
+# your host instead; how depends on the cluster:
+#   Docker/Rancher Desktop: https://host.docker.internal:9443
+#   kind or k3d on Linux:   https://<your host LAN IP>:9443
+#   minikube:               https://host.minikube.internal:9443
+#configMap:
+#  PORTAINER_URL: https://host.docker.internal:9443

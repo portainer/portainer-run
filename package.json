@@ -9,6 +9,7 @@
     "build": "bun run --cwd client build",
     "preview": "bun run --cwd client preview",
     "docker:run": "bash scripts/docker-run.sh",
+    "redeploy": "bun run scripts/redeploy.ts",
     "lint": "bun run --cwd client lint",
     "typecheck": "bun run --cwd client typecheck",
     "format": "prettier --write .",
