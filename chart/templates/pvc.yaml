@@ -1,7 +1,8 @@
+{{- include "portainer-run.validateStorageClass" . -}}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ include "portainer-run.fullname" . }}-cache
+  name: {{ include "portainer-run.cacheClaimName" . }}
   labels:
     {{- include "portainer-run.labels" . | nindent 4 }}
 spec:

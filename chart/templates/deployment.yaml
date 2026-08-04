@@ -90,4 +90,4 @@ spec:
       volumes:
         - name: cache
           persistentVolumeClaim:
-            claimName: {{ include "portainer-run.fullname" . }}-cache
+            claimName: {{ include "portainer-run.cacheClaimName" . }}
