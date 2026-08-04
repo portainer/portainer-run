@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1
 
 # Stage 1: Build the Vite client
-FROM node:24-alpine AS build-ui
+# Pinned to $BUILDPLATFORM: the output is arch-independent JS/CSS/fonts, and
+# emulating Node under QEMU for a multi-arch build is slow and SIGILLs.
+FROM --platform=$BUILDPLATFORM node:24-alpine AS build-ui
 WORKDIR /build
 COPY client/package.json ./
 RUN npm install
@@ -10,7 +12,10 @@ RUN npm run build
 
 # Stage 2: Install server dependencies
 # node:sqlite is built into Node — no native build tools needed
-FROM node:24-alpine AS build-server
+# Also pinned: js-yaml is pure JS, so the installed tree is arch-independent.
+# Keep it that way — a native dependency would install for the build arch and
+# silently break the others.
+FROM --platform=$BUILDPLATFORM node:24-alpine AS build-server
 WORKDIR /deps
 COPY server/package.json ./
 RUN npm install --omit=dev
