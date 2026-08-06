@@ -2,15 +2,16 @@ import url from 'node:url'
 import { readBody } from './lib/http.js'
 import { CORS } from './lib/cors.js'
 import { isCrossSiteRequest } from './lib/csrf.js'
+import { PORTAINER_URL, CONFIG_NAMESPACE, VERSION, BOOT_ID } from './config.js'
 import {
-  ANTHROPIC_KEY,
-  AI_PROVIDER,
-  BASE_DOMAIN,
-  OPENAI_KEY,
-  PORTAINER_URL,
-  CONFIG_NAMESPACE,
-  VERSION,
-} from './config.js'
+  aiProvider,
+  anthropicKey,
+  baseDomain,
+  ensureHydrated,
+  isConfigured,
+  openaiKey,
+} from './settings.js'
+import { keyContinuity } from './lib/key-continuity.js'
 import { handleCache } from './cache.js'
 import { handleEnvStatus } from './env-status.js'
 import { tryServeStatic } from './static.js'
@@ -19,6 +20,7 @@ import { proxyToOpenAI } from './proxy/openai.js'
 import { handleConnections } from './routes/connections.js'
 import { handleVibe } from './routes/vibe.js'
 import { handleMcp } from './routes/mcp.js'
+import { handleSetup } from './routes/setup.js'
 import { resolveCallerIdentity } from './lib/identity.js'
 
 /**
@@ -59,11 +61,18 @@ export async function handleRequest(req, res) {
       JSON.stringify({
         portainerUrl: PORTAINER_URL || null,
         portainerFromServer: Boolean(PORTAINER_URL),
-        aiAvailable: !!(ANTHROPIC_KEY || OPENAI_KEY),
-        aiProvider: AI_PROVIDER,
-        baseDomain: BASE_DOMAIN,
+        aiAvailable: !!(anthropicKey() || openaiKey()),
+        aiProvider: aiProvider(),
+        baseDomain: baseDomain(),
         configNamespace: CONFIG_NAMESPACE,
         version: VERSION,
+        // Boot state for the setup gate. Unauthenticated (the probes hit this),
+        // so only booleans here — details live on /api/setup/status.
+        setupRequired: !isConfigured(),
+        keyMismatch: keyContinuity().status === 'mismatch',
+        // Encrypted data but no key: a dropped key, not a first run.
+        keyLost: keyContinuity().status === 'lost',
+        bootId: BOOT_ID,
       }),
     )
     return
@@ -100,11 +109,43 @@ export async function handleRequest(req, res) {
       res.end(JSON.stringify({ error: 'Invalid JSON body' }))
       return
     }
-    if (AI_PROVIDER === 'openai') {
+    if (aiProvider() === 'openai') {
       proxyToOpenAI(req, res, body)
     } else {
       proxyToAnthropic(req, res, body)
     }
+    return
+  }
+
+  // First-run setup API
+  if (pathname.startsWith('/api/setup/')) {
+    const handled = await handleSetup(req, res, pathname)
+    if (handled !== null) return
+  }
+
+  // Settings live in Portainer and only in this process's memory, so a restart
+  // starts unconfigured. Borrow the first admin caller's token to fetch them
+  // back rather than waiting for someone to visit the setup screen.
+  if (!isConfigured() && pathname.startsWith('/api/')) {
+    const caller = await resolveCallerIdentity(req)
+    if (caller?.isAdmin) await ensureHydrated(caller.token)
+  }
+
+  // These read credentials encrypted with the key. Without it they would throw
+  // out of the crypto layer as a 500; say setup has not run instead.
+  if (
+    !isConfigured() &&
+    (pathname.startsWith('/api/connections') ||
+      pathname.startsWith('/api/vibe'))
+  ) {
+    res.writeHead(503, { 'Content-Type': 'application/json', ...CORS })
+    res.end(
+      JSON.stringify({
+        error:
+          'Portainer-Run is awaiting setup. An administrator must complete first-run setup before Git targets and deploys are available.',
+        setupRequired: true,
+      }),
+    )
     return
   }
 

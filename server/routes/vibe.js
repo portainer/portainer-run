@@ -16,13 +16,8 @@ import {
 } from '../lib/manifestSerialize.js'
 import yaml from 'js-yaml'
 import { resolvePortainerTarget } from '../resolve-portainer.js'
-import {
-  resolveCallerIdentity,
-  extractToken,
-  portainerAuthHeaders,
-} from '../lib/identity.js'
-import https from 'node:https'
-import http from 'node:http'
+import { resolveCallerIdentity, extractToken } from '../lib/identity.js'
+import { portainerRequest } from '../lib/portainer-api.js'
 
 /**
  * Handle all /api/vibe/* routes.
@@ -1035,67 +1030,6 @@ async function createPortainerGitOpsStack(
     `/api/stacks/create/kubernetes/repository?endpointId=${envId}`,
     bodyStr,
   )
-}
-
-function portainerRequest(
-  target,
-  userToken,
-  method,
-  path,
-  body,
-  contentType = 'application/json',
-) {
-  return new Promise((resolve, reject) => {
-    const transport = target.isHttps ? https : http
-    const headers = { 'Content-Type': contentType, Accept: 'application/json' }
-    if (userToken) Object.assign(headers, portainerAuthHeaders(userToken))
-    if (body) headers['Content-Length'] = Buffer.byteLength(body)
-
-    const opts = {
-      hostname: target.host,
-      port: target.port,
-      path,
-      method,
-      headers,
-      rejectUnauthorized: false,
-    }
-
-    const reqOut = transport.request(opts, (upRes) => {
-      const chunks = []
-      upRes.on('data', (c) => chunks.push(c))
-      upRes.on('end', () => {
-        const text = Buffer.concat(chunks).toString('utf8')
-        if (upRes.statusCode >= 400) {
-          // Keep the method/path/status alongside Portainer's own message so a
-          // routing 404 ("Not Found") is distinguishable from a resource 404.
-          let detail = ''
-          try {
-            const parsed = JSON.parse(text)
-            detail = parsed?.message || parsed?.details || ''
-          } catch {
-            /* ignore */
-          }
-          const err = new Error(
-            `Portainer ${method} ${path.split('?')[0]} → HTTP ${upRes.statusCode}` +
-              (detail ? `: ${detail}` : ''),
-          )
-          err.status = upRes.statusCode
-          err.method = method
-          err.url = path.split('?')[0]
-          return reject(err)
-        }
-        try {
-          resolve(JSON.parse(text))
-        } catch {
-          resolve(text)
-        }
-      })
-    })
-
-    reqOut.on('error', reject)
-    if (body) reqOut.write(body)
-    reqOut.end()
-  })
 }
 
 // ---------------------------------------------------------------------------

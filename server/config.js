@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -26,23 +27,22 @@ export const PORTAINER_URL = (process.env.PORTAINER_URL || '').replace(
   /\/$/,
   '',
 )
-export const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || ''
-export const OPENAI_KEY = process.env.OPENAI_API_KEY || ''
-export const AI_PROVIDER =
-  process.env.AI_PROVIDER ||
-  (ANTHROPIC_KEY ? 'anthropic' : OPENAI_KEY ? 'openai' : '')
-export const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o'
+// AI keys, BASE_DOMAIN, GATEWAY_URL and ENCRYPTION_KEY are not read here: they
+// come from Portainer at runtime and live in settings.js, which seeds itself
+// from the same environment variables for local development.
 // Plain HTTP only — TLS terminates at the proxy in front of us. Defaults to an
 // unprivileged port so the container can run as a non-root user.
 export const PORT = parseInt(process.env.PORT || '8080', 10)
 export const CACHE_DIR = process.env.CACHE_DIR || path.join(projectRoot, 'data')
-export const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || ''
-
-export const BASE_DOMAIN = process.env.BASE_DOMAIN || ''
-export const GATEWAY_URL = (process.env.GATEWAY_URL || '').replace(/\/$/, '')
 
 /** Release version, baked in at Docker build time. 'dev' for local/non-release builds. */
 export const VERSION = process.env.PORTAINER_RUN_VERSION || 'dev'
+
+/**
+ * Unique to this process, so the setup UI can tell a restarted pod from the old
+ * one still answering.
+ */
+export const BOOT_ID = crypto.randomUUID()
 
 function resolveConfigNamespace() {
   // When running in Kubernetes, the pod's own namespace is mounted at this path automatically.
@@ -81,22 +81,6 @@ if (PORTAINER_URL) {
   console.warn(
     '\n⚠️   No PORTAINER_URL in environment — the server cannot reach Portainer and all API requests will fail. Set PORTAINER_URL.\n',
   )
-}
-
-if (!ANTHROPIC_KEY && !OPENAI_KEY) {
-  console.warn(
-    '\n⚠️   No AI key set (ANTHROPIC_API_KEY or OPENAI_API_KEY) — AI triage will be unavailable\n',
-  )
-}
-
-if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length < 32) {
-  console.error(
-    '\n❌  ENCRYPTION_KEY is not set or is too short (minimum 32 characters).\n' +
-      '    Git target credentials cannot be stored without it.\n' +
-      '    Generate one with: openssl rand -hex 32\n' +
-      '    Then add ENCRYPTION_KEY=<value> to your .env file or docker run command.\n',
-  )
-  process.exit(1)
 }
 
 /** Set only when `PORTAINER_URL` is non-empty. */

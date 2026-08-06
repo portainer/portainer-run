@@ -25,6 +25,12 @@ export const useAppStore = create((set, _get) => ({
   baseDomain: '',
   configNamespace: 'kube-system',
   version: 'dev',
+  /** True until an admin completes first-run setup (no ENCRYPTION_KEY injected). */
+  setupRequired: false,
+  /** True when the injected ENCRYPTION_KEY differs from the one existing data was encrypted with. */
+  keyMismatch: false,
+  /** True when no key is injected but encrypted data exists — a dropped key, not a first run. */
+  keyLost: false,
   /** @type {Record<string, { reason?: string, disabledAt?: string }>} */
   disabledEnvs: {},
   cache: { ...initialCache },
@@ -72,6 +78,12 @@ export const useAppStore = create((set, _get) => ({
     set({ isAiAvailable, aiProvider, baseDomain: baseDomain || '' }),
   setConfigNamespace: (v) => set({ configNamespace: v || 'kube-system' }),
   setVersion: (v) => set({ version: v || 'dev' }),
+  setSetupState: (setupRequired, keyMismatch, keyLost) =>
+    set({
+      setupRequired: Boolean(setupRequired),
+      keyMismatch: Boolean(keyMismatch),
+      keyLost: Boolean(keyLost),
+    }),
   setDisabledEnvs: (disabledEnvs) => set({ disabledEnvs }),
   setCache: (updater) =>
     set((s) =>

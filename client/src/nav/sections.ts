@@ -57,6 +57,12 @@ const ADMIN_SECTION: NavSection = {
       icon: ShieldCheck,
       path: ROUTES.readiness,
     },
+    {
+      id: 'settings',
+      label: 'Settings',
+      icon: Settings,
+      path: ROUTES.settings,
+    },
   ],
 }
 

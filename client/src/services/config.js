@@ -26,6 +26,7 @@ export async function loadServerConfig() {
       )
       if (d.configNamespace) st().setConfigNamespace(d.configNamespace)
       st().setVersion(d.version || 'dev')
+      st().setSetupState(d.setupRequired, d.keyMismatch, d.keyLost)
     } catch (e) {
       st().setPortainerFromServer(false)
       st().setServerLabel(

@@ -4,20 +4,23 @@ In-cluster Service (ClusterIP):
     {{ include "portainer-run.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
     port: 80 (http — TLS terminates at the proxy in front of the addon)
 
-{{- if not .Values.secret.ENCRYPTION_KEY }}
+ℹ️  Sensitive configuration is not part of this release. Portainer-Run reads it
+    from a Secret named "portainer-run-secret" in this namespace, which is owned
+    outside the chart so that no key is ever written to Helm's release history.
 
-⚠️  WARNING: secret.ENCRYPTION_KEY is empty. The container exits on startup
-    without it (minimum 32 chars). Set it and upgrade:
+    As a Portainer addon: open Portainer-Run as an administrator and complete
+    first-run setup. It generates the encryption key, stores it in Portainer,
+    and Portainer writes the Secret and restarts the Deployment. Portainer keeps
+    the key and re-applies the same value from then on, so it never needs to be
+    set or rotated by hand.
 
-    helm upgrade {{ .Release.Name }} <chart> \
-      --set secret.ENCRYPTION_KEY="$(openssl rand -hex 32)"
-{{- end }}
+    Standalone: create the Secret yourself, then restart the Deployment.
 
-{{- if and (not .Values.secret.ANTHROPIC_API_KEY) (not .Values.secret.OPENAI_API_KEY) }}
+        kubectl -n {{ .Release.Namespace }} create secret generic portainer-run-secret \
+          --from-literal=ENCRYPTION_KEY=$(openssl rand -hex 32)
 
-ℹ️  No AI provider key set — AI triage is unavailable until you set
-    secret.ANTHROPIC_API_KEY or secret.OPENAI_API_KEY.
-{{- end }}
+    Until that Secret exists, Portainer-Run starts in "awaiting setup": the UI
+    shows the setup screen and Git targets and deploys stay unavailable.
 
 Check status:
     kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "portainer-run.fullname" . }}

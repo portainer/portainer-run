@@ -14,9 +14,10 @@ spec:
   template:
     metadata:
       annotations:
-        # Roll the pod when config/secret change so new values take effect.
+        # Rolls the pod when the ConfigMap changes. No equivalent for the
+        # Secret: it is not part of this chart (see envFrom), so whoever writes
+        # it must restart the Deployment themselves.
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
       labels:
         {{- include "portainer-run.selectorLabels" . | nindent 8 }}
     spec:
@@ -40,27 +41,20 @@ spec:
             - name: http
               containerPort: {{ include "portainer-run.port" . }}
               protocol: TCP
+          # Loaded wholesale, not key by key: the chart does not know which
+          # settings exist and must not change when one is added.
+          #
+          # The Secret is deliberately external — routing secrets through Helm
+          # values persists them in cleartext in every release revision. Fixed
+          # name so its writer can find it. `optional` is load-bearing: on a
+          # fresh install it does not exist yet, and without it the pod would
+          # fail to start rather than boot into "awaiting setup".
           envFrom:
             - configMapRef:
                 name: portainer-run-config
-          env:
-            - name: ENCRYPTION_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "portainer-run.fullname" . }}-secret
-                  key: ENCRYPTION_KEY
-            - name: ANTHROPIC_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "portainer-run.fullname" . }}-secret
-                  key: ANTHROPIC_API_KEY
-                  optional: true
-            - name: OPENAI_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "portainer-run.fullname" . }}-secret
-                  key: OPENAI_API_KEY
-                  optional: true
+            - secretRef:
+                name: portainer-run-secret
+                optional: true
           volumeMounts:
             - name: cache
               mountPath: /app/data
