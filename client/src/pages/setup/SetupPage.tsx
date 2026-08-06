@@ -148,12 +148,12 @@ export function SetupPage() {
       <div className="ash-content" style={PAGE_STYLE}>
         <PageTitle
           title="Setup required"
-          description="Portainer-Run has not been configured yet."
+          description="Portainer Run is not set up yet."
         />
         <Alert
           tone="info"
           title="An administrator needs to finish setup"
-          description="Portainer-Run is waiting for its configuration to be generated and stored in Portainer. Ask a Portainer administrator to open this page — deploys and Git targets are unavailable until then."
+          description="Ask a Portainer administrator to open this page and finish setting up Portainer Run. Deploying apps and saving Git targets are unavailable until then."
         />
       </div>
     )
@@ -168,13 +168,13 @@ export function SetupPage() {
   return (
     <div className="ash-content" style={PAGE_STYLE}>
       <PageTitle
-        title="Set up Portainer-Run"
+        title="Set up Portainer Run"
         description={
           keyLost
-            ? 'This installation already has encrypted data, but the key that protects it is no longer available.'
+            ? 'Portainer Run has protected data, but the key that unlocks it is missing.'
             : keyAlreadyStored
-              ? 'Portainer is already holding this installation’s configuration. Portainer-Run has not loaded it yet.'
-              : 'Portainer-Run stores its configuration in Portainer. Generate the encryption key below — Portainer keeps it, and it stays the same for the life of this installation.'
+              ? 'Your settings are saved in Portainer. Portainer Run has not picked them up yet.'
+              : 'Just one step: create the key that protects your saved credentials. Portainer keeps it safe, and you will not need to touch it again.'
         }
       />
 
@@ -182,8 +182,8 @@ export function SetupPage() {
       {loadError && (
         <Alert
           tone="warning"
-          title="Could not read this instance’s setup status"
-          description={`${loadError} Setup still works; Portainer-Run just cannot tell you whether this installation already has a hand-set key to import.`}
+          title="Could not check setup status"
+          description={`${loadError} You can still finish setup — Portainer Run just cannot check whether an existing key is available to reuse.`}
           action={
             <Button variant="ghost" onClick={() => void load()}>
               Retry
@@ -196,8 +196,8 @@ export function SetupPage() {
       {keyLost && (
         <Alert
           tone="danger"
-          title="The encryption key is missing — this is not a fresh install"
-          description="Portainer-Run has Git target credentials encrypted with a key it is no longer receiving. Restore the original key in Portainer to recover them. Do not generate a new one: it would leave the existing credentials permanently unreadable."
+          title="The encryption key is missing"
+          description="This is not a new installation. Portainer Run has saved Git credentials that need the original key to read them. Restore that key in Portainer to recover them; creating a new one would make them permanently unreadable."
           action={
             <Button
               variant="ghost"
@@ -214,8 +214,8 @@ export function SetupPage() {
       {storeUnreadable && (
         <Alert
           tone="danger"
-          title="Could not read the stored configuration"
-          description="Portainer's addon settings could not be reached, so it is not safe to generate a key — doing so could overwrite one this installation already relies on. Retry once Portainer is reachable."
+          title="Could not reach your settings"
+          description="Portainer could not be reached, so creating a key now is not safe: it could replace one already in use. Try again in a moment."
           action={
             <Button variant="ghost" onClick={() => void load()}>
               Retry
@@ -227,8 +227,8 @@ export function SetupPage() {
       {!keyAlreadyStored && !canGenerateSecrets() && (
         <Alert
           tone="danger"
-          title="This browser cannot generate a key"
-          description="Key generation needs the Web Crypto API, which requires a secure context. Open Portainer over HTTPS (or localhost) and try again."
+          title="This browser cannot create a key"
+          description="Creating a key securely requires an HTTPS connection. Open Portainer over HTTPS (or localhost) and try again."
         />
       )}
 
@@ -241,8 +241,8 @@ export function SetupPage() {
       {keyAlreadyStored && (
         <Alert
           tone="info"
-          title="A key is stored, but this instance has not loaded it"
-          description="Portainer is holding the encryption key. Portainer-Run keeps settings in memory and loads them on demand, so it starts unconfigured after a restart until an administrator triggers a read. Check again to load them now."
+          title="Almost there"
+          description="Your encryption key is saved in Portainer. Portainer Run just needs to load it. Check again to finish."
           action={
             <Button
               variant="ghost"
@@ -258,8 +258,8 @@ export function SetupPage() {
       {canImportExistingKey && !adopted && (
         <Alert
           tone="warning"
-          title="This install already has an encryption key"
-          description="A key was set by hand (Helm values or an .env file) but Portainer is not storing it. Import it so upgrades keep re-injecting the same value — generating a new one instead would make existing Git target credentials unreadable."
+          title="An existing encryption key was found"
+          description="This installation already has a key that Portainer is not storing yet. Import it so your saved Git credentials keep working. Creating a new one would make them unreadable."
           action={
             <Button onClick={() => void handleAdopt()} disabled={adopting}>
               {adopting ? 'Importing…' : 'Import existing key'}
@@ -276,14 +276,14 @@ export function SetupPage() {
         <Alert
           tone="success"
           title="Existing key imported"
-          description="Portainer now stores this installation's encryption key and will re-inject it on every deploy."
+          description="Portainer is now keeping your encryption key safe."
         />
       )}
 
       {!adopted && !keyAlreadyStored && !storeUnreadable && !keyLost && (
         <AddonConfigForm
           requiredOnly
-          submitLabel="Generate and save"
+          submitLabel="Create key and finish setup"
           onSaved={(phase) => {
             // A new pod means the key arrived, so reload and drop the gate.
             // Otherwise it is stored but not in use — re-read and say so.

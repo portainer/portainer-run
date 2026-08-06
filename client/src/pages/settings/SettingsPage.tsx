@@ -57,14 +57,11 @@ export function SettingsPage() {
   if (!isAdmin) {
     return (
       <div className="ash-content" style={PAGE_STYLE}>
-        <PageTitle
-          title="Settings"
-          description="Portainer-Run configuration."
-        />
+        <PageTitle title="Settings" description="Configure Portainer Run." />
         <Alert
           tone="info"
           title="Administrator access required"
-          description="These settings apply to the whole Portainer-Run installation, so only Portainer administrators can view or change them."
+          description="These settings apply to everyone using Portainer Run, so only administrators can view or change them."
         />
       </div>
     )
@@ -74,7 +71,7 @@ export function SettingsPage() {
     <div className="ash-content" style={PAGE_STYLE}>
       <PageTitle
         title="Settings"
-        description="Stored in Portainer and injected into Portainer-Run as environment variables. Saving re-applies the release, which restarts Portainer-Run to pick up the new values."
+        description="Configure Portainer Run. Your settings are stored securely in Portainer and take effect as soon as you save."
       />
 
       {status?.keyStatus === 'mismatch' && (
@@ -84,8 +81,8 @@ export function SettingsPage() {
           description={
             <span>
               {describeKeyDamage(status)} Restoring the previous key in
-              Portainer recovers them. Acknowledging instead keeps the new key
-              and abandons anything encrypted under the old one.
+              Portainer brings them back. Continuing with the new key means
+              starting over with anything the old one protected.
             </span>
           }
           action={
@@ -95,13 +92,13 @@ export function SettingsPage() {
               onClick={() => void handleAcknowledge()}
               disabled={acknowledging}
             >
-              {acknowledging ? 'Acknowledging…' : 'Acknowledge and move on'}
+              {acknowledging ? 'Continuing…' : 'Continue with the new key'}
             </Button>
           }
         />
       )}
 
-      <AddonConfigForm submitLabel="Save configuration" />
+      <AddonConfigForm submitLabel="Save changes" />
     </div>
   )
 }
@@ -110,12 +107,12 @@ function describeKeyDamage(status: SetupStatus): string {
   const parts: string[] = []
   if (status.affectedConnections > 0) {
     parts.push(
-      `${status.affectedConnections} Git target${status.affectedConnections === 1 ? '' : 's'} can no longer be decrypted`,
+      `${status.affectedConnections} saved Git target${status.affectedConnections === 1 ? '' : 's'} can no longer be read`,
     )
   }
   if (status.gatewayPskStale) {
-    parts.push('the registered file-gateway identity no longer matches')
+    parts.push('the file gateway no longer recognises this instance')
   }
-  if (!parts.length) return 'Data encrypted under the previous key is at risk.'
+  if (!parts.length) return 'Anything the previous key protected is at risk.'
   return `${parts.join(' and ')}.`.replace(/^./, (c) => c.toUpperCase())
 }

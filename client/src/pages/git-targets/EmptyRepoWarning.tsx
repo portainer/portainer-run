@@ -48,7 +48,7 @@ export function EmptyRepoWarning({
         // is valid here; the button goes in the `action` slot instead.
         <span style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <span>
-            This repository has no commits. Portainer-Run needs at least one
+            This repository has no commits. Portainer Run needs at least one
             commit before it can push manifests and source files. Click
             Initialize to create an initial commit automatically.
           </span>

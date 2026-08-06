@@ -142,7 +142,7 @@ export function GitTargetsPage() {
     >
       <PageTitle
         title="Git Targets"
-        description="Repositories where Portainer-Run commits Kubernetes manifests for GitOps deployment. Credentials are stored encrypted. Add a target here before deploying."
+        description="Repositories where Portainer Run commits Kubernetes manifests for GitOps deployment. Credentials are stored encrypted. Add a target here before deploying."
         actions={
           <Button onClick={() => setAdding(true)}>+ Add Git Target</Button>
         }

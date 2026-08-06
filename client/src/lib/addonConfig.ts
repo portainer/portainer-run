@@ -40,7 +40,7 @@ export const SETTINGS: SettingDef[] = [
     required: true,
     generated: true,
     immutableOnceSet: true,
-    help: 'Encrypts stored Git target credentials and derives this instance’s gateway identity. Generated for you and kept by Portainer — it must stay the same for the life of the installation.',
+    help: 'Protects the Git credentials you save. Created for you and kept safe in Portainer.',
     validate: (v) => (v.length < 32 ? 'Must be at least 32 characters.' : null),
   },
   {
@@ -48,7 +48,7 @@ export const SETTINGS: SettingDef[] = [
     label: 'Anthropic API key',
     sensitive: true,
     required: false,
-    help: 'Enables AI triage using Claude. Set this or an OpenAI key.',
+    help: 'Powers the assistant with Claude. Add this or an OpenAI key.',
     placeholder: 'sk-ant-…',
   },
   {
@@ -56,7 +56,7 @@ export const SETTINGS: SettingDef[] = [
     label: 'OpenAI API key',
     sensitive: true,
     required: false,
-    help: 'Enables AI triage using OpenAI instead of Anthropic.',
+    help: 'Use OpenAI for the assistant instead of Claude.',
     placeholder: 'sk-…',
   },
   {
@@ -64,7 +64,7 @@ export const SETTINGS: SettingDef[] = [
     label: 'Base domain',
     sensitive: false,
     required: false,
-    help: 'Wildcard domain used to build ingress hostnames for deployed apps. Without it, apps fall back to NodePort URLs.',
+    help: 'Gives your deployed apps a friendly web address, like myapp.apps.example.com. Without it, apps are reached by port number.',
     placeholder: 'apps.example.com',
     validate: (v) =>
       /^[a-z0-9.-]+$/i.test(v)
@@ -76,7 +76,7 @@ export const SETTINGS: SettingDef[] = [
     label: 'Gateway URL',
     sensitive: false,
     required: false,
-    help: 'File relay used when uploading app sources from an AI assistant.',
+    help: 'Lets AI coding tools send app files straight to Portainer Run.',
     placeholder: 'https://run-gateway.portainer.ai',
     validate: (v) => {
       try {
@@ -92,7 +92,7 @@ export const SETTINGS: SettingDef[] = [
     label: 'OpenAI model',
     sensitive: false,
     required: false,
-    help: 'Overrides the default OpenAI model. No effect when using Anthropic.',
+    help: 'Which OpenAI model the assistant uses. Ignored when Claude is set up.',
     placeholder: 'gpt-4o',
   },
 ]

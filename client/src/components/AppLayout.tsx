@@ -35,8 +35,8 @@ import type { SwitcherProduct } from '@/lib/addonToProduct.tsx'
 /** This app's own entry in the switcher — always present, always the selected one. */
 const SELF_PRODUCT: SwitcherProduct = {
   id: 'portainer-run',
-  label: 'Portainer-Run',
-  logo: <img src="/assets/addons/portainer-run.svg" alt="Portainer-Run logo" />,
+  label: 'Portainer Run',
+  logo: <img src="/assets/addons/portainer-run.svg" alt="Portainer Run logo" />,
   description: "Drag'n'drop deployment for Apps",
   available: true,
   path: import.meta.env.BASE_URL,
@@ -323,7 +323,7 @@ export function AppLayout() {
           }
           avatarSlot={<AccountMenuSlot />}
           sidebarFooter={
-            <span title="Portainer-Run release">Portainer-Run {version}</span>
+            <span title="Portainer Run release">Portainer Run {version}</span>
           }
         >
           <Outlet />

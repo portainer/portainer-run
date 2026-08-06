@@ -1035,7 +1035,7 @@ export function VibeDeploy() {
           title="No git targets configured."
           description={
             <>
-              Portainer-Run requires a git repository to commit manifests and
+              Portainer Run requires a git repository to commit manifests and
               source files before deploying.{' '}
               <Link
                 to={ROUTES.gitTargets}

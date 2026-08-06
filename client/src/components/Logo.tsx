@@ -1,4 +1,4 @@
-// Sidebar logo slots — the Portainer-Run brandmark, plus the Portainer wordmark.
+// Sidebar logo slots — the Portainer Run brandmark, plus the Portainer wordmark.
 
 const TILE_SIZE_EXPANDED = 32
 
@@ -7,7 +7,7 @@ function RunTile({ size }: { size?: number }) {
   return (
     <img
       src={`${import.meta.env.BASE_URL}portainer-run.svg`}
-      alt="Portainer-Run"
+      alt="Portainer Run"
       style={size ? { width: size, height: size } : undefined}
     />
   )
@@ -42,7 +42,7 @@ export function SidebarLogo() {
   return (
     <div
       style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-      title="Portainer-Run — Dashboard"
+      title="Portainer Run — Dashboard"
     >
       <RunTile size={TILE_SIZE_EXPANDED} />
       <PortainerWordmark />

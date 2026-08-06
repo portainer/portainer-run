@@ -185,7 +185,7 @@ export function AddonConfigForm({
 
     const { changed, cleared } = diff(effective)
     if (!changed.length && !cleared.length) {
-      setSaveError('Nothing to save — no values were changed.')
+      setSaveError('No changes to save.')
       return
     }
 
@@ -259,7 +259,7 @@ export function AddonConfigForm({
         {loadError && (
           <Alert
             tone="danger"
-            title="Could not load configuration"
+            title="Could not load your settings"
             description={loadError}
             action={
               <Button variant="ghost" onClick={() => void load()}>
@@ -309,16 +309,15 @@ export function AddonConfigForm({
               <div style={HINT_STYLE}>{def.help}</div>
               {locked ? (
                 <div style={HINT_STYLE}>
-                  Set for this installation and reused on every deploy. It
-                  cannot be changed here — a different key would make existing
-                  Git target credentials unreadable and change this instance’s
-                  gateway identity.
+                  In use and cannot be changed. A different key would make the
+                  Git credentials you have already saved unreadable.
                 </div>
               ) : (
                 state.isSet &&
                 def.sensitive && (
                   <div style={HINT_STYLE}>
-                    A value is already stored. Leave blank to keep it.
+                    Saved. Leave blank to keep it, or enter a new value to
+                    replace it.
                   </div>
                 )
               )}
@@ -344,23 +343,23 @@ export function AddonConfigForm({
           <Alert
             tone="info"
             title="Saving"
-            description="Storing the settings in Portainer, then asking Portainer-Run to re-read them."
+            description="Applying your changes."
           />
         )}
 
         {phase === 'done' && (
           <Alert
             tone="success"
-            title="Configuration applied"
-            description="Portainer-Run is now using the new values."
+            title="Settings saved"
+            description="Your changes are now in effect."
           />
         )}
 
         {phase === 'timeout' && (
           <Alert
             tone="warning"
-            title="Saved, but not yet in use"
-            description="The settings are stored in Portainer, but Portainer-Run could not re-read them just now. It picks them up on the next administrator request or restart."
+            title="Saved, but not active yet"
+            description="Your settings are stored safely, but Portainer Run could not apply them just now. Try saving again, or they will take effect the next time it reloads."
           />
         )}
 
