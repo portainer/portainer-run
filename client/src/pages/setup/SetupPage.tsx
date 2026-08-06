@@ -31,15 +31,9 @@ const PAGE_STYLE: React.CSSProperties = {
 }
 
 /**
- * First-run setup.
- *
- * A fresh install boots with no ENCRYPTION_KEY. The admin's browser generates
- * one and writes it to Portainer over their own session — Portainer-Run holds
- * no credential and never performs the write itself.
- *
- * Nothing here needs the key while it runs; it is only used later, for Git
- * credentials and the gateway PSK. So generate → store → deliver has no
- * ordering problem.
+ * First-run setup. The admin's browser generates the encryption key and writes
+ * it to Portainer over their own session. Nothing here needs the key while it
+ * runs — it is only used later — so there is no ordering problem.
  */
 export function SetupPage() {
   const isAdmin = useAppStore((s) => s.isAdmin)
@@ -58,9 +52,8 @@ export function SetupPage() {
   const [storeUnreadable, setStoreUnreadable] = useState(false)
 
   /**
-   * Read boot state and stored config independently. Chaining them would let an
-   * unrelated status failure answer "no key stored" and offer to overwrite a
-   * live one — which is exactly what a backend predating /api/setup/status does.
+   * Read boot state and stored config independently: chaining them would let a
+   * status failure answer "no key stored" and offer to overwrite a live one.
    */
   const load = useCallback(async () => {
     setLoading(true)
@@ -101,11 +94,7 @@ export function SetupPage() {
     void load()
   }, [load])
 
-  /**
-   * Ask Portainer-Run to re-read its settings, then reload into the app if that
-   * configured it. Settings are held in memory, so this is the whole mechanism
-   * — nothing arrives on its own.
-   */
+  /** Re-read settings, then reload into the app if that configured it. */
   async function handleRecheck() {
     setRechecking(true)
     try {
@@ -141,9 +130,8 @@ export function SetupPage() {
     }
   }
 
-  // Configured, so nothing to set up. Without this the page is a dead end:
-  // AppRoutes only redirects *to* /setup, so anyone landing here after the
-  // post-save reload would wait for a key that already arrived.
+  // Configured, so nothing to set up. AppRoutes only redirects *to* /setup, so
+  // without this anyone landing here waits for a key that already arrived.
   if (!setupRequired) return <Navigate to={ROUTES.services} replace />
 
   if (loading) {
@@ -204,11 +192,7 @@ export function SetupPage() {
         />
       )}
 
-      {/*
-        Encrypted data exists but the key is gone — usually a release applied
-        with an empty value. Generating a replacement would make that data
-        permanently unreadable, so the form is withheld.
-      */}
+      {/* Key gone but encrypted data exists: generating over it is unrecoverable. */}
       {keyLost && (
         <Alert
           tone="danger"

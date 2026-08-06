@@ -1,19 +1,10 @@
 /**
- * Portainer-Run's configuration, fetched from Portainer and held in memory.
+ * Configuration fetched from Portainer and held in memory only, so a restart
+ * starts unconfigured until something hydrates it again.
  *
- * Settings live in Portainer's addon store. Nothing delivers them into the
- * cluster — no Helm values, no Secret — so this process fetches them and keeps
- * them in memory only. A restart therefore starts unconfigured until something
- * hydrates it again.
- *
- * Portainer's settings endpoints are administrator-only and Portainer-Run holds
- * no credential of its own, so a fetch has to borrow an admin caller's token.
- * Two things do that: the setup screen calls reload right after saving, and any
- * admin request rehydrates opportunistically (see handler.js). A machine
- * credential will replace both and remove the cold-start gap.
- *
- * Environment variables still seed the initial values, which keeps local
- * development and any operator-configured deployment working unchanged.
+ * Portainer's endpoints are admin-only and Portainer-Run has no credential, so
+ * a fetch borrows an admin caller's token — from the setup screen's reload, or
+ * opportunistically in handler.js. Env vars seed values for local dev.
  */
 
 import { portainerRequest } from './lib/portainer-api.js'
@@ -23,7 +14,7 @@ const ADDON_ID = 'portainer-run'
 
 export const MIN_ENCRYPTION_KEY_LENGTH = 32
 
-/** Settings Portainer may hold. Anything else it stores is ignored. */
+/** Anything Portainer stores outside this list is ignored. */
 const KNOWN_KEYS = [
   'ENCRYPTION_KEY',
   'ANTHROPIC_API_KEY',
@@ -61,7 +52,7 @@ export function encryptionKey() {
   return getSetting('ENCRYPTION_KEY')
 }
 
-/** Whether a usable encryption key is present, and so whether setup is done. */
+/** Whether setup is done. */
 export function isConfigured() {
   return encryptionKey().length >= MIN_ENCRYPTION_KEY_LENGTH
 }
@@ -86,7 +77,7 @@ export function openaiModel() {
   return getSetting('OPENAI_MODEL') || 'gpt-4o'
 }
 
-/** Explicit override, else whichever provider has a key. */
+/** Explicit override, else whichever has a key. */
 export function aiProvider() {
   return (
     getSetting('AI_PROVIDER') ||
@@ -104,13 +95,9 @@ export function settingsStatus() {
 }
 
 /**
- * Fetch settings from Portainer using an administrator's token and replace the
- * in-memory copy.
- *
- * Values seeded from the environment are kept underneath, so a setting Portainer
- * does not hold falls back to it rather than disappearing.
- *
- * @param {string} token  An administrator's Portainer token
+ * Replace the in-memory copy from Portainer. Env seeds stay underneath, so a
+ * setting Portainer lacks falls back rather than disappearing.
+ * @param {string} token An administrator's Portainer token
  * @returns {Promise<boolean>} whether the fetch succeeded
  */
 export async function hydrate(token) {
@@ -146,12 +133,7 @@ export async function hydrate(token) {
   }
 }
 
-/**
- * Hydrate unless already configured, collapsing concurrent callers onto one
- * request so a burst of admin traffic does not fan out to Portainer.
- *
- * @param {string} token
- */
+/** Hydrate unless configured, collapsing concurrent callers onto one request. */
 export function ensureHydrated(token) {
   if (isConfigured()) return Promise.resolve(true)
   if (inFlight) return inFlight

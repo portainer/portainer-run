@@ -9,25 +9,6 @@ image:
 imagePullSecrets: [] # Optional. Only needed when pulling from a private/mirrored registry..
 storageClass: '' # Optional. StorageClass for the session-cache PVC. Empty uses the cluster default.
 
-# ── Non-sensitive configuration ──────────────────────────────────────────────
-# Empty by design: settings live in Portainer and are written here on install
-# and upgrade. Rendered generically into the `portainer-run-config` ConfigMap,
-# so a new setting needs no template change. PORTAINER_URL and PORT are baked
-# into _helpers.tpl. Override anything with `--set configMap.<KEY>=...`.
+# Empty by design: Portainer-Run reads its settings from Portainer at runtime.
+# Rendered generically, so `--set configMap.<KEY>=...` needs no template change.
 configMap: {}
-
-# ── Sensitive configuration: NOT a chart value ───────────────────────────────
-# There is deliberately no `secret:` map. Helm keeps every revision's values in
-# cleartext, so a rotated key would linger in the release history.
-#
-# Instead the Deployment reads an externally owned Secret, `portainer-run-secret`
-# (optional, so a fresh install boots into "awaiting setup" before it exists).
-# Portainer writes it for an addon install; create it yourself otherwise:
-#
-#   kubectl -n <namespace> create secret generic portainer-run-secret \
-#     --from-literal=ENCRYPTION_KEY=$(openssl rand -hex 32)
-#
-# Every key in it becomes an environment variable. ENCRYPTION_KEY must never
-# change: Git credentials are encrypted with it and the gateway identity derives
-# from it. envFrom is read only at container start, so whoever writes the Secret
-# must also roll the Deployment.

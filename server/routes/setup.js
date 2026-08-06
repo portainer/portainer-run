@@ -1,15 +1,9 @@
 /**
- * First-run setup support.
+ * First-run setup. The browser writes settings to Portainer itself; this covers
+ * what it cannot do — reloading this process's settings, importing a hand-set
+ * key from the pod's own environment, and clearing a key-mismatch warning.
  *
- * The browser writes settings to Portainer itself over the admin's session.
- * This module covers only what a browser cannot do:
- *
- *   • adopt-key — import a hand-set ENCRYPTION_KEY into Portainer's store, so
- *     upgrades keep the same value. Only the pod can read its own environment.
- *   • acknowledge-key-change — clear a surfaced key-mismatch warning.
- *
- * Neither uses a Portainer-Run credential: adopt-key forwards the calling
- * admin's own token, as the deploy and Kubernetes paths already do.
+ * No Portainer-Run credential: writes forward the calling admin's own token.
  */
 
 import { CORS } from '../lib/cors.js'
@@ -56,8 +50,7 @@ export async function handleSetup(req, res, pathname) {
       setupRequired: !isConfigured(),
       isAdmin: caller.isAdmin,
       settings: settingsStatus(),
-      // A key already in our environment can be imported into Portainer's store
-      // so it survives beyond this process.
+      // A key in our environment can be imported so it outlives this process.
       canAdoptLocalKey: isConfigured() && !settingsStatus().hydrated,
       keyStatus: continuity.status,
       affectedConnections: continuity.affectedConnections,
@@ -66,15 +59,14 @@ export async function handleSetup(req, res, pathname) {
     return true
   }
 
-  // Every remaining route mutates state that is global to the installation.
+  // The rest mutate installation-wide state.
   if (!caller.isAdmin) {
     json(res, 403, { error: 'Administrator access required' })
     return true
   }
 
-  // Called by the setup screen right after it saves. Settings are held only in
-  // memory, so this is what makes them live without waiting for a restart or
-  // for the next admin request to hydrate opportunistically.
+  // Called by the setup screen after saving: settings are memory-only, so this
+  // is what makes them live.
   if (pathname === '/api/setup/reload' && req.method === 'POST') {
     const ok = await hydrate(caller.token)
     json(res, ok ? 200 : 502, {

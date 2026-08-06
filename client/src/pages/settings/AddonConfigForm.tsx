@@ -106,10 +106,7 @@ export function AddonConfigForm({
     set(def.key, generateEncryptionKey())
   }
 
-  /**
-   * Generate any required secret left blank, so setup is one click. Only fills
-   * a blank field with nothing stored behind it — never overwrites a key.
-   */
+  /** Fill blank required secrets so setup is one click. Never overwrites. */
   function withGeneratedDefaults(
     current: Record<string, FieldState>,
   ): Record<string, FieldState> {
@@ -147,9 +144,8 @@ export function AddonConfigForm({
   }
 
   /**
-   * What actually changed. A blank sensitive field means "keep the stored
-   * value" — Portainer never returns secrets, so blank is their resting state.
-   * A blank non-sensitive field whose value we did receive is a real deletion.
+   * What changed. Blank sensitive means "keep stored" — Portainer never returns
+   * secrets. Blank non-sensitive whose value we received is a real deletion.
    */
   function diff(snapshot: Record<string, FieldState>): {
     changed: ConfigEntryInput[]
@@ -214,16 +210,13 @@ export function AddonConfigForm({
       return
     }
 
-    // Stored in Portainer, but Portainer-Run keeps settings in memory and
-    // nothing pushes them, so ask it to re-read. That is what makes the save
-    // take effect — there is no redeploy and no restart involved.
+    // Settings are memory-only and nothing pushes them, so ask for a re-read.
     setPhase('applying')
     let live = false
     try {
       live = await reloadSettings()
     } catch {
-      // Non-fatal: the values are saved either way. Fall back to watching for a
-      // restart, which is the only other way they could become live.
+      // Saved either way; fall back to watching for a restart.
       live = (await waitForRestart(before?.bootId)) === 'restarted'
     }
     setPhase(live ? 'done' : 'timeout')

@@ -1,12 +1,7 @@
 /**
- * ENCRYPTION_KEY continuity check.
- *
- * A changed key fails silently: Git credentials stop decrypting and the gateway
- * identity shifts, neither of which announces itself. So we fingerprint the key
- * alongside the data it protects and compare on every start.
- *
- * The fingerprint is an HMAC keyed by the key itself, so it reveals nothing a
- * reader of the database could not already learn by trying to decrypt a row.
+ * A changed encryption key fails silently, so fingerprint it alongside the data
+ * it protects and compare on every start. The fingerprint is an HMAC keyed by
+ * the key itself, so it reveals nothing about it.
  */
 
 import crypto from 'node:crypto'
@@ -37,7 +32,7 @@ function writeStored(value) {
   )
 }
 
-/** Rows whose payload can no longer be decrypted if the key changed. */
+/** Rows that stop decrypting if the key changed. */
 function encryptedRowCount() {
   return db.prepare('SELECT COUNT(*) AS n FROM connections').get()?.n ?? 0
 }
@@ -51,8 +46,7 @@ function hasGatewayPsk() {
 /**
  * @typedef {object} KeyContinuity
  * @property {'unconfigured'|'ok'|'mismatch'|'lost'} status
- *   `unconfigured` — no key, nothing encrypted: a genuine first run.
- *   `lost` — no key, but encrypted data exists. Never treat as a first run.
+ *   `lost` — no key but encrypted data exists. Never a first run.
  * @property {number} affectedConnections  Git targets that will no longer decrypt.
  * @property {boolean} gatewayPskStale     Whether the registered gateway PSK is orphaned.
  */
@@ -65,9 +59,8 @@ let memoKey = null
 /** @returns {KeyContinuity} */
 function compute() {
   if (!isConfigured()) {
-    // A recorded fingerprint means this volume once had a key, so it went away
-    // rather than never being set — usually a release applied with an empty
-    // value. Mistaking that for a first run invites generating a replacement.
+    // A recorded fingerprint means the key went away rather than never being
+    // set. Mistaking that for a first run invites generating a replacement.
     const stored = readStored()
     const affectedConnections = stored ? encryptedRowCount() : 0
     const gatewayPskStale = stored ? hasGatewayPsk() : false
@@ -93,8 +86,7 @@ function compute() {
   const affectedConnections = encryptedRowCount()
   const gatewayPskStale = hasGatewayPsk()
 
-  // A key change with nothing encrypted behind it costs nothing — adopt it
-  // silently rather than nagging about damage that cannot have happened.
+  // Nothing encrypted behind it, so the change costs nothing. Adopt silently.
   if (affectedConnections === 0 && !gatewayPskStale) {
     writeStored(current)
     return { status: 'ok', affectedConnections: 0, gatewayPskStale: false }
@@ -113,11 +105,7 @@ export function keyContinuity() {
   return memo
 }
 
-/**
- * Accept the current key as the new baseline, abandoning data encrypted under
- * the previous one. Explicit by design: this discards the old Git credentials
- * rather than recovering them.
- */
+/** Accept the current key as the baseline, discarding data under the old one. */
 export function acknowledgeKeyChange() {
   if (!isConfigured()) return keyContinuity()
   writeStored(fingerprint(encryptionKey()))
@@ -126,7 +114,7 @@ export function acknowledgeKeyChange() {
   return memo
 }
 
-/** Log a loud, actionable warning at boot when the key changed or vanished. */
+/** Warn loudly at boot when the key changed or vanished. */
 export function reportKeyContinuity() {
   const c = keyContinuity()
   if (c.status !== 'mismatch' && c.status !== 'lost') return c

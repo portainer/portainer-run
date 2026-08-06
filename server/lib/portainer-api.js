@@ -3,10 +3,8 @@ import http from 'node:http'
 import { portainerAuthHeaders } from './identity.js'
 
 /**
- * Make a request to Portainer's API on behalf of a caller.
- *
- * `userToken` is always the inbound caller's own credential: Portainer-Run has
- * no identity of its own, so privileged calls are the user's session forwarded.
+ * Request Portainer's API as a caller. `userToken` is always the inbound
+ * caller's own credential — Portainer-Run has no identity of its own.
  *
  * @param {{ host: string, port: number, isHttps: boolean }} target
  * @param {string} userToken

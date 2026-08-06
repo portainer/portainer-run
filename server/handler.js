@@ -66,8 +66,8 @@ export async function handleRequest(req, res) {
         baseDomain: baseDomain(),
         configNamespace: CONFIG_NAMESPACE,
         version: VERSION,
-        // Boot state for the setup gate. Unauthenticated (the probes hit this),
-        // so only booleans here — details live on /api/setup/status.
+        // Probes hit this unauthenticated, so booleans only; details live on
+        // /api/setup/status.
         setupRequired: !isConfigured(),
         keyMismatch: keyContinuity().status === 'mismatch',
         // Encrypted data but no key: a dropped key, not a first run.
@@ -123,16 +123,14 @@ export async function handleRequest(req, res) {
     if (handled !== null) return
   }
 
-  // Settings live in Portainer and only in this process's memory, so a restart
-  // starts unconfigured. Borrow the first admin caller's token to fetch them
-  // back rather than waiting for someone to visit the setup screen.
+  // Settings are memory-only, so a restart starts unconfigured. Borrow the
+  // first admin caller's token rather than waiting for the setup screen.
   if (!isConfigured() && pathname.startsWith('/api/')) {
     const caller = await resolveCallerIdentity(req)
     if (caller?.isAdmin) await ensureHydrated(caller.token)
   }
 
-  // These read credentials encrypted with the key. Without it they would throw
-  // out of the crypto layer as a 500; say setup has not run instead.
+  // These decrypt stored credentials, so without a key they would 500.
   if (
     !isConfigured() &&
     (pathname.startsWith('/api/connections') ||

@@ -1,12 +1,7 @@
 /**
- * Portainer-Run's own configuration, stored in Portainer's addon settings store.
- *
- * Portainer is addon-agnostic — it keeps key/value entries with a `sensitive`
- * flag and knows nothing about their meaning. That meaning lives here: which
- * settings exist, which are required, and how the generated ones are made.
- *
- * These calls go straight to Portainer on the admin's own session cookie,
- * same-origin; Portainer-Run's backend holds no credential and is not involved.
+ * Portainer-Run's configuration in Portainer's addon store. Portainer keeps
+ * opaque key/value entries; their meaning lives here. Calls go straight to
+ * Portainer on the admin's own session cookie.
  */
 
 import { apiFetch, serverFetch } from './api.js'
@@ -119,10 +114,8 @@ export interface ConfigEntryInput {
 }
 
 /**
- * Whether Portainer holds a value for this entry. Sensitive entries come back
- * masked (`isSet: true, value: null`), plain ones carry a value and may omit
- * the flag — accept either. Never infer "not set" from a missing `isSet`: that
- * is what leads to offering to overwrite a stored key.
+ * Whether Portainer holds a value. Accept either signal — never infer "not set"
+ * from a missing `isSet`, which leads to overwriting a stored key.
  */
 export function entryIsSet(entry: ConfigEntry | undefined): boolean {
   if (!entry) return false
@@ -132,11 +125,7 @@ export function entryIsSet(entry: ConfigEntry | undefined): boolean {
 
 // ─── Secret generation ───────────────────────────────────────────────────────
 
-/**
- * Generate an ENCRYPTION_KEY with the platform CSPRNG. Client-side because the
- * browser already holds the admin session that performs the write; the backend
- * has no credential of its own.
- */
+/** Generate an ENCRYPTION_KEY with the platform CSPRNG. */
 export function generateEncryptionKey(): string {
   const bytes = new Uint8Array(ENCRYPTION_KEY_BYTES)
   crypto.getRandomValues(bytes)
@@ -236,10 +225,7 @@ export async function getSetupStatus(): Promise<SetupStatus> {
   return data as SetupStatus
 }
 
-/**
- * Import a hand-set ENCRYPTION_KEY from the pod's environment into Portainer's
- * store, so upgrades keep the same value. The key never reaches the browser.
- */
+/** Import a hand-set key from the pod's environment; it never reaches the browser. */
 export async function adoptLocalKey(): Promise<void> {
   await readServerJson(
     await serverFetch('/api/setup/adopt-key', { method: 'POST' }),
@@ -248,11 +234,8 @@ export async function adoptLocalKey(): Promise<void> {
 }
 
 /**
- * Tell Portainer-Run to re-read its settings from Portainer.
- *
- * Settings are held in memory only, so this is what makes a save take effect —
- * there is no redeploy and no restart. Returns whether the instance is
- * configured afterwards.
+ * Tell Portainer-Run to re-read its settings. Memory-only, so this is what makes
+ * a save take effect. Returns whether it is configured afterwards.
  */
 export async function reloadSettings(): Promise<boolean> {
   const data = (await readServerJson(
@@ -305,12 +288,8 @@ const RESTART_POLL_MS = 2000
  * the save itself already succeeded either way, so this is informational.
  * 'unknown' means we never had a baseline to compare against and cannot tell.
  *
- * Short by default: storing settings does not trigger a redeploy, so in the
- * common case there is nothing coming and this only catches a restart that
- * happened to be in flight.
- *
- * @param previousBootId  bootId observed before saving
- * @param timeoutMs       give up after this long
+ * Short by default: nothing triggers a redeploy, so this only catches a restart
+ * already in flight.
  */
 export async function waitForRestart(
   previousBootId: string | undefined,

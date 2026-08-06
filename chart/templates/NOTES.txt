@@ -4,23 +4,10 @@ In-cluster Service (ClusterIP):
     {{ include "portainer-run.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
     port: 80 (http — TLS terminates at the proxy in front of the addon)
 
-ℹ️  Sensitive configuration is not part of this release. Portainer-Run reads it
-    from a Secret named "portainer-run-secret" in this namespace, which is owned
-    outside the chart so that no key is ever written to Helm's release history.
-
-    As a Portainer addon: open Portainer-Run as an administrator and complete
-    first-run setup. It generates the encryption key, stores it in Portainer,
-    and Portainer writes the Secret and restarts the Deployment. Portainer keeps
-    the key and re-applies the same value from then on, so it never needs to be
-    set or rotated by hand.
-
-    Standalone: create the Secret yourself, then restart the Deployment.
-
-        kubectl -n {{ .Release.Namespace }} create secret generic portainer-run-secret \
-          --from-literal=ENCRYPTION_KEY=$(openssl rand -hex 32)
-
-    Until that Secret exists, Portainer-Run starts in "awaiting setup": the UI
-    shows the setup screen and Git targets and deploys stay unavailable.
+ℹ️  Nothing here needs configuring: Portainer-Run reads its settings from
+    Portainer at runtime. Open it as an administrator to run first-run setup,
+    which generates the encryption key and stores it. Until then it runs in
+    "awaiting setup" and Git targets and deploys stay unavailable.
 
 Check status:
     kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "portainer-run.fullname" . }}
