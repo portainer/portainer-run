@@ -359,7 +359,7 @@ export function AddonConfigForm({
           <Alert
             tone="warning"
             title="Saved, but not active yet"
-            description="Your settings are stored safely, but Portainer Run could not apply them just now. Try saving again, or they will take effect the next time it reloads."
+            description="Your settings are stored safely, but Portainer-Run could not apply them just now. Try saving again, or they will take effect the next time it reloads."
           />
         )}
 

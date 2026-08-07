@@ -247,7 +247,7 @@ export function VibeEditTab({
     }
     if (!gitOpsInfo?.gitTargetId || !gitBranch || !sourcePath) {
       setError(
-        'Missing git target information — this deployment may not have been created by Portainer Run',
+        'Missing git target information — this deployment may not have been created by Portainer-Run',
       )
       return
     }

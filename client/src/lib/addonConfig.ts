@@ -69,14 +69,14 @@ export const SETTINGS: SettingDef[] = [
     validate: (v) =>
       /^[a-z0-9.-]+$/i.test(v)
         ? null
-        : 'Use a bare hostname — no scheme, port, or path.',
+        : 'Use a bare hostname, with no scheme, port, or path.',
   },
   {
     key: 'GATEWAY_URL',
     label: 'Gateway URL',
     sensitive: false,
     required: false,
-    help: 'Lets AI coding tools send app files straight to Portainer Run.',
+    help: 'Lets AI coding tools send app files straight to Portainer-Run.',
     placeholder: 'https://run-gateway.portainer.ai',
     validate: (v) => {
       try {
@@ -211,7 +211,7 @@ async function readServerJson(res: Response, what: string) {
   // otherwise read as success. Same trap as deleteAppStack in gitTargets.js.
   if (!data || typeof data !== 'object') {
     throw new Error(
-      `Unexpected response from ${what} — the endpoint may be missing or misrouted`,
+      `Unexpected response from ${what}, so the endpoint may be missing or misrouted`,
     )
   }
   return data

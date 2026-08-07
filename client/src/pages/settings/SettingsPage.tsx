@@ -57,11 +57,11 @@ export function SettingsPage() {
   if (!isAdmin) {
     return (
       <div className="ash-content" style={PAGE_STYLE}>
-        <PageTitle title="Settings" description="Configure Portainer Run." />
+        <PageTitle title="Settings" description="Configure Portainer-Run." />
         <Alert
           tone="info"
           title="Administrator access required"
-          description="These settings apply to everyone using Portainer Run, so only administrators can view or change them."
+          description="These settings apply to everyone using Portainer-Run, so only administrators can view or change them."
         />
       </div>
     )
@@ -71,7 +71,7 @@ export function SettingsPage() {
     <div className="ash-content" style={PAGE_STYLE}>
       <PageTitle
         title="Settings"
-        description="Configure Portainer Run. Your settings are stored securely in Portainer and take effect as soon as you save."
+        description="Configure Portainer-Run. Your settings are stored securely in Portainer and take effect as soon as you save."
       />
 
       {status?.keyStatus === 'mismatch' && (

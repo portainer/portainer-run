@@ -148,12 +148,12 @@ export function SetupPage() {
       <div className="ash-content" style={PAGE_STYLE}>
         <PageTitle
           title="Setup required"
-          description="Portainer Run is not set up yet."
+          description="Portainer-Run is not set up yet."
         />
         <Alert
           tone="info"
           title="An administrator needs to finish setup"
-          description="Ask a Portainer administrator to open this page and finish setting up Portainer Run. Deploying apps and saving Git targets are unavailable until then."
+          description="Ask a Portainer administrator to open this page and finish setting up Portainer-Run. Deploying apps and saving Git targets are unavailable until then."
         />
       </div>
     )
@@ -168,12 +168,12 @@ export function SetupPage() {
   return (
     <div className="ash-content" style={PAGE_STYLE}>
       <PageTitle
-        title="Set up Portainer Run"
+        title="Set up Portainer-Run"
         description={
           keyLost
-            ? 'Portainer Run has protected data, but the key that unlocks it is missing.'
+            ? 'Portainer-Run has protected data, but the key that unlocks it is missing.'
             : keyAlreadyStored
-              ? 'Your settings are saved in Portainer. Portainer Run has not picked them up yet.'
+              ? 'Your settings are saved in Portainer. Portainer-Run has not picked them up yet.'
               : 'Just one step: create the key that protects your saved credentials. Portainer keeps it safe, and you will not need to touch it again.'
         }
       />
@@ -183,7 +183,7 @@ export function SetupPage() {
         <Alert
           tone="warning"
           title="Could not check setup status"
-          description={`${loadError} You can still finish setup — Portainer Run just cannot check whether an existing key is available to reuse.`}
+          description={`${loadError} You can still finish setup, but Portainer-Run cannot check whether an existing key is available to reuse.`}
           action={
             <Button variant="ghost" onClick={() => void load()}>
               Retry
@@ -197,7 +197,7 @@ export function SetupPage() {
         <Alert
           tone="danger"
           title="The encryption key is missing"
-          description="This is not a new installation. Portainer Run has saved Git credentials that need the original key to read them. Restore that key in Portainer to recover them; creating a new one would make them permanently unreadable."
+          description="This is not a new installation. Portainer-Run has saved Git credentials that need the original key to read them. Restore that key in Portainer to recover them; creating a new one would make them permanently unreadable."
           action={
             <Button
               variant="ghost"
@@ -232,17 +232,12 @@ export function SetupPage() {
         />
       )}
 
-      {/*
-        The key exists in Portainer but has not reached this container yet, so
-        there is nothing to generate — offering to would overwrite a key that
-        stored Git credentials already depend on. Either the release re-apply
-        has not finished, or it failed.
-      */}
+      {/* Key stored but not loaded: generating would overwrite a live one. */}
       {keyAlreadyStored && (
         <Alert
           tone="info"
           title="Almost there"
-          description="Your encryption key is saved in Portainer. Portainer Run just needs to load it. Check again to finish."
+          description="Your encryption key is saved in Portainer. Portainer-Run just needs to load it. Check again to finish."
           action={
             <Button
               variant="ghost"

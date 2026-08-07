@@ -407,7 +407,7 @@ function TokenScopeNotice({ provider }: { provider: string }) {
       <>
         Requires a token with the <code>api</code> scope. Narrower combinations
         such as <code>read_api</code> + <code>write_repository</code> pass
-        GitLab&apos;s own checks but fail when Portainer Run writes manifests
+        GitLab&apos;s own checks but fail when Portainer-Run writes manifests
         and creates the GitOps stack.
       </>
     )
