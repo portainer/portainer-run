@@ -9,21 +9,6 @@ image:
 imagePullSecrets: [] # Optional. Only needed when pulling from a private/mirrored registry..
 storageClass: '' # Optional. StorageClass for the session-cache PVC. Empty uses the cluster default.
 
-# ── ConfigMap (non-sensitive configuration) ──────────────────────────────────
-# Rendered into the `portainer-run-config` ConfigMap and loaded into the
-# container via envFrom. The MCP config flow reads this ConfigMap by that fixed
-# name through the Portainer API, so keep any keys you add here as env keys.
-#
-# PORTAINER_URL and PORT are baked into the templates
-# (chart/templates/_helpers.tpl) with in-cluster defaults, so they're kept out
-# of this list. Override any of them — or set any other env key — with
-# `--set configMap.<KEY>=...` (or an overrides file) without a template change.
-configMap:
-  OPENAI_MODEL: '' # Optional. OpenAI model to use (default: gpt-4o). No effect when using Anthropic.
-
-# ── Secret (sensitive values) ────────────────────────────────────────────────
-# Rendered into an Opaque Secret (as stringData, so use plain text — no base64).
-secret:
-  ENCRYPTION_KEY: '' # Required. Encrypts stored Git target credentials at rest. Min 32 chars. Generate one with: openssl rand -hex 32
-  ANTHROPIC_API_KEY: '' # Optional. Anthropic (Claude). Set this or OPENAI_API_KEY to enable AI triage.
-  OPENAI_API_KEY: '' # Optional. OpenAI (GPT-4o) — set instead of ANTHROPIC_API_KEY to use OpenAI.
+# Empty by design: Portainer-Run reads its settings from Portainer at runtime.
+# Rendered generically, so `--set configMap.<KEY>=...` needs no template change.
+configMap: {}

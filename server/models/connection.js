@@ -1,13 +1,15 @@
 import crypto from 'node:crypto'
 import { randomUUID } from 'node:crypto'
 import db from '../db/db.js'
+import { encryptionKey, MIN_ENCRYPTION_KEY_LENGTH } from '../settings.js'
 
 const ALGORITHM = 'aes-256-gcm'
 
 function getKey() {
-  const key = process.env.ENCRYPTION_KEY
-  if (!key || key.length < 32) {
-    throw new Error('ENCRYPTION_KEY env var must be at least 32 characters')
+  const key = encryptionKey()
+  if (key.length < MIN_ENCRYPTION_KEY_LENGTH) {
+    // Only reachable past the 503 setup guard in handler.js.
+    throw new Error('Portainer-Run is awaiting setup: no encryption key yet')
   }
   return Buffer.from(key.slice(0, 32))
 }

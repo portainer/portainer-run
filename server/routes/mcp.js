@@ -17,7 +17,8 @@
 
 import { readBody } from '../lib/http.js'
 import { CORS } from '../lib/cors.js'
-import { BASE_DOMAIN, CONFIG_NAMESPACE } from '../config.js'
+import { CONFIG_NAMESPACE } from '../config.js'
+import { baseDomain } from '../settings.js'
 import { requestUploadSession, fetchStagedFiles } from '../lib/gateway.js'
 import {
   resolveCallerIdentity,
@@ -397,8 +398,8 @@ async function toolListIngressClasses(req, args) {
   // a full ingress.host (and should ask the user for it).
   return {
     classes,
-    baseDomain: BASE_DOMAIN || null,
-    ingressHostRequired: !BASE_DOMAIN,
+    baseDomain: baseDomain() || null,
+    ingressHostRequired: !baseDomain(),
   }
 }
 
@@ -701,7 +702,8 @@ async function toolDeployVibeApp(req, args, caller) {
   // <appName>.<BASE_DOMAIN> if a base domain is configured — mirroring the
   // template/UI default.
   const resolvedIngress = {
-    host: ingress.host || (BASE_DOMAIN ? `${safeAppName}.${BASE_DOMAIN}` : ''),
+    host:
+      ingress.host || (baseDomain() ? `${safeAppName}.${baseDomain()}` : ''),
     path: ingress.path || '/',
     ...(ingress.ingressClass ? { ingressClass: ingress.ingressClass } : {}),
   }

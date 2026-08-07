@@ -48,6 +48,8 @@ Clicking any application opens a detail panel with tabs for Overview, Containers
 
 **Cluster Readiness** (admin only) checks each environment for ingress, LoadBalancer, storage, node health, and GPU availability, and lets administrators disable environments from the deploy flow.
 
+**Settings** (admin only) is where Portainer-Run's own configuration is managed: the encryption key, AI provider keys, base domain, and gateway URL. Values are stored in Portainer rather than in the chart, so they survive upgrades and never appear in Helm's release history. See [Setup and configuration](#setup-and-configuration).
+
 **Assistant** is a persistent chat panel available on every page. It is context-aware and fetches live diagnostic data before answering health questions. It directs all deployment questions to the Deploy workflow and never executes irreversible operations directly.
 
 The running release is shown at the bottom of the sidebar as "Portainer-Run [version]". The value is baked into the image at build time: tagged releases show their release version, builds from the develop branch show `develop`, pull request builds show `pr-<number>`, and local or untagged builds show `dev`.
@@ -58,7 +60,7 @@ Deploy commits manifests and source files to a git repository. A git target is a
 
 Manifests are committed to `<env-name>/<namespace>/<appname>.yaml` and source files to `<env-name>/<namespace>/<appname>/src/`. This structure keeps each deployment environment cleanly separated within the repository. The browser UI and the MCP endpoint use the same paths, so an app deployed either way lands in the same place.
 
-Each target stores the provider (GitHub, GitLab, Gitea, or other), the repository in `owner/repo` form, a personal access token, an optional path prefix, and a default branch. Credentials are encrypted at rest using `ENCRYPTION_KEY`. This key must remain identical across deploys or stored targets become unreadable.
+Each target stores the provider (GitHub, GitLab, Gitea, or other), the repository in `owner/repo` form, a personal access token, an optional path prefix, and a default branch. Credentials are encrypted at rest using `ENCRYPTION_KEY`, which Portainer stores and Portainer-Run reads back at runtime (see [Setup and configuration](#setup-and-configuration)).
 
 The Test button on each target checks connectivity and reports read and write permissions. For GitHub, the check uses the collaborator permissions API, which works correctly with fine-grained PATs. For GitHub fine-grained PATs, the token requires Contents (read and write) permission on the target repository. Classic PATs require the `repo` scope.
 
@@ -76,7 +78,7 @@ Application removal deletes the manifest file and the source directory in a sing
 
 Portainer-Run derives roles from Portainer. A user with Role 1 (admin) in Portainer is an admin in Portainer-Run.
 
-Admins see the Admin section of the navigation, which contains Cluster Readiness and full git target management including the ability to mark targets as shared. Admins can edit and delete any git target, including shared ones.
+Admins see the Admin section of the navigation, which contains Cluster Readiness, Settings, and full git target management including the ability to mark targets as shared. Admins can edit and delete any git target, including shared ones. Settings is admin-only on both sides: the page refuses to render for non-admins, and Portainer's own configuration endpoints reject them.
 
 Non-admins see their own git targets plus any shared targets created by admins. Shared targets appear with a "shared" badge and are read-only for non-admins (Test is available, Edit and Delete are not).
 
@@ -152,6 +154,8 @@ Browser → TLS-terminating proxy → Node HTTP server (server.js) → Portainer
 
 Portainer-Run is a React and Vite frontend served by a Node HTTP server. The server forwards Kubernetes API calls to Portainer (bypassing browser CORS), relays AI requests to the configured provider (keeping the API key server-side), serves the aggregated `/env-status/` endpoint, exposes the `/mcp` MCP endpoint, and maintains a file-backed session cache.
 
+Its own configuration comes from the same Portainer API: the server fetches it and holds it in memory, so settings are neither baked into the image nor stored in the cluster. Every call to Portainer, including that one, carries the requesting user's credential — Portainer-Run has no identity of its own.
+
 User credentials never appear in server logs. AI API keys never reach the browser.
 
 ### TLS
@@ -166,7 +170,57 @@ The default port is deliberately unprivileged so the container can run as a non-
 
 The server maintains a SQLite database at `data/portainer-run.db` for git target storage and a file-backed cache at `data/cache.json` for deployment state. Both live under `/app/data` inside the container, which the addon system persists across restarts.
 
-`ENCRYPTION_KEY` must be set to the same value on every deploy. Git target credentials are encrypted with this key at rest. A different or missing key on redeploy means existing targets cannot be decrypted and will appear gone.
+`ENCRYPTION_KEY` must stay the same for the life of the installation. Git target credentials are encrypted with it at rest and the file-gateway identity is derived from it, so a changed key orphans both. Portainer holds the authoritative copy in its own database, which is why it survives pod restarts, upgrades, and the PVC being recreated. Portainer-Run fingerprints the key against the database it protects, so a key that changes or disappears is reported at boot and on the Settings page rather than letting targets quietly appear gone.
+
+## Setup and configuration
+
+Portainer-Run's configuration lives in Portainer, not in the chart and not in Kubernetes. Portainer holds the values; Portainer-Run fetches them over Portainer's API and keeps them in memory. Nothing is written into the cluster, so there is no Secret to manage, no Helm value to set, and no redeploy when a setting changes.
+
+`ENCRYPTION_KEY` is the clearest example. It is generated inside Portainer-Run during first-run setup, saved to Portainer's database, and read back from there whenever Portainer-Run needs it. An operator never generates it, never copies it into a values file, and never has to keep it identical across upgrades by hand.
+
+Two consequences follow from settings being memory-only:
+
+- **A restart begins unconfigured.** Portainer-Run has no credential of its own and Portainer's settings endpoints are administrator-only, so it cannot fetch on its own behalf at boot. It borrows an administrator's token instead: the setup screen asks it to load settings the moment they are saved, and any administrator request re-loads them opportunistically. In practice a restarted pod configures itself as soon as an admin uses it. A machine credential (mTLS) will remove this gap.
+- **Settings never enter Helm.** Helm keeps every retained revision's values in cleartext inside its own `sh.helm.release.*` Secrets, so a key passed as a chart value would linger in release history long after it was rotated. Keeping configuration out of Helm avoids that entirely.
+
+### First-run setup
+
+A fresh install starts with no `ENCRYPTION_KEY` and boots into an **awaiting setup** state: the UI shows the setup screen, and Git targets and deploys return `503` until configuration arrives. The server deliberately does not exit — `/config` is the liveness and readiness probe, so exiting would crashloop the pod before an administrator could ever reach the setup screen.
+
+An administrator opens Portainer-Run and completes setup:
+
+1. The setup screen generates an `ENCRYPTION_KEY` in the browser using the Web Crypto CSPRNG.
+2. It saves the value to Portainer over the administrator's own session. Portainer-Run holds no credential and never performs this write itself.
+3. It asks Portainer-Run to load its settings, which it does using that same administrator's token.
+4. Portainer-Run is configured. No restart, no redeploy.
+
+The key is only needed _after_ setup, for encrypting Git target credentials and deriving the gateway identity, so generating it before Portainer-Run holds it presents no ordering problem.
+
+Administrators change the AI keys, base domain, and gateway URL later from **Settings**, which uses the same save-then-load flow and takes effect immediately.
+
+### Standalone installs
+
+Outside the addon there is no Portainer store to read from, so environment variables seed the values instead. Anything present in the container's environment at startup is used, and Portainer's copy overrides it if a fetch later succeeds. Supply them however you normally would — a Secret consumed via `envFrom`, chart values, or an `.env` file for local development:
+
+```bash
+kubectl -n <namespace> create secret generic portainer-run-secret \
+  --from-literal=ENCRYPTION_KEY=$(openssl rand -hex 32)
+```
+
+The Deployment reads a Secret of that name as an _optional_ `envFrom` source, so it is picked up if present and ignored if absent.
+
+### Existing installations
+
+An installation whose `ENCRYPTION_KEY` was set by hand keeps working unchanged, because environment variables still seed the configuration.
+
+To move it under Portainer's management, the setup screen detects the case and offers to import the current key rather than replace it. The key never reaches the browser: the import runs server-side, sending the value Portainer-Run already holds to Portainer over the administrator's forwarded session. Import before removing the environment variable, so the value is banked before its only source disappears.
+
+If the key is lost anyway, Portainer-Run fails loudly rather than silently. It fingerprints the key against the database that key protects, so:
+
+- A **changed** key is reported at boot and on the Settings page, with the number of Git targets that can no longer be read.
+- A **missing** key with encrypted data still present is reported as a dropped key, never as a fresh install, and the setup screen refuses to generate a replacement that would orphan the existing credentials.
+
+Restoring the original value recovers everything with no further action.
 
 ## Local development
 
@@ -183,21 +237,23 @@ or newer is required to run `server/server.js` directly.
 
 ## Environment variables
 
-When installed as a Portainer add-on, most of these are populated for you by the Add-ons setup screen (encryption key, API keys, image repository/tag, storage class) — see [docs.portainer.ai/quick-start](https://docs.portainer.ai/quick-start). The table below documents what each variable does at the container level, for anyone customizing the chart or running the server directly.
+When installed as a Portainer add-on you do not set these by hand. Portainer stores the configuration and Portainer-Run reads it back at runtime; the encryption key and AI keys are managed from [first-run setup and the Settings page](#setup-and-configuration), and the image repository/tag and storage class from the Add-ons setup screen. See [docs.portainer.ai/quick-start](https://docs.portainer.ai/quick-start).
 
-`PORTAINER_URL` and `ENCRYPTION_KEY` are required. All others are optional.
+The variables below are read only at startup, to seed the initial configuration. A value fetched from Portainer takes precedence over the matching variable. They remain the way to configure a standalone install or local development, and the table documents what each one does at the container level.
 
-| Variable            | Default    | Description                                                                                                                                        |
-| ------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PORTAINER_URL`     | (required) | Full URL of your Portainer instance. Example: `https://portainer.example.com:9443`                                                                 |
-| `ENCRYPTION_KEY`    | (required) | Encrypts stored git target credentials at rest. Must be at least 32 characters and identical across deploys. Generate with: `openssl rand -hex 32` |
-| `ANTHROPIC_API_KEY` | (none)     | Anthropic API key. Enables the Assistant using Claude.                                                                                             |
-| `OPENAI_API_KEY`    | (none)     | OpenAI API key. Enables the Assistant using GPT-4o. Set one or the other, not both. Anthropic takes priority if both are set.                      |
-| `AI_PROVIDER`       | auto       | Override AI provider: `anthropic` or `openai`. Auto-detected from whichever key is set.                                                            |
-| `OPENAI_MODEL`      | `gpt-4o`   | OpenAI model override.                                                                                                                             |
-| `BASE_DOMAIN`       | (none)     | Base domain for Ingress exposure. If set, the deploy flow defaults the Ingress host to `appname.BASE_DOMAIN`.                                      |
-| `GATEWAY_URL`       | (none)     | File relay gateway for staged uploads. When set, large deploy uploads use the gateway instead of inline MCP transfer.                              |
-| `PORT`              | `8080`     | Plain-HTTP listen port inside the container. TLS terminates at the proxy in front of it.                                                           |
+`PORTAINER_URL` is required and is genuine bootstrap: Portainer-Run cannot reach Portainer without it, so it can never come from Portainer. `ENCRYPTION_KEY` is required before Git targets and deploys work, but the server starts without it and waits for setup. All others are optional.
+
+| Variable            | Default          | Description                                                                                                                                                                                                                                                             |
+| ------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORTAINER_URL`     | (required)       | Full URL of your Portainer instance. Example: `https://portainer.example.com:9443`                                                                                                                                                                                      |
+| `ENCRYPTION_KEY`    | (from Portainer) | Encrypts stored git target credentials at rest and derives the gateway identity. At least 32 characters, and fixed for the life of the installation. Generated during first-run setup and stored in Portainer's database; set it manually only for standalone installs. |
+| `ANTHROPIC_API_KEY` | (none)           | Anthropic API key. Enables the Assistant using Claude.                                                                                                                                                                                                                  |
+| `OPENAI_API_KEY`    | (none)           | OpenAI API key. Enables the Assistant using GPT-4o. Set one or the other, not both. Anthropic takes priority if both are set.                                                                                                                                           |
+| `AI_PROVIDER`       | auto             | Override AI provider: `anthropic` or `openai`. Auto-detected from whichever key is set.                                                                                                                                                                                 |
+| `OPENAI_MODEL`      | `gpt-4o`         | OpenAI model override.                                                                                                                                                                                                                                                  |
+| `BASE_DOMAIN`       | (none)           | Base domain for Ingress exposure. If set, the deploy flow defaults the Ingress host to `appname.BASE_DOMAIN`.                                                                                                                                                           |
+| `GATEWAY_URL`       | (none)           | File relay gateway for staged uploads. When set, large deploy uploads use the gateway instead of inline MCP transfer.                                                                                                                                                   |
+| `PORT`              | `8080`           | Plain-HTTP listen port inside the container. TLS terminates at the proxy in front of it.                                                                                                                                                                                |
 
 `PORTAINER_RUN_VERSION` is not a runtime setting. It is a Docker build argument, set by the CI and release workflows at image build time, and surfaced read-only in the sidebar. Local builds default it to `dev`.
 

@@ -1,6 +1,6 @@
 import https from 'node:https'
 import { CORS } from '../lib/cors.js'
-import { OPENAI_KEY, OPENAI_MODEL } from '../config.js'
+import { openaiKey, openaiModel } from '../settings.js'
 
 /**
  * @param {import('http').IncomingMessage} req
@@ -8,7 +8,7 @@ import { OPENAI_KEY, OPENAI_MODEL } from '../config.js'
  * @param {Buffer} body
  */
 export function proxyToOpenAI(req, res, body) {
-  if (!OPENAI_KEY) {
+  if (!openaiKey()) {
     res.writeHead(503, { 'Content-Type': 'application/json', ...CORS })
     res.end(
       JSON.stringify({ error: 'OPENAI_API_KEY not configured on server' }),
@@ -30,7 +30,7 @@ export function proxyToOpenAI(req, res, body) {
     messages.push({ role: m.role, content: m.content })
 
   const openaiPayload = {
-    model: OPENAI_MODEL,
+    model: openaiModel(),
     max_tokens: payload.max_tokens || 1000,
     stream: !!payload.stream,
     messages,
@@ -39,7 +39,7 @@ export function proxyToOpenAI(req, res, body) {
   const outBody = Buffer.from(JSON.stringify(openaiPayload))
   const headers = {
     'Content-Type': 'application/json',
-    Authorization: 'Bearer ' + OPENAI_KEY,
+    Authorization: 'Bearer ' + openaiKey(),
     'Content-Length': outBody.length,
   }
 
@@ -70,7 +70,7 @@ export function proxyToOpenAI(req, res, body) {
               type: 'message',
               role: 'assistant',
               content: [{ type: 'text', text }],
-              model: OPENAI_MODEL,
+              model: openaiModel(),
               stop_reason: 'end_turn',
               usage: {
                 input_tokens: (oai.usage && oai.usage.prompt_tokens) || 0,
@@ -107,7 +107,7 @@ export function proxyToOpenAI(req, res, body) {
       }
       res.write(
         'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_openai","type":"message","role":"assistant","content":[],"model":"' +
-          OPENAI_MODEL +
+          openaiModel() +
           '"}}\n\n',
       )
       res.write(

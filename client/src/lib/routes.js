@@ -4,6 +4,8 @@ export const ROUTES = {
   deploy: '/deploy/vibe',
   readiness: '/readiness',
   gitTargets: '/git-targets',
+  settings: '/settings',
+  setup: '/setup',
 }
 
 /**

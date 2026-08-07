@@ -1,6 +1,6 @@
 import https from 'node:https'
 import { CORS } from '../lib/cors.js'
-import { ANTHROPIC_KEY } from '../config.js'
+import { anthropicKey } from '../settings.js'
 
 /**
  * @param {import('http').IncomingMessage} req
@@ -8,7 +8,7 @@ import { ANTHROPIC_KEY } from '../config.js'
  * @param {Buffer} body
  */
 export function proxyToAnthropic(req, res, body) {
-  if (!ANTHROPIC_KEY) {
+  if (!anthropicKey()) {
     res.writeHead(503, { 'Content-Type': 'application/json', ...CORS })
     res.end(
       JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured on server' }),
@@ -26,7 +26,7 @@ export function proxyToAnthropic(req, res, body) {
   const outBody = Buffer.from(JSON.stringify(payload))
   const headers = {
     'Content-Type': 'application/json',
-    'x-api-key': ANTHROPIC_KEY,
+    'x-api-key': anthropicKey(),
     'anthropic-version': '2023-06-01',
     'Content-Length': outBody.length,
   }

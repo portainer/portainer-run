@@ -13,7 +13,7 @@
  */
 
 import crypto from 'node:crypto'
-import { ENCRYPTION_KEY, GATEWAY_URL } from '../config.js'
+import { encryptionKey, gatewayUrl } from '../settings.js'
 import db from '../db/db.js'
 
 // ---------------------------------------------------------------------------
@@ -21,8 +21,16 @@ import db from '../db/db.js'
 // ---------------------------------------------------------------------------
 
 function getInstanceId() {
+  // An empty HMAC key is legal in Node, so without this an unconfigured
+  // instance would register a meaningless identity and lose it once keyed.
+  const key = encryptionKey()
+  if (!key) {
+    throw new Error(
+      'Cannot derive a gateway identity: Portainer-Run is awaiting setup',
+    )
+  }
   return crypto
-    .createHmac('sha256', ENCRYPTION_KEY)
+    .createHmac('sha256', key)
     .update('portainer-run-gateway-id')
     .digest('hex')
 }
@@ -51,7 +59,7 @@ function storePsk(psk) {
 
 async function register() {
   const instanceId = getInstanceId()
-  const res = await fetch(`${GATEWAY_URL}/register`, {
+  const res = await fetch(`${gatewayUrl()}/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ instanceId }),
@@ -82,7 +90,7 @@ async function ensurePsk() {
  * The AI coding assistant uploads files directly to uploadUrl.
  */
 export async function requestUploadSession() {
-  if (!GATEWAY_URL) {
+  if (!gatewayUrl()) {
     throw new Error(
       'GATEWAY_URL is not configured on this Portainer-Run instance. ' +
         'Set GATEWAY_URL=https://run-gateway.portainer.ai in your environment.',
@@ -92,7 +100,7 @@ export async function requestUploadSession() {
   let psk = await ensurePsk()
 
   async function attempt(currentPsk) {
-    return fetch(`${GATEWAY_URL}/session`, {
+    return fetch(`${gatewayUrl()}/session`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${currentPsk}` },
     })
@@ -124,14 +132,14 @@ export async function requestUploadSession() {
  * that vibe.js expects.
  */
 export async function fetchStagedFiles(sessionId) {
-  if (!GATEWAY_URL) {
+  if (!gatewayUrl()) {
     throw new Error(
       'GATEWAY_URL is not configured on this Portainer-Run instance.',
     )
   }
 
   const res = await fetch(
-    `${GATEWAY_URL}/download/${encodeURIComponent(sessionId)}`,
+    `${gatewayUrl()}/download/${encodeURIComponent(sessionId)}`,
   )
 
   if (!res.ok) {
