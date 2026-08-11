@@ -1,5 +1,6 @@
 import { apiFetch, serverFetch } from '../lib/api.js'
 import { writeCurrentUser } from '../lib/currentUser.js'
+import { isLicenseInvalid } from '../lib/license'
 import { useAppStore, visibleDeployments } from '../store/useAppStore.js'
 import { loadServerConfig } from './config.js'
 import { loadDisabledEnvs } from './disabledEnvs.js'
@@ -17,6 +18,20 @@ const K8S_TYPES = [5, 6, 7]
  *  requests to `/`, which renders the Portainer login page. */
 function redirectToLogin() {
   window.location.href = '/'
+}
+
+/** Portainer hash-routes from the gateway root; replace() so Back exits the addon. */
+function redirectToInitLicense() {
+  window.location.replace('/#!/init/license')
+}
+
+async function fetchLicenseInfo() {
+  try {
+    const r = await apiFetch(null, '/licenses/info')
+    return r.ok ? await r.json() : undefined
+  } catch {
+    return undefined
+  }
 }
 
 /**
@@ -49,6 +64,11 @@ export async function bootstrap() {
   } catch (e) {
     st().setConnectError('Cannot reach Portainer. ' + (e && e.message))
     st().setAuthChecking(false)
+    return false
+  }
+
+  if (isLicenseInvalid(await fetchLicenseInfo())) {
+    redirectToInitLicense()
     return false
   }
 
