@@ -1,6 +1,13 @@
 import http from 'node:http'
 import { CACHE_FILE, PORT, PORTAINER_URL } from './config.js'
-import { aiProvider, baseDomain, isConfigured } from './settings.js'
+import {
+  aiProvider,
+  baseDomain,
+  credentialHealth,
+  ensureHydrated,
+  isConfigured,
+} from './settings.js'
+import { hasMachineCredential } from './machine-credential.js'
 import { handleRequest } from './handler.js'
 import { reportKeyContinuity } from './lib/key-continuity.js'
 
@@ -30,7 +37,11 @@ const httpServer = http.createServer(handleRequest)
 // Warn on a changed key before listen, so it heads the pod log.
 const continuity = reportKeyContinuity()
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, async () => {
+  // Comes up configured with no user behind it. Listening first keeps the
+  // probes served while Portainer is being reached.
+  if (hasMachineCredential()) await ensureHydrated()
+
   console.log(
     isConfigured()
       ? '\n✅  Portainer-Run started'
@@ -46,12 +57,15 @@ httpServer.listen(PORT, () => {
     `    Domain:    ${baseDomain() || '(not set — NodePort fallback)'}`,
   )
   console.log(
+    // An add-on that read Portainer and found nothing stored is new.
     `    Config:    ${
-      !isConfigured()
-        ? 'awaiting an admin to run setup (fetched from Portainer on demand)'
-        : continuity.status === 'mismatch'
-          ? 'encryption key changed ⚠️'
-          : 'ready ✓'
+      credentialHealth() !== 'ok'
+        ? 'could not be read from Portainer ⚠️'
+        : !isConfigured()
+          ? 'awaiting an admin to run setup'
+          : continuity.status === 'mismatch'
+            ? 'encryption key changed ⚠️'
+            : 'ready ✓'
     }\n`,
   )
 })

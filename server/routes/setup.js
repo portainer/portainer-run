@@ -3,7 +3,8 @@
  * what it cannot do — reloading this process's settings, importing a hand-set
  * key from the pod's own environment, and clearing a key-mismatch warning.
  *
- * No Portainer-Run credential: writes forward the calling admin's own token.
+ * Writes forward the calling admin's own token even where this add-on has a
+ * credential: adopting a key is a deliberate act, and Portainer records who.
  */
 
 import { CORS } from '../lib/cors.js'

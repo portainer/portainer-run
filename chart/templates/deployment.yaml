@@ -47,6 +47,14 @@ spec:
           volumeMounts:
             - name: cache
               mountPath: /app/data
+            {{- /*
+              Mounted rather than envFrom because the kubelet refreshes a mounted
+              Secret in place, which is what lets a repaired credential reach a
+              running pod without a restart.
+            */}}
+            - name: portainer-credential
+              mountPath: /var/run/secrets/portainer/addon
+              readOnly: true
           resources:
             requests:
               cpu: 50m
@@ -74,3 +82,9 @@ spec:
         - name: cache
           persistentVolumeClaim:
             claimName: {{ include "portainer-run.cacheClaimName" . }}
+        - name: portainer-credential
+          secret:
+            secretName: portainer-run-token
+            # Absent where Portainer has not issued a credential; the server
+            # borrows an admin caller's token instead.
+            optional: true
