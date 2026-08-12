@@ -52,6 +52,9 @@ async function main() {
   const plan = planForContext(context)
   const step = loadStep(image, plan)
   const deployments = await deploymentNames(namespace, selector)
+  const mismatched = (await deploymentImages(namespace, deployments)).filter(
+    (d) => d.image !== image,
+  )
 
   log('cluster', `context "${context}"  →  namespace ${namespace}`)
   log('image', `${image}  (${source})`)
@@ -72,6 +75,12 @@ async function main() {
         ? deployments.join(', ')
         : `(none found — install "${id}" from the Addons screen first)`,
     )
+    for (const d of mismatched) {
+      log(
+        'stale',
+        `${d.name} runs ${d.image} — a restart would not pick up ${image}`,
+      )
+    }
     return
   }
 
@@ -82,6 +91,20 @@ async function main() {
       `No add-on Deployment found in ${namespace} (selector ${selector}).\n` +
         `Install "${id}" once from the Addons screen first — with DEV_ADDON_CHARTS/\n` +
         `DEV_ADDON_VALUES pointing at this repo — then re-run redeploy.`,
+    )
+  }
+
+  // A restart only reloads the image the Deployment already references. Installed
+  // without DEV_ADDON_VALUES it still points at the published image, so the
+  // restart succeeds, a new pod starts, and the old build is served — the one
+  // failure here with no visible symptom. Checked before building so it costs
+  // seconds rather than a full image build.
+  if (mismatched.length > 0) {
+    fail(
+      `${mismatched.map((d) => `${d.name} runs ${d.image}`).join('\n')}\n` +
+        `but this builds ${image}, so a restart would redeploy the same image.\n\n` +
+        `Reinstall "${id}" from the Addons screen with DEV_ADDON_CHARTS/\n` +
+        `DEV_ADDON_VALUES pointing at this repo, so the release runs your build.`,
     )
   }
 
@@ -166,7 +189,10 @@ function parseArgs(argv: string[]): Args {
   const args: Args = { skipBuild: false, dryRun: false }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
-    if (arg === '--image') {
+    // `bun run redeploy -- --dry-run` forwards the separator; npm strips it.
+    if (arg === '--') {
+      continue
+    } else if (arg === '--image') {
       args.image = argv[++i]
     } else if (arg === '--skip-build') {
       args.skipBuild = true
@@ -233,6 +259,24 @@ async function deploymentNames(
     .split('\n')
     .map((s) => s.trim())
     .filter(Boolean)
+}
+
+// The image each Deployment actually runs. Read straight from the cluster: it is
+// the only thing that says whether a restart would pick up a local build.
+async function deploymentImages(
+  namespace: string,
+  deployments: string[],
+): Promise<{ name: string; image: string }[]> {
+  return Promise.all(
+    deployments.map(async (name) => ({
+      name,
+      image: (
+        await $`kubectl get ${name} -n ${namespace} -o jsonpath={.spec.template.spec.containers[0].image}`
+          .nothrow()
+          .text()
+      ).trim(),
+    })),
+  )
 }
 
 function planForContext(context: string): LoadPlan {
