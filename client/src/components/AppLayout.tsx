@@ -31,6 +31,8 @@ import { AssistantPanel } from './AssistantPanel'
 import { ApplicationSwitcher } from '@ds/v3-templates/ApplicationSwitcher/ApplicationSwitcher.tsx'
 import { getAddons } from '@/lib/getAddons.ts'
 import type { SwitcherProduct } from '@/lib/addonToProduct.tsx'
+import { setLastViewedAddon } from '@/lib/lastViewedAddon.ts'
+import { ADDON_ID } from '@/lib/addonConfig.ts'
 
 /** This app's own entry in the switcher — always present, always the selected one. */
 const SELF_PRODUCT: SwitcherProduct = {
@@ -129,6 +131,7 @@ export function AppLayout() {
   const [addonsLoading, setAddonsLoading] = useState<boolean>(true)
 
   const isAdmin = useAppStore((s) => s.isAdmin)
+  const userId = useAppStore((s) => s.userId)
   const portainerAccessDenied = useAppStore((s) => s.portainerAccessDenied)
   const isAiAvailable = useAppStore((s) => s.isAiAvailable)
   const version = useAppStore((s) => s.version)
@@ -152,6 +155,13 @@ export function AppLayout() {
       .catch(() => setAddons([]))
       .finally(() => setAddonsLoading(false))
   }, [])
+
+  // Portainer reads this back at login to return the user to the portal they
+  // were last in. Recorded on arrival, so a bookmark or direct link counts.
+  useEffect(() => {
+    if (!userId) return
+    setLastViewedAddon(userId, ADDON_ID)
+  }, [userId])
 
   // Portainer Ops leads the list, mirroring Portainer's own switcher.
   const products: SwitcherProduct[] = [
