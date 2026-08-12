@@ -8,7 +8,7 @@
 # portal-template/docs/developing-inside-portainer.md.
 image:
   repository: portainer-run
-  tag: dev
+  tag: local
   # Use the node-loaded image; never reach a registry.
   pullPolicy: IfNotPresent
 # This add-on's server calls Portainer, which in the dev rig runs on your host — so

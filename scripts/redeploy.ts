@@ -190,7 +190,7 @@ function readAddonId(): string {
 
 // Resolve which image tag to build. Explicit flag/env win; otherwise use the
 // exact ref from dev-values.yaml so the built tag always matches what the
-// install actually runs. Falls back to <id>:dev if no dev-values.yaml.
+// install actually runs. Falls back to <id>:local if no dev-values.yaml.
 function resolveImage(
   args: Args,
   id: string,
@@ -200,7 +200,7 @@ function resolveImage(
     return { image: normalizeTag(process.env.IMAGE), source: '$IMAGE' }
   const fromValues = readImageFromDevValues()
   if (fromValues) return { image: fromValues, source: 'dev-values.yaml' }
-  return { image: `${id}:dev`, source: 'default' }
+  return { image: `${id}:local`, source: 'default' }
 }
 
 function readImageFromDevValues(): string | null {
@@ -216,9 +216,9 @@ function readImageFromDevValues(): string | null {
   return tag ? `${repository}:${tag}` : repository
 }
 
-// A bare "foo" is ambiguous to Docker (implies :latest); pin our dev tag.
+// A bare "foo" is ambiguous to Docker (implies :latest); pin our local tag.
 function normalizeTag(image: string): string {
-  return image.includes(':') ? image : `${image}:dev`
+  return image.includes(':') ? image : `${image}:local`
 }
 
 async function deploymentNames(
