@@ -135,6 +135,9 @@ function verifyPeer(req, socket) {
   const ca = portainerCA()
   if (!ca) return
 
+  // Validity dates are not checked here. They bound how long a chain vouches
+  // for a binding this does not rely on, and expiry has no republishing of its
+  // own — a Repair would hand back the same certificate, with no way out.
   const leaf = socket.getPeerCertificate(false)?.raw
   if (leaf && publishedCertificates(ca).some((der) => der.equals(leaf))) return
 

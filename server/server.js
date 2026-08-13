@@ -35,14 +35,17 @@ function onError(e) {
 // production), which forwards plain HTTP, so this server never speaks HTTPS.
 const httpServer = http.createServer(handleRequest)
 
-// Warn on a changed key before listen, so it heads the pod log.
-const continuity = reportKeyContinuity()
 warnUnverified(resolvePortainerTarget()?.isHttps)
 
 httpServer.listen(PORT, async () => {
   // With a credential mounted this comes up configured, no user behind it.
   // Listening first keeps the probes served while Portainer is being reached.
   await ensureHydrated()
+
+  // Only meaningful once the key is in hand: judged before the fetch, an
+  // instance that keeps its key in Portainer reports every restart as a
+  // dropped one.
+  const continuity = reportKeyContinuity()
 
   console.log(
     isConfigured()
