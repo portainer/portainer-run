@@ -1,8 +1,6 @@
-import https from 'node:https'
-import http from 'node:http'
 import { getCachedUser, setCachedUser } from './userCache.js'
 import { resolvePortainerTarget } from '../resolve-portainer.js'
-import { portainerTlsOptions, boundRequest } from './portainer-tls.js'
+import { portainerHttpRequest } from './portainer-tls.js'
 
 /**
  * Build the outbound auth header for a call to Portainer, matching the token
@@ -30,33 +28,28 @@ export function portainerAuthHeaders(token) {
  */
 export function portainerGet(target, token, path) {
   return new Promise((resolve, reject) => {
-    const mod = target.isHttps ? https : http
-    const req = boundRequest(
-      mod.request(
-        {
-          hostname: target.host,
-          port: target.port,
-          path,
-          method: 'GET',
-          headers: {
-            ...portainerAuthHeaders(token),
-            'Content-Type': 'application/json',
-          },
-          // Answers "is the caller an administrator?", so a forged reply grants it.
-          ...portainerTlsOptions(),
+    // Answers "is the caller an administrator?", so a forged reply grants it.
+    const req = portainerHttpRequest(
+      target,
+      {
+        path,
+        method: 'GET',
+        headers: {
+          ...portainerAuthHeaders(token),
+          'Content-Type': 'application/json',
         },
-        (res) => {
-          let body = ''
-          res.on('data', (c) => (body += c))
-          res.on('end', () => {
-            try {
-              resolve(JSON.parse(body))
-            } catch {
-              reject(new Error('Invalid JSON from Portainer'))
-            }
-          })
-        },
-      ),
+      },
+      (res) => {
+        let body = ''
+        res.on('data', (c) => (body += c))
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(body))
+          } catch {
+            reject(new Error('Invalid JSON from Portainer'))
+          }
+        })
+      },
     )
     req.on('error', reject)
     req.end()

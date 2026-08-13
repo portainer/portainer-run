@@ -1,11 +1,9 @@
-import http from 'node:http'
-import https from 'node:https'
 import crypto from 'node:crypto'
 import { CORS } from './lib/cors.js'
 import { createLimiter } from './lib/limit.js'
 import { resolvePortainerTarget } from './resolve-portainer.js'
 import { extractToken, portainerAuthHeaders } from './lib/identity.js'
-import { portainerTlsOptions, boundRequest } from './lib/portainer-tls.js'
+import { portainerHttpRequest } from './lib/portainer-tls.js'
 
 const STATUS_TTL = 5 * 1000
 
@@ -22,37 +20,31 @@ function kubeCall(token, envId, kubePath, target) {
   return kubeLimit(
     () =>
       new Promise((resolve, reject) => {
-        const upPath = `/api/endpoints/${envId}/kubernetes${kubePath}`
         const headers = {
           Accept: 'application/json',
           ...portainerAuthHeaders(token),
         }
-        const transport = target.isHttps ? https : http
-        const req = boundRequest(
-          transport.request(
-            {
-              hostname: target.host,
-              port: target.port,
-              path: upPath,
-              method: 'GET',
-              headers,
-              ...portainerTlsOptions(),
-            },
-            (res) => {
-              const chunks = []
-              res.on('data', (c) => chunks.push(c))
-              res.on('end', () => {
-                try {
-                  resolve({
-                    status: res.statusCode,
-                    body: JSON.parse(Buffer.concat(chunks).toString('utf8')),
-                  })
-                } catch {
-                  resolve({ status: res.statusCode, body: {} })
-                }
-              })
-            },
-          ),
+        const req = portainerHttpRequest(
+          target,
+          {
+            path: `/api/endpoints/${envId}/kubernetes${kubePath}`,
+            method: 'GET',
+            headers,
+          },
+          (res) => {
+            const chunks = []
+            res.on('data', (c) => chunks.push(c))
+            res.on('end', () => {
+              try {
+                resolve({
+                  status: res.statusCode,
+                  body: JSON.parse(Buffer.concat(chunks).toString('utf8')),
+                })
+              } catch {
+                resolve({ status: res.statusCode, body: {} })
+              }
+            })
+          },
         )
         req.on('error', reject)
         req.end()

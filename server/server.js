@@ -7,9 +7,10 @@ import {
   ensureHydrated,
   isConfigured,
 } from './settings.js'
-import { hasMachineCredential } from './machine-credential.js'
 import { handleRequest } from './handler.js'
 import { reportKeyContinuity } from './lib/key-continuity.js'
+import { warnUnverified } from './lib/portainer-tls.js'
+import { resolvePortainerTarget } from './resolve-portainer.js'
 
 function onError(e) {
   const err = e
@@ -36,11 +37,12 @@ const httpServer = http.createServer(handleRequest)
 
 // Warn on a changed key before listen, so it heads the pod log.
 const continuity = reportKeyContinuity()
+warnUnverified(resolvePortainerTarget()?.isHttps)
 
 httpServer.listen(PORT, async () => {
-  // Comes up configured with no user behind it. Listening first keeps the
-  // probes served while Portainer is being reached.
-  if (hasMachineCredential()) await ensureHydrated()
+  // With a credential mounted this comes up configured, no user behind it.
+  // Listening first keeps the probes served while Portainer is being reached.
+  await ensureHydrated()
 
   console.log(
     isConfigured()

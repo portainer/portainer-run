@@ -10,7 +10,12 @@
 
 import { portainerRequest } from './lib/portainer-api.js'
 import { resolvePortainerTarget } from './resolve-portainer.js'
-import { hasMachineCredential, machineToken } from './machine-credential.js'
+import {
+  hasMachineCredential,
+  machineToken,
+  machineTokenUnreadable,
+  portainerCAUnreadable,
+} from './machine-credential.js'
 
 const ADDON_ID = 'portainer-run'
 
@@ -47,8 +52,10 @@ let hydratedAt = null
 let lastError = null
 /** @type {Promise<boolean> | null} */
 let inFlight = null
-/** Set when this add-on's own credential was refused or could not be trusted. */
-let credentialRejected = false
+/** Why this add-on's own credential last failed: null, 'rejected' or 'certificate'. */
+let credentialFailure = null
+/** Whether the last successful fetch carried an ENCRYPTION_KEY of Portainer's own. */
+let keyCameFromPortainer = false
 
 /** @param {string} key */
 export function getSetting(key) {
@@ -114,52 +121,57 @@ export function settingsStatus() {
  * @returns {'ok' | 'credential-invalid' | 'settings-unavailable'}
  */
 export function credentialHealth() {
+  // A file that exists and will not open is a credential the add-on holds and
+  // cannot present, so ask that before asking whether it works.
+  if (credentialUnreadable()) return 'credential-invalid'
+
   // A credential since removed has nothing left to repair.
   if (!hasMachineCredential()) return 'ok'
 
-  if (credentialRejected) return 'credential-invalid'
+  if (credentialFailure) return 'credential-invalid'
   // Env-seeded settings skip hydration, so never hydrating is not a fault.
   if (hydratedAt === null && !isConfigured()) return 'settings-unavailable'
 
   return 'ok'
 }
 
-/** Shortest gap between retries, so a fast prober cannot hammer Portainer. */
-const CREDENTIAL_RETRY_INTERVAL = 15_000
-let lastCredentialRetry = 0
-
-/**
- * Re-read the credential and try again after it failed.
- *
- * Hydration is otherwise retried only by inbound API traffic, so an idle add-on
- * stays broken after a repair. Portainer's health probe calls this, making the
- * thing that reports the fault the thing that clears it. Not awaited, so the
- * probe stays fast.
- */
-export function retryFailedHydration() {
-  if (credentialHealth() === 'ok') return
-  if (Date.now() - lastCredentialRetry < CREDENTIAL_RETRY_INTERVAL) return
-
-  // Stamped before the await so concurrent probes cannot stack up retries.
-  lastCredentialRetry = Date.now()
-  hydrate().catch(() => {})
+function credentialUnreadable() {
+  return machineTokenUnreadable() || portainerCAUnreadable()
 }
 
 /**
- * Whether reaching Portainer failed on its certificate — Node reports these on
- * `code` with no status attached. The chain failures are the ones that do not
- * carry CERT in the name.
+ * Shortest gap between opportunistic hydrations, so neither a fast prober nor
+ * unauthenticated traffic turns into a Portainer round trip per request.
  */
-function isCertificateError(e) {
-  const code = e?.code
-  if (typeof code !== 'string') return false
+const HYDRATE_RETRY_INTERVAL = 15_000
+let lastHydrateAttempt = 0
 
-  return (
-    code.includes('CERT') ||
-    code.startsWith('ERR_TLS') ||
-    code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' ||
-    code === 'SELF_SIGNED_CERT_IN_CHAIN'
-  )
+/**
+ * Which half of the credential failed. A refused token and an untrusted
+ * certificate need the same repair, so /healthz reports which one it was
+ * without echoing the upstream message to an unauthenticated caller.
+ *
+ * @returns {'rejected' | 'certificate' | null}
+ */
+function failureCause(e) {
+  if (e?.status === 401 || e?.status === 403) return 'rejected'
+
+  const code = e?.code
+  if (
+    typeof code === 'string' &&
+    (code.includes('CERT') || code.startsWith('ERR_TLS'))
+  ) {
+    return 'certificate'
+  }
+
+  return null
+}
+
+/** @returns {'rejected' | 'certificate' | 'unreadable' | undefined} */
+export function credentialFault() {
+  if (credentialUnreadable()) return 'unreadable'
+
+  return credentialFailure ?? undefined
 }
 
 /**
@@ -169,7 +181,7 @@ function isCertificateError(e) {
  * @param {string} [adminToken] Only used where no credential is mounted
  * @returns {Promise<boolean>} whether the fetch succeeded
  */
-export async function hydrate(adminToken) {
+async function hydrate(adminToken) {
   const target = resolvePortainerTarget()
   if (!target) {
     lastError = 'No Portainer target available'
@@ -177,21 +189,31 @@ export async function hydrate(adminToken) {
   }
 
   const machine = machineToken()
-  const token = machine || adminToken
+  // Prefer the add-on's own credential, but let a caller's token through once
+  // that credential has been refused, so a broken one can be recovered without
+  // uninstalling.
+  const asAdmin =
+    Boolean(adminToken) && (!machine || credentialFailure !== null)
+  const token = asAdmin ? adminToken : machine
   if (!token) {
     lastError =
       'No add-on credential is mounted and no admin token was supplied'
     return false
   }
 
-  const path = machine ? MACHINE_CONFIG_PATH : ADMIN_CONFIG_PATH
+  const path = asAdmin ? ADMIN_CONFIG_PATH : MACHINE_CONFIG_PATH
 
   try {
     const body = await portainerRequest(target, token, 'GET', path)
-    const entries = Array.isArray(body?.entries) ? body.entries : []
+    // A 200 carrying something else is not an add-on with no settings yet:
+    // treating it as one would invite an administrator to generate a second
+    // ENCRYPTION_KEY over data the first one encrypted.
+    if (!Array.isArray(body?.entries)) {
+      throw new Error('Portainer returned no configuration entry list')
+    }
 
     const fetched = {}
-    for (const entry of entries) {
+    for (const entry of body.entries) {
       if (!entry?.key || typeof entry.value !== 'string') continue
       if (!KNOWN_KEYS.includes(entry.key)) continue
       fetched[entry.key] = entry.value
@@ -200,30 +222,85 @@ export async function hydrate(adminToken) {
     values = { ...seeded, ...fetched }
     hydratedAt = Date.now()
     lastError = null
-    credentialRejected = false
+    keyCameFromPortainer = 'ENCRYPTION_KEY' in fetched
+    // A borrowed admin token says nothing about this add-on's credential, so a
+    // fetch that worked around a broken one leaves the fault standing.
+    if (!asAdmin) credentialFailure = null
     return true
   } catch (e) {
     lastError = e instanceof Error ? e.message : String(e)
-    // A borrowed admin token says nothing about this add-on's credential. A
-    // refusal and an untrusted certificate share one remedy: republish both.
-    credentialRejected =
-      Boolean(machine) &&
-      (e?.status === 401 || e?.status === 403 || isCertificateError(e))
+    // Only a recognised cause replaces a recorded one. A 500 says nothing about
+    // the credential, and letting it clear a known rejection would report the
+    // add-on healthy with nothing left to retry.
+    if (!asAdmin) credentialFailure = failureCause(e) ?? credentialFailure
     return false
   }
 }
 
 /**
- * Hydrate unless configured, collapsing concurrent callers onto one request.
+ * Collapse concurrent callers onto one request.
  * @param {string} [adminToken] Only needed where no credential is mounted.
  */
-export function ensureHydrated(adminToken) {
-  if (isConfigured()) return Promise.resolve(true)
+function hydrateOnce(adminToken) {
   if (inFlight) return inFlight
 
+  lastHydrateAttempt = Date.now()
   inFlight = hydrate(adminToken).finally(() => {
     inFlight = null
   })
 
   return inFlight
+}
+
+/**
+ * Fetch again, for an administrator who has just saved.
+ *
+ * A hydrate already running was started before that save, so joining it would
+ * report a pre-save snapshot as a successful reload. Waiting for it to settle
+ * also keeps the two from assigning the settings out of order.
+ *
+ * @param {string} [adminToken] Only needed where no credential is mounted.
+ */
+export function refetch(adminToken) {
+  const settled = inFlight ? inFlight.catch(() => {}) : Promise.resolve()
+
+  return settled.then(() => hydrateOnce(adminToken))
+}
+
+/**
+ * Fetch unless there is nothing left to fetch for.
+ *
+ * The one opportunistic entry point: startup, unidentified inbound traffic and
+ * Portainer's health probe all arrive here, so none can pick a variant that
+ * skips the throttle or the in-flight collapse. An administrator's explicit
+ * reload goes through refetch instead.
+ *
+ * Throttled because the caller may be traffic that has not been identified yet:
+ * an unconfigured instance must not turn every request into a round trip.
+ *
+ * @param {string} [adminToken] Only needed where no credential is mounted, or
+ * where the mounted one has been refused.
+ * @returns {Promise<boolean>}
+ */
+export function ensureHydrated(adminToken) {
+  // Settings can be live from an env seed or an earlier fetch while the
+  // credential is not, so being configured is not on its own a reason to stop.
+  if (isConfigured() && credentialHealth() === 'ok')
+    return Promise.resolve(true)
+  if (!machineToken() && !adminToken) return Promise.resolve(false)
+  if (inFlight) return inFlight
+  if (Date.now() - lastHydrateAttempt < HYDRATE_RETRY_INTERVAL) {
+    return Promise.resolve(false)
+  }
+
+  return hydrateOnce(adminToken)
+}
+
+/**
+ * Whether the key this process holds came from its own environment rather than
+ * Portainer. That is the one that can be adopted: storing it in Portainer is
+ * what makes it outlive this pod.
+ */
+export function encryptionKeyIsLocal() {
+  return isConfigured() && !keyCameFromPortainer
 }

@@ -7,11 +7,11 @@ import {
   aiProvider,
   anthropicKey,
   baseDomain,
+  credentialFault,
   credentialHealth,
   ensureHydrated,
   isConfigured,
   openaiKey,
-  retryFailedHydration,
 } from './settings.js'
 import { hasMachineCredential } from './machine-credential.js'
 import { keyContinuity } from './lib/key-continuity.js'
@@ -62,19 +62,31 @@ export async function handleRequest(req, res) {
   // probes: this one answers 401 so Portainer can offer a repair, where a
   // Kubernetes probe would restart the pod and fix nothing.
   if (pathname === '/healthz') {
-    // Portainer polls this, so let its probe pick up a repaired Secret.
-    retryFailedHydration()
+    // Portainer polls this, so let its probe pick up a repaired Secret. Not
+    // awaited, so the probe does not wait on a round trip to answer.
+    void ensureHydrated().catch(() => {})
 
     const status = credentialHealth()
     const code = { ok: 200, 'credential-invalid': 401 }[status] ?? 503
 
-    res.writeHead(code, { 'Content-Type': 'application/json', ...CORS })
+    res.writeHead(code, {
+      'Content-Type': 'application/json',
+      // A 401 must carry a challenge. This one names the add-on's own
+      // credential, which no caller can supply.
+      ...(code === 401
+        ? { 'WWW-Authenticate': 'Bearer realm="portainer-addon"' }
+        : {}),
+      ...CORS,
+    })
     res.end(
       JSON.stringify({
         status,
         hasCredential: hasMachineCredential(),
         configured: isConfigured(),
         version: VERSION,
+        // Which half failed, not why: this endpoint is unauthenticated, so the
+        // upstream message stays on /api/setup/status with the other details.
+        fault: credentialFault(),
       }),
     )
     return
@@ -149,11 +161,11 @@ export async function handleRequest(req, res) {
   }
 
   // This already ran at startup; retrying recovers a Portainer that was down
-  // then. Only without a credential do we still borrow an admin caller's token.
+  // then. Only without a credential do we borrow an admin caller's token, which
+  // costs an identity lookup this path would otherwise not need.
   if (!isConfigured() && pathname.startsWith('/api/')) {
-    if (hasMachineCredential()) {
-      await ensureHydrated()
-    } else {
+    if (hasMachineCredential()) await ensureHydrated()
+    else {
       const caller = await resolveCallerIdentity(req)
       if (caller?.isAdmin) await ensureHydrated(caller.token)
     }

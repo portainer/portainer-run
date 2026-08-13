@@ -1,7 +1,5 @@
-import https from 'node:https'
-import http from 'node:http'
 import { portainerAuthHeaders } from './identity.js'
-import { portainerTlsOptions, boundRequest } from './portainer-tls.js'
+import { portainerHttpRequest } from './portainer-tls.js'
 
 /**
  * Request Portainer's API. `token` is either the inbound caller's own
@@ -23,22 +21,14 @@ export function portainerRequest(
   contentType = 'application/json',
 ) {
   return new Promise((resolve, reject) => {
-    const transport = target.isHttps ? https : http
     const headers = { 'Content-Type': contentType, Accept: 'application/json' }
     if (token) Object.assign(headers, portainerAuthHeaders(token))
     if (body) headers['Content-Length'] = Buffer.byteLength(body)
 
-    const opts = {
-      hostname: target.host,
-      port: target.port,
-      path,
-      method,
-      headers,
-      ...portainerTlsOptions(),
-    }
-
-    const reqOut = boundRequest(
-      transport.request(opts, (upRes) => {
+    const reqOut = portainerHttpRequest(
+      target,
+      { path, method, headers },
+      (upRes) => {
         const chunks = []
         upRes.on('data', (c) => chunks.push(c))
         upRes.on('end', () => {
@@ -68,7 +58,7 @@ export function portainerRequest(
             resolve(text)
           }
         })
-      }),
+      },
     )
 
     reqOut.on('error', reject)
