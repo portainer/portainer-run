@@ -1,6 +1,7 @@
 import { apiFetch, serverFetch } from '../lib/api.js'
 import { writeCurrentUser } from '../lib/currentUser.js'
 import { isLicenseInvalid } from '../lib/license'
+import { storeReturnUrl } from '../lib/returnUrl'
 import { useAppStore, visibleDeployments } from '../store/useAppStore.js'
 import { loadServerConfig } from './config.js'
 import { loadDisabledEnvs } from './disabledEnvs.js'
@@ -15,8 +16,12 @@ const SESSION_SENTINEL = 'session'
 const K8S_TYPES = [5, 6, 7]
 
 /** Send the user to Portainer's login. The addon gateway 302s unauthenticated
- *  requests to `/`, which renders the Portainer login page. */
+ *  requests to `/`, which renders the Portainer login page. Where the user was
+ *  is recorded first, so logging back in returns them here rather than to
+ *  Portainer's home — this covers both an expired session and an explicit
+ *  logout, which both land here. */
 function redirectToLogin() {
+  storeReturnUrl()
   window.location.href = '/'
 }
 
