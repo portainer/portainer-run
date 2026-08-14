@@ -1,14 +1,14 @@
-import https from 'node:https'
-import http from 'node:http'
 import { getCachedUser, setCachedUser } from './userCache.js'
 import { resolvePortainerTarget } from '../resolve-portainer.js'
+import { portainerHttpRequest } from './portainer-tls.js'
 
 /**
  * Build the outbound auth header for a call to Portainer, matching the token
- * type: API access tokens ("ptr_" prefix) go on X-API-Key, session JWTs on
- * Authorization: Bearer. Only the matching header is sent — Portainer's
- * apiKeyLookup runs first and 401s if X-API-Key holds a JWT. A JWT must never
- * be sent as the portainer_api_key cookie: core's CSRF check fails closed on
+ * type: API access tokens ("ptr_" prefix) go on X-API-Key, session JWTs and
+ * this add-on's machine token ("paddon_") on Authorization: Bearer, which is
+ * the only header the machine API reads. Only the matching header is sent —
+ * Portainer's apiKeyLookup runs first and 401s if X-API-Key holds a JWT. A JWT
+ * must never be sent as the portainer_api_key cookie: core's CSRF check fails closed on
  * unsafe cookie-authenticated requests lacking Origin/Sec-Fetch-Site (which
  * server-to-server calls never send), but exempts token auth.
  * @param {string} token
@@ -28,18 +28,16 @@ export function portainerAuthHeaders(token) {
  */
 export function portainerGet(target, token, path) {
   return new Promise((resolve, reject) => {
-    const mod = target.isHttps ? https : http
-    const req = mod.request(
+    // Answers "is the caller an administrator?", so a forged reply grants it.
+    const req = portainerHttpRequest(
+      target,
       {
-        hostname: target.host,
-        port: target.port,
         path,
         method: 'GET',
         headers: {
           ...portainerAuthHeaders(token),
           'Content-Type': 'application/json',
         },
-        rejectUnauthorized: false,
       },
       (res) => {
         let body = ''

@@ -1,10 +1,9 @@
-import http from 'node:http'
-import https from 'node:https'
 import crypto from 'node:crypto'
 import { CORS } from './lib/cors.js'
 import { createLimiter } from './lib/limit.js'
 import { resolvePortainerTarget } from './resolve-portainer.js'
 import { extractToken, portainerAuthHeaders } from './lib/identity.js'
+import { portainerHttpRequest } from './lib/portainer-tls.js'
 
 const STATUS_TTL = 5 * 1000
 
@@ -21,20 +20,16 @@ function kubeCall(token, envId, kubePath, target) {
   return kubeLimit(
     () =>
       new Promise((resolve, reject) => {
-        const upPath = `/api/endpoints/${envId}/kubernetes${kubePath}`
         const headers = {
           Accept: 'application/json',
           ...portainerAuthHeaders(token),
         }
-        const transport = target.isHttps ? https : http
-        const req = transport.request(
+        const req = portainerHttpRequest(
+          target,
           {
-            hostname: target.host,
-            port: target.port,
-            path: upPath,
+            path: `/api/endpoints/${envId}/kubernetes${kubePath}`,
             method: 'GET',
             headers,
-            rejectUnauthorized: false,
           },
           (res) => {
             const chunks = []

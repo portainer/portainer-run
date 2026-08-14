@@ -154,7 +154,7 @@ Browser → TLS-terminating proxy → Node HTTP server (server.js) → Portainer
 
 Portainer-Run is a React and Vite frontend served by a Node HTTP server. The server forwards Kubernetes API calls to Portainer (bypassing browser CORS), relays AI requests to the configured provider (keeping the API key server-side), serves the aggregated `/env-status/` endpoint, exposes the `/mcp` MCP endpoint, and maintains a file-backed session cache.
 
-Its own configuration comes from the same Portainer API: the server fetches it and holds it in memory, so settings are neither baked into the image nor stored in the cluster. Every call to Portainer, including that one, carries the requesting user's credential — Portainer-Run has no identity of its own.
+Its own configuration comes from the same Portainer API: the server fetches it and holds it in memory, so settings are neither baked into the image nor stored in the cluster. Calls made on a user's behalf carry that user's credential. Reading its own settings uses the credential Portainer issues the add-on — a token mounted as a Secret in its namespace, good for that one API and nothing else.
 
 User credentials never appear in server logs. AI API keys never reach the browser.
 
@@ -174,13 +174,13 @@ The server maintains a SQLite database at `data/portainer-run.db` for git target
 
 ## Setup and configuration
 
-Portainer-Run's configuration lives in Portainer, not in the chart and not in Kubernetes. Portainer holds the values; Portainer-Run fetches them over Portainer's API and keeps them in memory. Nothing is written into the cluster, so there is no Secret to manage, no Helm value to set, and no redeploy when a setting changes.
+Portainer-Run's configuration lives in Portainer, not in the chart and not in Kubernetes. Portainer holds the values; Portainer-Run fetches them over Portainer's API and keeps them in memory. No setting is written into the cluster, so there is no Secret to manage, no Helm value to set, and no redeploy when a setting changes.
 
 `ENCRYPTION_KEY` is the clearest example. It is generated inside Portainer-Run during first-run setup, saved to Portainer's database, and read back from there whenever Portainer-Run needs it. An operator never generates it, never copies it into a values file, and never has to keep it identical across upgrades by hand.
 
 Two consequences follow from settings being memory-only:
 
-- **A restart begins unconfigured.** Portainer-Run has no credential of its own and Portainer's settings endpoints are administrator-only, so it cannot fetch on its own behalf at boot. It borrows an administrator's token instead: the setup screen asks it to load settings the moment they are saved, and any administrator request re-loads them opportunistically. In practice a restarted pod configures itself as soon as an admin uses it. A machine credential (mTLS) will remove this gap.
+- **A restart refetches at boot.** Portainer issues Portainer-Run a credential of its own, mounted as a Secret in its namespace, and the server uses it to fetch settings at startup with no user behind the request.
 - **Settings never enter Helm.** Helm keeps every retained revision's values in cleartext inside its own `sh.helm.release.*` Secrets, so a key passed as a chart value would linger in release history long after it was rotated. Keeping configuration out of Helm avoids that entirely.
 
 ### First-run setup
@@ -190,8 +190,8 @@ A fresh install starts with no `ENCRYPTION_KEY` and boots into an **awaiting set
 An administrator opens Portainer-Run and completes setup:
 
 1. The setup screen generates an `ENCRYPTION_KEY` in the browser using the Web Crypto CSPRNG.
-2. It saves the value to Portainer over the administrator's own session. Portainer-Run holds no credential and never performs this write itself.
-3. It asks Portainer-Run to load its settings, which it does using that same administrator's token.
+2. It saves the value to Portainer over the administrator's own session, never through Portainer-Run: adopting a key is a deliberate act, and Portainer records who made it.
+3. It asks Portainer-Run to load its settings, which it does with its own credential.
 4. Portainer-Run is configured. No restart, no redeploy.
 
 The key is only needed _after_ setup, for encrypting Git target credentials and deriving the gateway identity, so generating it before Portainer-Run holds it presents no ordering problem.

@@ -7,10 +7,13 @@ import {
   aiProvider,
   anthropicKey,
   baseDomain,
+  credentialFault,
+  credentialHealth,
   ensureHydrated,
   isConfigured,
   openaiKey,
 } from './settings.js'
+import { hasMachineCredential } from './machine-credential.js'
 import { keyContinuity } from './lib/key-continuity.js'
 import { handleCache } from './cache.js'
 import { handleEnvStatus } from './env-status.js'
@@ -52,6 +55,40 @@ export async function handleRequest(req, res) {
   ) {
     res.writeHead(403, { 'Content-Type': 'application/json', ...CORS })
     res.end(JSON.stringify({ error: 'Cross-site request blocked' }))
+    return
+  }
+
+  // Portainer's own health probe, kept apart from the /config that Kubernetes
+  // probes: this one answers 401 so Portainer can offer a repair, where a
+  // Kubernetes probe would restart the pod and fix nothing.
+  if (pathname === '/healthz') {
+    // Portainer polls this, so let its probe pick up a repaired Secret. Not
+    // awaited, so the probe does not wait on a round trip to answer.
+    void ensureHydrated().catch(() => {})
+
+    const status = credentialHealth()
+    const code = { ok: 200, 'credential-invalid': 401 }[status] ?? 503
+
+    res.writeHead(code, {
+      'Content-Type': 'application/json',
+      // A 401 must carry a challenge. This one names the add-on's own
+      // credential, which no caller can supply.
+      ...(code === 401
+        ? { 'WWW-Authenticate': 'Bearer realm="portainer-addon"' }
+        : {}),
+      ...CORS,
+    })
+    res.end(
+      JSON.stringify({
+        status,
+        hasCredential: hasMachineCredential(),
+        configured: isConfigured(),
+        version: VERSION,
+        // Which half failed, not why: this endpoint is unauthenticated, so the
+        // upstream message stays on /api/setup/status with the other details.
+        fault: credentialFault(),
+      }),
+    )
     return
   }
 
@@ -123,11 +160,15 @@ export async function handleRequest(req, res) {
     if (handled !== null) return
   }
 
-  // Settings are memory-only, so a restart starts unconfigured. Borrow the
-  // first admin caller's token rather than waiting for the setup screen.
+  // This already ran at startup; retrying recovers a Portainer that was down
+  // then. Only without a credential do we borrow an admin caller's token, which
+  // costs an identity lookup this path would otherwise not need.
   if (!isConfigured() && pathname.startsWith('/api/')) {
-    const caller = await resolveCallerIdentity(req)
-    if (caller?.isAdmin) await ensureHydrated(caller.token)
+    if (hasMachineCredential()) await ensureHydrated()
+    else {
+      const caller = await resolveCallerIdentity(req)
+      if (caller?.isAdmin) await ensureHydrated(caller.token)
+    }
   }
 
   // These decrypt stored credentials, so without a key they would 500.

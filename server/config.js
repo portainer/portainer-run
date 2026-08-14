@@ -35,6 +35,9 @@ export const PORTAINER_URL = (process.env.PORTAINER_URL || '').replace(
 export const PORT = parseInt(process.env.PORT || '8080', 10)
 export const CACHE_DIR = process.env.CACHE_DIR || path.join(projectRoot, 'data')
 
+export const MACHINE_CREDENTIAL_DIR =
+  process.env.MACHINE_CREDENTIAL_DIR || '/var/run/secrets/portainer/addon'
+
 /** Release version, baked in at Docker build time. 'dev' for local/non-release builds. */
 export const VERSION = process.env.PORTAINER_RUN_VERSION || 'dev'
 

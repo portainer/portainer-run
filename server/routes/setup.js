@@ -3,14 +3,15 @@
  * what it cannot do — reloading this process's settings, importing a hand-set
  * key from the pod's own environment, and clearing a key-mismatch warning.
  *
- * No Portainer-Run credential: writes forward the calling admin's own token.
+ * Writes forward the calling admin's own token even where this add-on has a
+ * credential: adopting a key is a deliberate act, and Portainer records who.
  */
 
 import { CORS } from '../lib/cors.js'
 import {
   encryptionKey,
-  ensureHydrated,
-  hydrate,
+  encryptionKeyIsLocal,
+  refetch,
   isConfigured,
   settingsStatus,
 } from '../settings.js'
@@ -51,7 +52,7 @@ export async function handleSetup(req, res, pathname) {
       isAdmin: caller.isAdmin,
       settings: settingsStatus(),
       // A key in our environment can be imported so it outlives this process.
-      canAdoptLocalKey: isConfigured() && !settingsStatus().hydrated,
+      canAdoptLocalKey: encryptionKeyIsLocal(),
       keyStatus: continuity.status,
       affectedConnections: continuity.affectedConnections,
       gatewayPskStale: continuity.gatewayPskStale,
@@ -68,7 +69,7 @@ export async function handleSetup(req, res, pathname) {
   // Called by the setup screen after saving: settings are memory-only, so this
   // is what makes them live.
   if (pathname === '/api/setup/reload' && req.method === 'POST') {
-    const ok = await hydrate(caller.token)
+    const ok = await refetch(caller.token)
     json(res, ok ? 200 : 502, {
       ok,
       setupRequired: !isConfigured(),

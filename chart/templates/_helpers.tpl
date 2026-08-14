@@ -160,3 +160,10 @@ honored — `default` would treat 0/"" as empty and silently restore the fallbac
 {{- $c := .Values.configMap | default dict -}}
 {{- if hasKey $c "PORT" }}{{ $c.PORT }}{{ else }}8080{{ end -}}
 {{- end }}
+
+{{- /* Where Portainer's credential is mounted. One definition for the volume
+mount and the server that reads it, so the two cannot drift. */}}
+{{- define "portainer-run.credentialDir" -}}
+{{- $c := .Values.configMap | default dict -}}
+{{- if hasKey $c "MACHINE_CREDENTIAL_DIR" }}{{ $c.MACHINE_CREDENTIAL_DIR }}{{ else }}/var/run/secrets/portainer/addon{{ end -}}
+{{- end }}

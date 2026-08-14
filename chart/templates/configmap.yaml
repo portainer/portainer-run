@@ -10,8 +10,9 @@ data:
   # Baked-in defaults (kept out of values.yaml; see _helpers.tpl).
   PORTAINER_URL: {{ include "portainer-run.portainerUrl" . | quote }}
   PORT: {{ include "portainer-run.port" . | quote }}
+  MACHINE_CREDENTIAL_DIR: {{ include "portainer-run.credentialDir" . | quote }}
   {{- range $key, $value := .Values.configMap }}
-  {{- if not (has $key (list "PORTAINER_URL" "PORT")) }}
+  {{- if not (has $key (list "PORTAINER_URL" "PORT" "MACHINE_CREDENTIAL_DIR")) }}
   {{ $key }}: {{ $value | quote }}
   {{- end }}
   {{- end }}

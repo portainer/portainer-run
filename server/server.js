@@ -1,8 +1,16 @@
 import http from 'node:http'
 import { CACHE_FILE, PORT, PORTAINER_URL } from './config.js'
-import { aiProvider, baseDomain, isConfigured } from './settings.js'
+import {
+  aiProvider,
+  baseDomain,
+  credentialHealth,
+  ensureHydrated,
+  isConfigured,
+} from './settings.js'
 import { handleRequest } from './handler.js'
 import { reportKeyContinuity } from './lib/key-continuity.js'
+import { warnUnverified } from './lib/portainer-tls.js'
+import { resolvePortainerTarget } from './resolve-portainer.js'
 
 function onError(e) {
   const err = e
@@ -27,10 +35,18 @@ function onError(e) {
 // production), which forwards plain HTTP, so this server never speaks HTTPS.
 const httpServer = http.createServer(handleRequest)
 
-// Warn on a changed key before listen, so it heads the pod log.
-const continuity = reportKeyContinuity()
+warnUnverified(resolvePortainerTarget()?.isHttps)
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, async () => {
+  // With a credential mounted this comes up configured, no user behind it.
+  // Listening first keeps the probes served while Portainer is being reached.
+  await ensureHydrated()
+
+  // Only meaningful once the key is in hand: judged before the fetch, an
+  // instance that keeps its key in Portainer reports every restart as a
+  // dropped one.
+  const continuity = reportKeyContinuity()
+
   console.log(
     isConfigured()
       ? '\n✅  Portainer-Run started'
@@ -46,12 +62,15 @@ httpServer.listen(PORT, () => {
     `    Domain:    ${baseDomain() || '(not set — NodePort fallback)'}`,
   )
   console.log(
+    // An add-on that read Portainer and found nothing stored is new.
     `    Config:    ${
-      !isConfigured()
-        ? 'awaiting an admin to run setup (fetched from Portainer on demand)'
-        : continuity.status === 'mismatch'
-          ? 'encryption key changed ⚠️'
-          : 'ready ✓'
+      credentialHealth() !== 'ok'
+        ? 'could not be read from Portainer ⚠️'
+        : !isConfigured()
+          ? 'awaiting an admin to run setup'
+          : continuity.status === 'mismatch'
+            ? 'encryption key changed ⚠️'
+            : 'ready ✓'
     }\n`,
   )
 })
