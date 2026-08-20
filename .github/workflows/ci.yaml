@@ -54,8 +54,20 @@ jobs:
           submodules: recursive
           token: ${{ steps.fetch-token.outputs.token }}
 
+      # Node 24 to match the image, and for glob support in the test script.
+      - name: '[preparation] set up node'
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 24
+
       - name: '[validation] check server syntax'
         run: node --check server/server.js
+
+      - name: '[preparation] install helm'
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+
+      - name: '[validation] run tests'
+        run: npm test
 
       - name: '[preparation] capture git commit'
         id: git-info
