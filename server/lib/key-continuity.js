@@ -7,6 +7,7 @@
 import crypto from 'node:crypto'
 import db from '../db/db.js'
 import { encryptionKey, isConfigured } from '../settings.js'
+import { classifyKeyState } from './key-state.js'
 
 const FINGERPRINT_KV_KEY = 'encryption_key_fingerprint'
 
@@ -43,13 +44,7 @@ function hasGatewayPsk() {
   )
 }
 
-/**
- * @typedef {object} KeyContinuity
- * @property {'unconfigured'|'ok'|'mismatch'|'lost'} status
- *   `lost` — no key but encrypted data exists. Never a first run.
- * @property {number} affectedConnections  Git targets that will no longer decrypt.
- * @property {boolean} gatewayPskStale     Whether the registered gateway PSK is orphaned.
- */
+/** @typedef {import('./key-state.js').KeyContinuity} KeyContinuity */
 
 /** @type {KeyContinuity | null} */
 let memo = null
@@ -58,41 +53,20 @@ let memoKey = null
 
 /** @returns {KeyContinuity} */
 function compute() {
-  if (!isConfigured()) {
-    // A recorded fingerprint means the key went away rather than never being
-    // set. Mistaking that for a first run invites generating a replacement.
-    const stored = readStored()
-    const affectedConnections = stored ? encryptedRowCount() : 0
-    const gatewayPskStale = stored ? hasGatewayPsk() : false
-    if (stored && (affectedConnections > 0 || gatewayPskStale)) {
-      return { status: 'lost', affectedConnections, gatewayPskStale }
-    }
-    return {
-      status: 'unconfigured',
-      affectedConnections: 0,
-      gatewayPskStale: false,
-    }
-  }
+  const configured = isConfigured()
+  const current = configured ? fingerprint(encryptionKey()) : null
 
-  const current = fingerprint(encryptionKey())
-  const stored = readStored()
+  const { rebaseline, ...verdict } = classifyKeyState({
+    configured,
+    stored: readStored(),
+    current,
+    encryptedRows: encryptedRowCount(),
+    gatewayPsk: hasGatewayPsk(),
+  })
 
-  if (!stored || stored === current) {
-    // First boot on this volume, or the expected steady state.
-    if (!stored) writeStored(current)
-    return { status: 'ok', affectedConnections: 0, gatewayPskStale: false }
-  }
+  if (rebaseline) writeStored(current)
 
-  const affectedConnections = encryptedRowCount()
-  const gatewayPskStale = hasGatewayPsk()
-
-  // Nothing encrypted behind it, so the change costs nothing. Adopt silently.
-  if (affectedConnections === 0 && !gatewayPskStale) {
-    writeStored(current)
-    return { status: 'ok', affectedConnections: 0, gatewayPskStale: false }
-  }
-
-  return { status: 'mismatch', affectedConnections, gatewayPskStale }
+  return verdict
 }
 
 /** Verdict for the key currently held. Recomputed when that key changes. */

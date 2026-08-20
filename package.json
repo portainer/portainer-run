@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "bun run --cwd client dev",
     "start": "node server/server.js",
+    "test": "node --test \"server/**/*.test.js\" \"test/**/*.test.js\"",
     "build": "bun run --cwd client build",
     "preview": "bun run --cwd client preview",
     "docker:run": "bash scripts/docker-run.sh",

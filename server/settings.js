@@ -56,8 +56,14 @@ let inFlight = null
 let credentialFailure = null
 /** Whether Portainer holds this add-on's ENCRYPTION_KEY. */
 let keyCameFromPortainer = false
-/** One attempt per process: a restart retries it, a loop would not help. */
-let adoptionAttempted = false
+/**
+ * @typedef {'adopted'|'settled'|'retry'} AdoptionOutcome
+ *   `settled` — Portainer holds a key, or there is no local one to hand over.
+ *   `retry` — the attempt could not be made yet, which says nothing either way.
+ */
+
+/** Latched once the key's home is decided. */
+let adoptionSettled = false
 
 /** @param {string} key */
 export function getSetting(key) {
@@ -313,20 +319,22 @@ export function encryptionKeyIsLocal() {
  * Unattended: by the time an administrator could press Adopt in setup, the
  * Secret that a later release drops is already gone.
  *
- * @returns {Promise<boolean>} whether Portainer now holds the key
+ * @returns {Promise<AdoptionOutcome>}
  */
 export async function adoptEnvKey() {
-  if (adoptionAttempted || !encryptionKeyIsLocal()) return false
-  adoptionAttempted = true
+  if (adoptionSettled || !encryptionKeyIsLocal()) return 'settled'
 
   const target = resolvePortainerTarget()
   const token = machineToken()
-  if (!target || !token) return false
+  if (!target || !token) return 'retry'
 
   // Ask first: a stale chart seed must not overwrite a key Portainer holds, and
   // a configured instance never fetches on its own.
-  if (!(await hydrateOnce())) return false
-  if (keyCameFromPortainer) return false
+  if (!(await hydrateOnce())) return 'retry'
+  if (keyCameFromPortainer) {
+    adoptionSettled = true
+    return 'settled'
+  }
 
   try {
     await portainerRequest(
@@ -339,10 +347,11 @@ export async function adoptEnvKey() {
   } catch (e) {
     // Never record the key, or a message that might carry it.
     lastError = e instanceof Error ? e.message : String(e)
-    return false
+    return 'retry'
   }
 
   keyCameFromPortainer = true
+  adoptionSettled = true
 
-  return true
+  return 'adopted'
 }
