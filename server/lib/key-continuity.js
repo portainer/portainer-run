@@ -8,6 +8,7 @@ import crypto from 'node:crypto'
 import db from '../db/db.js'
 import { encryptionKey, isConfigured } from '../settings.js'
 import { classifyKeyState } from './key-state.js'
+import { heldKeyDecryptsStoredRow } from '../models/connection.js'
 
 const FINGERPRINT_KV_KEY = 'encryption_key_fingerprint'
 
@@ -62,6 +63,7 @@ function compute() {
     current,
     encryptedRows: encryptedRowCount(),
     gatewayPsk: hasGatewayPsk(),
+    decryptsStoredRow: configured ? heldKeyDecryptsStoredRow() : null,
   })
 
   if (rebaseline) writeStored(current)
@@ -110,10 +112,10 @@ export function reportKeyContinuity() {
           '\n    This is NOT a fresh install. The key was most likely dropped by a\n' +
           '    release applied with an empty value. Restore it in Portainer —\n' +
           '    generating a new one will permanently orphan the data above.\n'
-      : '\n❌  ENCRYPTION_KEY has changed since this instance last started.\n' +
+      : '\n❌  ENCRYPTION_KEY does not match the data on this volume.\n' +
           parts.join('\n') +
-          '\n    Restore the previous key in Portainer to recover, or acknowledge the\n' +
-          '    change from Portainer-Run settings to start over with the new one.\n',
+          '\n    Restore the key that encrypted it in Portainer to recover, or\n' +
+          '    acknowledge the change from Portainer-Run settings to start over.\n',
   )
   return c
 }

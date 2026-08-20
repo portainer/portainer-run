@@ -336,6 +336,8 @@ export async function adoptEnvKey() {
     return 'settled'
   }
 
+  // A key stored between the read-back and here is overwritten on purpose: the
+  // rows on this volume are encrypted with the one being handed over.
   try {
     await portainerRequest(
       target,

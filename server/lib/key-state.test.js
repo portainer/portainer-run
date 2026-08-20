@@ -13,6 +13,7 @@ function state(overrides) {
     current: null,
     encryptedRows: 0,
     gatewayPsk: false,
+    decryptsStoredRow: null,
     ...overrides,
   })
 }
@@ -56,6 +57,42 @@ test('first boot on a volume records the key as the baseline', () => {
     gatewayPskStale: false,
     rebaseline: true,
   })
+})
+
+// R8S-1253
+test('a key that cannot open an existing row is a mismatch, not a first boot', () => {
+  assert.deepEqual(
+    state({
+      configured: true,
+      current: KEY_A,
+      encryptedRows: 2,
+      gatewayPsk: true,
+      decryptsStoredRow: false,
+    }),
+    {
+      status: 'mismatch',
+      affectedConnections: 2,
+      gatewayPskStale: true,
+      rebaseline: false,
+    },
+  )
+})
+
+test('a key that opens an existing row becomes the baseline', () => {
+  assert.deepEqual(
+    state({
+      configured: true,
+      current: KEY_A,
+      encryptedRows: 2,
+      decryptsStoredRow: true,
+    }),
+    {
+      status: 'ok',
+      affectedConnections: 0,
+      gatewayPskStale: false,
+      rebaseline: true,
+    },
+  )
 })
 
 test('the steady state records nothing', () => {

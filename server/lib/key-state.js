@@ -19,6 +19,8 @@
  * @property {string | null} current Fingerprint of the key held now.
  * @property {number} encryptedRows
  * @property {boolean} gatewayPsk
+ * @property {boolean | null} decryptsStoredRow Whether the key held opens an
+ *   existing row, or null where there are none to try.
  */
 
 /**
@@ -32,6 +34,7 @@ export function classifyKeyState({
   current,
   encryptedRows,
   gatewayPsk,
+  decryptsStoredRow,
 }) {
   if (!configured) {
     // Rows, not the fingerprint: 1.3.0 never recorded one, so gating on it
@@ -52,13 +55,33 @@ export function classifyKeyState({
     }
   }
 
-  // First boot on this volume, or the expected steady state.
-  if (!stored || stored === current) {
+  if (!stored) {
+    // No fingerprint to compare, so authentication is the only check left: a
+    // key that cannot open an existing row is not the one that wrote it.
+    if (decryptsStoredRow === false) {
+      return {
+        status: 'mismatch',
+        affectedConnections: encryptedRows,
+        gatewayPskStale: gatewayPsk,
+        rebaseline: false,
+      }
+    }
+
+    // First boot on this volume.
     return {
       status: 'ok',
       affectedConnections: 0,
       gatewayPskStale: false,
-      rebaseline: !stored,
+      rebaseline: true,
+    }
+  }
+
+  if (stored === current) {
+    return {
+      status: 'ok',
+      affectedConnections: 0,
+      gatewayPskStale: false,
+      rebaseline: false,
     }
   }
 
