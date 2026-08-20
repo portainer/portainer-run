@@ -54,8 +54,10 @@ let lastError = null
 let inFlight = null
 /** Why this add-on's own credential last failed: null, 'rejected' or 'certificate'. */
 let credentialFailure = null
-/** Whether the last successful fetch carried an ENCRYPTION_KEY of Portainer's own. */
+/** Whether Portainer holds this add-on's ENCRYPTION_KEY. */
 let keyCameFromPortainer = false
+/** One attempt per process: a restart retries it, a loop would not help. */
+let adoptionAttempted = false
 
 /** @param {string} key */
 export function getSetting(key) {
@@ -303,4 +305,44 @@ export function ensureHydrated(adminToken) {
  */
 export function encryptionKeyIsLocal() {
   return isConfigured() && !keyCameFromPortainer
+}
+
+/**
+ * Hand an environment-seeded ENCRYPTION_KEY to Portainer, so it outlives this pod.
+ *
+ * Unattended: by the time an administrator could press Adopt in setup, the
+ * Secret that a later release drops is already gone.
+ *
+ * @returns {Promise<boolean>} whether Portainer now holds the key
+ */
+export async function adoptEnvKey() {
+  if (adoptionAttempted || !encryptionKeyIsLocal()) return false
+  adoptionAttempted = true
+
+  const target = resolvePortainerTarget()
+  const token = machineToken()
+  if (!target || !token) return false
+
+  // Ask first: a stale chart seed must not overwrite a key Portainer holds, and
+  // a configured instance never fetches on its own.
+  if (!(await hydrateOnce())) return false
+  if (keyCameFromPortainer) return false
+
+  try {
+    await portainerRequest(
+      target,
+      token,
+      'PATCH',
+      `${MACHINE_CONFIG_PATH}/ENCRYPTION_KEY`,
+      JSON.stringify({ value: encryptionKey(), sensitive: true }),
+    )
+  } catch (e) {
+    // Never record the key, or a message that might carry it.
+    lastError = e instanceof Error ? e.message : String(e)
+    return false
+  }
+
+  keyCameFromPortainer = true
+
+  return true
 }

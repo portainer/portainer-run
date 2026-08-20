@@ -1,6 +1,7 @@
 import http from 'node:http'
 import { CACHE_FILE, PORT, PORTAINER_URL } from './config.js'
 import {
+  adoptEnvKey,
   aiProvider,
   baseDomain,
   credentialHealth,
@@ -41,6 +42,9 @@ httpServer.listen(PORT, async () => {
   // With a credential mounted this comes up configured, no user behind it.
   // Listening first keeps the probes served while Portainer is being reached.
   await ensureHydrated()
+
+  // Not awaited: nothing below reads the result, and it can retry for minutes.
+  void adoptEnvKey().catch(() => {})
 
   // Only meaningful once the key is in hand: judged before the fetch, an
   // instance that keeps its key in Portainer reports every restart as a
