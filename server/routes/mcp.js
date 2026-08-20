@@ -61,7 +61,7 @@ const SERVER_INSTRUCTIONS = [
   '',
   'Static sites: if the app is plain HTML/CSS/JS with no server-side logic, deploy it as a static site — send only the static files (index.html, css, js, assets) and set runtime to "nginx". Do NOT scaffold a Node/Express (or any) server to serve static files; adding a package.json would make it deploy as a Node app instead of nginx.',
   '',
-  'Port: deploy_app has no port parameter. The service port is inferred from the detected runtime (Node 3000, Python 8000, php/nginx 80, Ruby 9292). Make the app listen on that runtime default and bind 0.0.0.0. If the app must use a non-standard port, warn the user that the MCP deploy may expose the wrong port and the app could be unreachable.',
+  'Port: deploy_app has no port parameter. The service port is inferred from the detected runtime (Node 3000, Python 8000, php 80, nginx 8080, Ruby 9292). Make the app listen on that runtime default and bind 0.0.0.0. If the app must use a non-standard port, warn the user that the MCP deploy may expose the wrong port and the app could be unreachable.',
   '',
   'Always show a summary of the chosen settings and get explicit confirmation before calling deploy_app.',
   '',
@@ -404,19 +404,23 @@ async function toolListIngressClasses(req, args) {
 }
 
 // ---------------------------------------------------------------------------
-// Runtime detection (server-side mirror of client/src/components/VibeDeploy.jsx)
+// Runtime detection (server-side mirror of client/src/pages/deploy/runtimes.ts)
 //
 // The browser UI fills runtime/runtimeImage/startCmd/workDir/port before calling
 // the deploy backend. The MCP path has no UI, so without this it would always
 // deploy a bare node:22-slim image with no start command — which crashloops.
-// Keep this in sync with the RUNTIMES table in VibeDeploy.jsx.
+// Keep this in sync with the RUNTIMES table in client/src/pages/deploy/runtimes.ts.
 // ---------------------------------------------------------------------------
 
 const NGINX_RUNTIME = {
   id: 'nginx',
-  image: 'nginx:alpine',
+  // Unprivileged NGINX: runs as UID 101, listens on 8080, and moves its PID and
+  // temp paths to /tmp, so it needs no Linux capabilities at startup. Required
+  // because all pods drop ALL capabilities under our pod security baseline (#39).
+  // Note: a custom nginx.conf must include `pid /tmp/nginx.pid`.
+  image: 'nginxinc/nginx-unprivileged:alpine',
   defaultCmd: () => "nginx -g 'daemon off;'",
-  port: 80,
+  port: 8080,
   workDir: '/usr/share/nginx/html',
 }
 
