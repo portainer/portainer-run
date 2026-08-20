@@ -35,6 +35,9 @@ export default defineConfig(({ mode }) => {
       alias: {
         '@': resolve(__dirname, 'src'),
         '@ds': resolve(__dirname, 'design-system/src'),
+        // Runtime catalogue shared with the server and the MCP path, so all
+        // three deploy a given runtime identically (see shared/runtimes.js).
+        '@shared': resolve(__dirname, '../shared'),
       },
       // The design system source lives outside the project root; force every
       // import of react/react-dom to the single copy in our node_modules so
