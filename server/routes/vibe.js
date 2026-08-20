@@ -15,6 +15,14 @@ import {
   buildManifestPath,
 } from '../lib/manifestSerialize.js'
 import yaml from 'js-yaml'
+import {
+  installCommandFor,
+  runtimeEnvFor,
+  runtimeNeedsCaps,
+  defaultPortFor,
+  defaultWorkDirFor,
+  WEBSERVER_RUNTIME_CAPS,
+} from '../../shared/runtimes.js'
 import { resolvePortainerTarget } from '../resolve-portainer.js'
 import { resolveCallerIdentity, extractToken } from '../lib/identity.js'
 import { portainerRequest } from '../lib/portainer-api.js'
@@ -118,97 +126,6 @@ function parseJson(buf) {
 }
 
 // ---------------------------------------------------------------------------
-// Runtime install commands
-// ---------------------------------------------------------------------------
-
-/**
- * Returns the runtime environment variables the main container needs so the
- * interpreter finds dependencies installed into the shared PV by the install
- * init container. Kept in sync with getInstallCommand: only python and ruby
- * install outside the working directory and therefore need path hints. Node
- * (node_modules) and php (vendor) install into the working directory already.
- *
- * @param {string} runtime
- * @param {string} workDir
- * @returns {{name: string, value: string}[]}
- */
-function getRuntimeEnv(runtime, workDir) {
-  switch (runtime) {
-    case 'python':
-      return [
-        { name: 'PYTHONPATH', value: `${workDir}/.pydeps` },
-        {
-          name: 'PATH',
-          value: `${workDir}/.pydeps/bin:/usr/local/bin:/usr/bin:/bin`,
-        },
-      ]
-    case 'ruby':
-      return [
-        { name: 'BUNDLE_PATH', value: `${workDir}/.bundle` },
-        { name: 'BUNDLE_GEMFILE', value: `${workDir}/Gemfile` },
-        { name: 'GEM_HOME', value: `${workDir}/.bundle` },
-        { name: 'GEM_PATH', value: `${workDir}/.bundle` },
-        {
-          name: 'PATH',
-          value: `${workDir}/.bundle/bin:/usr/local/bundle/bin:/usr/local/bin:/usr/bin:/bin`,
-        },
-      ]
-    default:
-      return []
-  }
-}
-
-/**
- * Returns the shell command to install dependencies for a given runtime,
- * or null if no install step is needed (e.g. nginx static sites).
- *
- * Runs inside the runtime image so native modules compile correctly.
- *
- * @param {string} runtime  e.g. 'node', 'python', 'ruby', 'php', 'nginx'
- * @param {string} workDir  absolute path inside the container
- * @returns {string|null}
- */
-function getInstallCommand(runtime, workDir) {
-  switch (runtime) {
-    case 'node':
-      // npm installs node_modules into the working directory, which is on the PV.
-      //
-      // When a dependency has no prebuilt binary for this runtime's ABI, npm
-      // compiles it with node-gyp, which by default downloads the Node headers
-      // tarball and extracts it. That extraction is the fragile step: tar
-      // preserves ownership and mtime when running as uid 0, and both need
-      // capabilities this pod deliberately drops. Pointing node-gyp at headers
-      // already present in the image makes it skip the download and extraction
-      // altogether, which also removes a build-time dependency on reaching
-      // nodejs.org (relevant for air-gapped clusters). Official images ship the
-      // headers under /usr/local/include/node; the guard means any image that
-      // does not simply falls back to the download path.
-      return (
-        `cd ${workDir} && if [ -f package.json ]; then ` +
-        `if [ -f /usr/local/include/node/common.gypi ]; then export npm_config_nodedir=/usr/local; fi; ` +
-        `npm install --omit=dev 2>&1; fi`
-      )
-    case 'python':
-      // pip's default target is the image's system site-packages, which live
-      // OUTSIDE the shared PV and so are lost when this init container exits.
-      // Install into a PV-local directory instead (libraries + console scripts
-      // under ${workDir}/.pydeps and ${workDir}/.pydeps/bin) so the main
-      // container can see them via PYTHONPATH/PATH.
-      return `cd ${workDir} && if [ -f requirements.txt ]; then pip install --no-cache-dir --target=${workDir}/.pydeps -r requirements.txt; fi`
-    case 'ruby':
-      // Same problem as pip: default gem install location is outside the PV.
-      // Vendor gems into a PV-local path so they persist into the main container.
-      return `cd ${workDir} && if [ -f Gemfile ]; then bundle config set --local path '${workDir}/.bundle' && bundle install; fi`
-    case 'php':
-      // composer installs vendor/ into the working directory, which is on the PV.
-      return `cd ${workDir} && if [ -f composer.json ] && command -v composer > /dev/null 2>&1; then composer install --no-dev --optimize-autoloader --no-interaction; fi`
-    case 'nginx':
-    default:
-      return null
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Build the Vibe Deploy Kubernetes manifest set
 // ---------------------------------------------------------------------------
 
@@ -273,15 +190,9 @@ const CONTAINER_SECURITY_CONTEXT = {
   seccompProfile: { type: 'RuntimeDefault' },
 }
 
-// Some runtime images de-privilege at startup: they start as root, chown their
-// working/cache dirs to a worker user, and bind a privileged port (80). With ALL
-// capabilities dropped they fail at boot ("Operation not permitted" on chown).
-// nginx is handled by switching to the unprivileged image; php-apache has no
-// clean unprivileged official image, so the php runtime is granted back the
-// minimum capabilities it needs. This is a deliberate, scoped exception to the
-// baseline for the php runtime only (see #39).
-const WEBSERVER_RUNTIME_CAPS = ['CHOWN', 'SETUID', 'SETGID', 'NET_BIND_SERVICE']
-const RUNTIMES_NEEDING_CAPS = new Set(['php'])
+// Some runtime images de-privilege at startup and cannot run under drop-ALL.
+// Which runtimes need a capability grant, and which caps, is declared on the
+// runtime itself in shared/runtimes.js (see #39) — not decided here.
 
 // Pod-level context: never mount the service account token (the workloads
 // deployed here never call the Kubernetes API) and pin the default seccomp
@@ -298,7 +209,7 @@ const POD_SECURITY_CONTEXT = {
 function harden(container, runtime) {
   if (!container || typeof container !== 'object') return container
   const base = { ...CONTAINER_SECURITY_CONTEXT }
-  if (runtime && RUNTIMES_NEEDING_CAPS.has(runtime)) {
+  if (runtime && runtimeNeedsCaps(runtime)) {
     base.capabilities = { drop: ['ALL'], add: [...WEBSERVER_RUNTIME_CAPS] }
   }
   container.securityContext = {
@@ -360,8 +271,8 @@ function buildVibeManifests({
 }) {
   const { runtime, runtimeImage, startCmd, workDir, envVars } = vibeParams
   const safeApp = sanitizeStackName(appName)
-  const port = servicePorts?.[0] || 80
-  const workDirSafe = workDir || '/app'
+  const port = servicePorts?.[0] || defaultPortFor(runtime)
+  const workDirSafe = workDir || defaultWorkDirFor(runtime)
 
   const labels = {
     app: safeApp,
@@ -414,7 +325,7 @@ function buildVibeManifests({
   // install init container. These take precedence over user-supplied vars on
   // collision (e.g. PYTHONPATH, PATH), so the app can actually locate its
   // dependencies. Merge by key to avoid emitting duplicate env entries.
-  const runtimeEnv = getRuntimeEnv(runtime, workDirSafe)
+  const runtimeEnv = runtimeEnvFor(runtime, workDirSafe)
   const envByName = new Map()
   for (const e of userEnv) envByName.set(e.name, e)
   for (const e of runtimeEnv) envByName.set(e.name, e) // runtime wins on collision
@@ -469,7 +380,7 @@ function buildVibeManifests({
 
   // Init 2: dependency install — runs the appropriate package manager for the runtime.
   // Uses the same runtime image as the main container so native modules compile correctly.
-  const installCmd = getInstallCommand(runtime, workDirSafe)
+  const installCmd = installCommandFor(runtime, workDirSafe)
   if (installCmd) {
     initContainers.push({
       name: 'vibe-install',
@@ -479,7 +390,7 @@ function buildVibeManifests({
       volumeMounts: [{ name: 'app-data', mountPath: workDirSafe }],
       // Fallback for runtime images that do not ship Node's headers, where
       // node-gyp has to download and extract the headers tarball (see the node
-      // case in getInstallCommand). Running as uid 0, which every official
+      // case in installCommandFor). Running as uid 0, which every official
       // runtime image does, tar preserves both ownership and mtime from the
       // archive. The chown needs CHOWN. The chown then hands the file to the
       // archive's uid, and because tar issues the chown and the utimes
@@ -825,7 +736,9 @@ async function handleVibeDeploy(req, res) {
       instances: instances || 1,
       vibeParams,
       exposeType: exposeType || 'none',
-      servicePorts: servicePorts || [3000],
+      // Fall back to the runtime's own port, not a hardcoded guess — the
+      // manifest builder applies the same default if this is empty.
+      servicePorts: servicePorts || [defaultPortFor(vibeParams?.runtime)],
       ingress: ingress || {},
       gitopsAnnotations,
       gitRepoUrl: initCloneUrl,

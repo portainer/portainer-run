@@ -28,6 +28,11 @@ import {
 import { resolvePortainerTarget } from '../resolve-portainer.js'
 import { getConnectionsForUser } from '../models/connection.js'
 import { handleVibe } from './vibe.js'
+import {
+  resolveRuntime,
+  RUNTIME_IDS,
+  ALL_RUNTIMES,
+} from '../../shared/runtimes.js'
 import { resolveUrl } from '../env-status.js'
 
 const MCP_VERSION = '2024-11-05'
@@ -37,6 +42,13 @@ const SERVER_INFO = { name: 'portainer-run', version: '1.0.0' }
 // (returned in the initialize response). This makes the deploy workflow
 // self-describing so the user does not have to prompt for it — the model
 // is told to gather the info the tool schema cannot enforce on its own.
+//
+// The port list is generated from the runtime catalogue so this prose can
+// never contradict what actually gets deployed.
+const RUNTIME_PORT_SUMMARY = ALL_RUNTIMES.map((r) => `${r.id} ${r.port}`).join(
+  ', ',
+)
+
 const SERVER_INSTRUCTIONS = [
   'Portainer-Run deploys applications to Kubernetes from source files via the deploy_app tool.',
   '',
@@ -61,7 +73,7 @@ const SERVER_INSTRUCTIONS = [
   '',
   'Static sites: if the app is plain HTML/CSS/JS with no server-side logic, deploy it as a static site — send only the static files (index.html, css, js, assets) and set runtime to "nginx". Do NOT scaffold a Node/Express (or any) server to serve static files; adding a package.json would make it deploy as a Node app instead of nginx.',
   '',
-  'Port: deploy_app has no port parameter. The service port is inferred from the detected runtime (Node 3000, Python 8000, php 80, nginx 8080, Ruby 9292). Make the app listen on that runtime default and bind 0.0.0.0. If the app must use a non-standard port, warn the user that the MCP deploy may expose the wrong port and the app could be unreachable.',
+  `Port: deploy_app has no port parameter. The service port is inferred from the detected runtime (${RUNTIME_PORT_SUMMARY}). Make the app listen on that runtime default and bind 0.0.0.0. If the app must use a non-standard port, warn the user that the MCP deploy may expose the wrong port and the app could be unreachable.`,
   '',
   'Always show a summary of the chosen settings and get explicit confirmation before calling deploy_app.',
   '',
@@ -176,7 +188,7 @@ function buildTools() {
         },
         runtime: {
           type: 'string',
-          enum: ['auto', 'node', 'python', 'php', 'ruby', 'nginx'],
+          enum: ['auto', ...RUNTIME_IDS],
           description:
             'Runtime override. Default: auto (detected from the uploaded files). Set to "nginx" to deploy a static HTML/CSS/JS site — upload only the static files (index.html, css, js, assets) and do NOT scaffold a Node/Express or other server to serve them.',
         },
@@ -404,96 +416,13 @@ async function toolListIngressClasses(req, args) {
 }
 
 // ---------------------------------------------------------------------------
-// Runtime detection (server-side mirror of client/src/pages/deploy/runtimes.ts)
+// Runtime resolution
 //
 // The browser UI fills runtime/runtimeImage/startCmd/workDir/port before calling
-// the deploy backend. The MCP path has no UI, so without this it would always
-// deploy a bare node:22-slim image with no start command — which crashloops.
-// Keep this in sync with the RUNTIMES table in client/src/pages/deploy/runtimes.ts.
+// the deploy backend. The MCP path has no UI, so it resolves the same values
+// from the same catalogue — shared/runtimes.js — which is what keeps an
+// MCP-deployed app identical to one deployed through the form.
 // ---------------------------------------------------------------------------
-
-const NGINX_RUNTIME = {
-  id: 'nginx',
-  // Unprivileged NGINX: runs as UID 101, listens on 8080, and moves its PID and
-  // temp paths to /tmp, so it needs no Linux capabilities at startup. Required
-  // because all pods drop ALL capabilities under our pod security baseline (#39).
-  // Note: a custom nginx.conf must include `pid /tmp/nginx.pid`.
-  image: 'nginxinc/nginx-unprivileged:alpine',
-  defaultCmd: () => "nginx -g 'daemon off;'",
-  port: 8080,
-  workDir: '/usr/share/nginx/html',
-}
-
-const RUNTIMES = [
-  {
-    id: 'node',
-    image: 'node:22',
-    detect: (names) => names.includes('package.json'),
-    defaultCmd: (files) => {
-      const pkg = files.find((f) => f.name === 'package.json')
-      if (pkg) {
-        try {
-          const parsed = JSON.parse(pkg.text)
-          if (parsed?.scripts?.start) return 'npm start'
-        } catch {
-          /* ignore */
-        }
-      }
-      const hasServerJs = files.some(
-        (f) => f.name === 'server.js' || f.name === 'index.js',
-      )
-      return hasServerJs
-        ? `node ${files.find((f) => f.name === 'server.js') ? 'server.js' : 'index.js'}`
-        : 'npm start'
-    },
-    port: 3000,
-    workDir: '/app',
-  },
-  {
-    id: 'python',
-    image: 'python:3.13-slim',
-    detect: (names) =>
-      names.includes('requirements.txt') ||
-      names.some((n) => n.endsWith('.py')),
-    defaultCmd: (files) => {
-      for (const candidate of ['main.py', 'app.py', 'server.py', 'run.py']) {
-        if (files.some((f) => f.name === candidate))
-          return `python ${candidate}`
-      }
-      return 'python app.py'
-    },
-    port: 8000,
-    workDir: '/app',
-  },
-  {
-    id: 'php',
-    image: 'php:8.4-apache',
-    detect: (names) => names.some((n) => n.endsWith('.php')),
-    defaultCmd: () => 'apache2-foreground',
-    port: 80,
-    workDir: '/var/www/html',
-  },
-  {
-    id: 'ruby',
-    image: 'ruby:3.4-slim',
-    detect: (names) =>
-      names.includes('Gemfile') || names.some((n) => n.endsWith('.rb')),
-    defaultCmd: (files) => {
-      for (const candidate of ['app.rb', 'server.rb', 'config.ru']) {
-        if (files.some((f) => f.name === candidate)) {
-          return candidate === 'config.ru'
-            ? 'bundle exec rackup -p 9292 -o 0.0.0.0'
-            : `ruby ${candidate}`
-        }
-      }
-      return 'bundle exec ruby app.rb'
-    },
-    port: 9292,
-    workDir: '/app',
-  },
-]
-
-const ALL_RUNTIMES = [...RUNTIMES, NGINX_RUNTIME]
 
 /**
  * Resolves the runtime for a list of MCP files ({ path, content }).
@@ -503,25 +432,12 @@ const ALL_RUNTIMES = [...RUNTIMES, NGINX_RUNTIME]
  * Returns { id, image, startCmd, workDir, port }.
  */
 function detectRuntimeForFiles(files, forcedId) {
-  // Map MCP { path, content } → { name, text } used by the detection table.
+  // Map MCP { path, content } → { name, text } used by the catalogue.
   const mapped = files.map((f) => ({
     name: (f.path || '').split('/').pop(),
     text: f.content,
   }))
-  const names = mapped.map((f) => f.name)
-
-  let rt
-  if (forcedId && forcedId !== 'auto') {
-    rt = ALL_RUNTIMES.find((r) => r.id === forcedId)
-    if (!rt)
-      throw new Error(
-        `Unknown runtime "${forcedId}" — use one of: ${ALL_RUNTIMES.map((r) => r.id).join(', ')}`,
-      )
-  } else {
-    // Static sites (all assets static) and the no-match case both default to nginx.
-    rt = RUNTIMES.find((r) => r.detect(names)) || NGINX_RUNTIME
-  }
-
+  const rt = resolveRuntime(mapped, forcedId)
   return {
     id: rt.id,
     image: rt.image,
