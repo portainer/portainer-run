@@ -37,6 +37,21 @@ function decrypt(stored) {
   return JSON.parse(decrypted.toString('utf8'))
 }
 
+/** Whether the key now held decrypts a stored row. Null when there are none. */
+export function heldKeyDecryptsStoredRow() {
+  const row = db
+    .prepare('SELECT encrypted_payload FROM connections LIMIT 1')
+    .get()
+  if (!row) return null
+
+  try {
+    decrypt(row.encrypted_payload)
+    return true
+  } catch {
+    return false
+  }
+}
+
 function rowToConn(conn) {
   return {
     id: conn.id,

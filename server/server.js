@@ -1,6 +1,7 @@
 import http from 'node:http'
 import { CACHE_FILE, PORT, PORTAINER_URL } from './config.js'
 import {
+  adoptEnvKey,
   aiProvider,
   baseDomain,
   credentialHealth,
@@ -31,6 +32,19 @@ function onError(e) {
   process.exit(1)
 }
 
+const ADOPT_RETRY_INTERVAL = 15_000
+
+/**
+ * Keep offering the key to Portainer until its home is decided.
+ *
+ * The credential is mounted optional and Portainer may still be starting, so a
+ * first attempt can fail with nothing wrong.
+ */
+async function adoptWhenPossible() {
+  if ((await adoptEnvKey().catch(() => 'retry')) !== 'retry') return
+  setTimeout(adoptWhenPossible, ADOPT_RETRY_INTERVAL).unref()
+}
+
 // TLS terminates at the proxy in front of us (the Portainer addon gateway in
 // production), which forwards plain HTTP, so this server never speaks HTTPS.
 const httpServer = http.createServer(handleRequest)
@@ -41,6 +55,9 @@ httpServer.listen(PORT, async () => {
   // With a credential mounted this comes up configured, no user behind it.
   // Listening first keeps the probes served while Portainer is being reached.
   await ensureHydrated()
+
+  // Not awaited: nothing below reads the result, and it can retry for minutes.
+  void adoptWhenPossible()
 
   // Only meaningful once the key is in hand: judged before the fetch, an
   // instance that keeps its key in Portainer reports every restart as a

@@ -6,6 +6,15 @@ metadata:
     {{- include "portainer-run.labels" . | nindent 4 }}
 spec:
   replicas: 1
+  # maxSurge 0 because the cache PVC is ReadWriteOnce: a second pod on another
+  # node cannot mount it. Not Recreate — the API server defaults rollingUpdate
+  # into existing installs, Helm's three-way merge keeps it, and Recreate
+  # rejects the pair.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   # Prevents slow installs when something is failing
   progressDeadlineSeconds: 180
   selector:

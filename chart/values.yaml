@@ -13,3 +13,8 @@ storageClass: '' # Optional. StorageClass for the session-cache PVC. Empty uses 
 # Empty by design: Portainer-Run reads its settings from Portainer at runtime.
 # Rendered generically, so `--set configMap.<KEY>=...` needs no template change.
 configMap: {}
+
+# Empty by design, as above. A key already in the Secret is carried across
+# upgrades and adopted into Portainer on boot — see templates/secret.yaml.
+# Accepts ENCRYPTION_KEY, ANTHROPIC_API_KEY and OPENAI_API_KEY.
+secret: {}

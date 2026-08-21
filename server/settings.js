@@ -54,8 +54,16 @@ let lastError = null
 let inFlight = null
 /** Why this add-on's own credential last failed: null, 'rejected' or 'certificate'. */
 let credentialFailure = null
-/** Whether the last successful fetch carried an ENCRYPTION_KEY of Portainer's own. */
+/** Whether Portainer holds this add-on's ENCRYPTION_KEY. */
 let keyCameFromPortainer = false
+/**
+ * @typedef {'adopted'|'settled'|'retry'} AdoptionOutcome
+ *   `settled` — Portainer holds a key, or there is no local one to hand over.
+ *   `retry` — the attempt could not be made yet, which says nothing either way.
+ */
+
+/** Latched once the key's home is decided. */
+let adoptionSettled = false
 
 /** @param {string} key */
 export function getSetting(key) {
@@ -303,4 +311,49 @@ export function ensureHydrated(adminToken) {
  */
 export function encryptionKeyIsLocal() {
   return isConfigured() && !keyCameFromPortainer
+}
+
+/**
+ * Hand an environment-seeded ENCRYPTION_KEY to Portainer, so it outlives this pod.
+ *
+ * Unattended: by the time an administrator could press Adopt in setup, the
+ * Secret that a later release drops is already gone.
+ *
+ * @returns {Promise<AdoptionOutcome>}
+ */
+export async function adoptEnvKey() {
+  if (adoptionSettled || !encryptionKeyIsLocal()) return 'settled'
+
+  const target = resolvePortainerTarget()
+  const token = machineToken()
+  if (!target || !token) return 'retry'
+
+  // Ask first: a stale chart seed must not overwrite a key Portainer holds, and
+  // a configured instance never fetches on its own.
+  if (!(await hydrateOnce())) return 'retry'
+  if (keyCameFromPortainer) {
+    adoptionSettled = true
+    return 'settled'
+  }
+
+  // A key stored between the read-back and here is overwritten on purpose: the
+  // rows on this volume are encrypted with the one being handed over.
+  try {
+    await portainerRequest(
+      target,
+      token,
+      'PATCH',
+      `${MACHINE_CONFIG_PATH}/ENCRYPTION_KEY`,
+      JSON.stringify({ value: encryptionKey(), sensitive: true }),
+    )
+  } catch (e) {
+    // Never record the key, or a message that might carry it.
+    lastError = e instanceof Error ? e.message : String(e)
+    return 'retry'
+  }
+
+  keyCameFromPortainer = true
+  adoptionSettled = true
+
+  return 'adopted'
 }
