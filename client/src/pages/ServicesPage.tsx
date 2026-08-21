@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { RefreshCw } from 'lucide-react'
+import { ArrowUpDown, Check, Eye, ListFilter, RefreshCw } from 'lucide-react'
 
 import { Button } from '@ds/v3-components/Button/Button'
 import { Badge } from '@ds/v3-components/Badge/Badge'
-import { Skeleton } from '@ds/v3-components/Skeleton/Skeleton'
 import { StatusDot } from '@ds/v3-components/StatusDot/StatusDot'
 import type { StatusTone } from '@ds/v3-components/StatusDot/StatusDot'
 import { StatusBar } from '@ds/v3-components/StatusSummary/StatusSummary'
-import { SortableList } from '@ds/v3-templates/SortableList/SortableList'
+import {
+  DropdownMenu,
+  DropdownMenuItem,
+  DropdownMenuSection,
+} from '@ds/v3-components/DropdownMenu/DropdownMenu'
+import { DataTableCard } from '@ds/v3-templates/DataTableInCard/DataTableInCard'
+import type { ColumnDef, SortDir } from '@ds/v3-components/DataTable/DataTable'
 import { PageTitle } from '@ds/v3-templates/PageTitle/PageTitle'
 
 import { checkEnvPermissions } from '../lib/envPermissions.js'
@@ -22,6 +27,10 @@ import { age } from '../lib/utils.js'
 import { manualRefresh } from '../services/refreshDeployments.js'
 import type { Deployment } from '../types/k8s'
 
+const PAGE_SIZE = 15
+
+/* Sort values double as DataTable column keys, so a column header click and
+   the Sort menu drive the same state. */
 const SERVICE_LIST_SORT = [
   { value: 'name', label: 'Name' },
   { value: 'env', label: 'Environment' },
@@ -36,18 +45,56 @@ const STATUS_SORT_ORDER = [
   'no_workloads',
 ]
 
-const SVC_STATUS_GROUP: Record<string, { name: string }> = {
-  workloads_down: { name: 'Unavailable' },
-  workloads_degraded: { name: 'Degraded' },
-  workloads_running: { name: 'Running' },
-  no_workloads: { name: 'Switched off' },
-}
-
 const SVC_STATUS_SUBFILTER_EMPTY: Record<string, string> = {
   workloads_down: 'No unavailable applications in this view.',
   workloads_degraded: 'No degraded applications in this view.',
   workloads_running: 'No running applications in this view.',
   no_workloads: 'No applications are scaled to zero in this view.',
+}
+
+/* Columns the View menu can hide. Name and the actions column are always on —
+   a row without its name is unidentifiable, and actions carries the only
+   per-row controls. */
+const HIDEABLE_COLUMNS = [
+  { key: 'env', label: 'Environment' },
+  { key: 'ns', label: 'Project space' },
+  { key: 'status', label: 'Health' },
+  { key: 'access', label: 'Access' },
+  { key: 'age', label: 'Deployed' },
+  { key: 'owner', label: 'Deployed by' },
+]
+
+/* Which columns are hidden is a durable preference, not part of the query —
+   it survives reloads, unlike the sort/filter/page state in `listQuery`.
+   Same storage conventions as lib/favorites.ts. */
+const HIDDEN_COLUMNS_STORAGE_KEY = 'portainer-run.applications.hiddenColumns'
+
+function readHiddenColumns(): string[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(HIDDEN_COLUMNS_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    // Drop anything that is no longer a hideable column, so a renamed or
+    // removed column can't leave a permanently hidden ghost in storage.
+    const valid = new Set(HIDEABLE_COLUMNS.map((c) => c.key))
+    return parsed.filter((k) => typeof k === 'string' && valid.has(k))
+  } catch {
+    return []
+  }
+}
+
+function writeHiddenColumns(next: string[]) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(
+      HIDDEN_COLUMNS_STORAGE_KEY,
+      JSON.stringify(next),
+    )
+  } catch {
+    /* storage full / disabled — the in-memory choice still applies */
+  }
 }
 
 interface ListItem {
@@ -104,60 +151,23 @@ function serviceRowId(d: Deployment): string {
   return `${d._envId}-${d.metadata.namespace}-${d.metadata.name}`
 }
 
-/* Shared grid template: Name | Environment | Project space | Health | Access |
-   Deployed | Deployed by | actions.
-   The header and every row are independent grids. The actions column must be a
-   fixed width (not `auto`) so both resolve the same free space for the `fr`
-   tracks — otherwise the empty header cell and the buttons in each row give the
-   grids different free space and the headers drift out of alignment. */
-const ACTIONS_COL_WIDTH = 120
-const ROW_GRID: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: `minmax(140px, 1.4fr) minmax(100px, 1fr) minmax(100px, 1fr) minmax(140px, 1.2fr) minmax(90px, 0.9fr) minmax(70px, 0.6fr) minmax(90px, 0.9fr) ${ACTIONS_COL_WIDTH}px`,
-  alignItems: 'center',
-  gap: 12,
-  padding: '10px 14px',
-}
-
-function ColumnHeaders() {
-  const cell: React.CSSProperties = {
-    fontSize: 10,
-    fontWeight: 600,
-    letterSpacing: '0.07em',
-    textTransform: 'uppercase',
-    color: 'var(--muted)',
-    whiteSpace: 'nowrap',
-  }
+function deployedBy(d: Deployment): string {
   return (
-    <div
-      style={{ ...ROW_GRID, borderBottom: '1px solid var(--border)' }}
-      aria-hidden
-    >
-      <span style={cell}>Name</span>
-      <span style={cell}>Environment</span>
-      <span style={cell}>Project space</span>
-      <span style={cell}>Health</span>
-      <span style={cell}>Access</span>
-      <span style={cell}>Deployed</span>
-      <span style={cell}>Deployed by</span>
-      <span />
-    </div>
+    d.metadata?.labels?.['io.portainer.kubernetes.application.owner'] ||
+    d.metadata?.labels?.['io.portainer.kubernetes.application.owner.id'] ||
+    '—'
   )
 }
 
-interface ServiceRowProps {
-  d: Deployment
-  envStatusClientCache: Record<string, unknown>
-  onOpen: () => void
-  onViewLogs: () => void
-}
-
-function ServiceRow({
+/* Its own component rather than an inline render, because the per-row
+   permission check is a hook — it needs a component that mounts once per row. */
+function RowActions({
   d,
-  envStatusClientCache,
-  onOpen,
   onViewLogs,
-}: ServiceRowProps) {
+}: {
+  d: Deployment
+  onViewLogs: () => void
+}) {
   const token = useAppStore((s) => s.token)
   const setRestartTarget = useAppStore((s) => s.setRestartTarget)
   const envPermissions = useAppStore((s) => s.envPermissions)
@@ -165,7 +175,6 @@ function ServiceRow({
   const permKey = `${d._envId}:${d.metadata.namespace}`
   const perms = envPermissions[permKey] ?? null
 
-  // Fire permission check for this row's env+namespace if not yet cached
   useEffect(() => {
     if (envPermissions[permKey] !== undefined) return
     const envId = d._envId
@@ -176,156 +185,119 @@ function ServiceRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [permKey])
 
-  const name = d.metadata.name
-  const ns = d.metadata.namespace
-  const envId = d._envId
-  const envName = d._envName || '—'
-  const created = d.metadata?.creationTimestamp
-  const deployedBy =
-    d.metadata?.labels?.['io.portainer.kubernetes.application.owner'] ||
-    d.metadata?.labels?.['io.portainer.kubernetes.application.owner.id'] ||
-    '—'
-  const { tone, label } = rowStatus(d)
-  const extra = getExtraForApp(envStatusClientCache, envId, name)
-
-  const onRestart = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!token) return
-    setRestartTarget({ envId, ns, name })
-  }
-
   return (
     <div
-      role="button"
-      tabIndex={0}
-      style={{
-        ...ROW_GRID,
-        cursor: 'pointer',
-        borderBottom: '1px solid var(--border)',
-      }}
-      data-svc-env={String(envId)}
-      data-svc-name={name}
-      onClick={onOpen}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          onOpen()
-        }
-      }}
+      style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}
+      onClick={(e) => e.stopPropagation()}
     >
-      <div
-        style={{
-          fontWeight: 600,
-          color: 'var(--text)',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
+      <Button
+        variant="ghost"
+        onClick={onViewLogs}
+        disabled={!perms?.canViewLogs}
+        disabledReason={
+          !perms?.canViewLogs
+            ? 'You do not have permission to view logs in this environment'
+            : undefined
+        }
+      >
+        Logs
+      </Button>
+      <Button
+        variant="ghost"
+        onClick={(e) => {
+          e.stopPropagation()
+          if (!token) return
+          setRestartTarget({
+            envId: d._envId,
+            ns: d.metadata.namespace,
+            name: d.metadata.name,
+          })
         }}
+        disabled={!perms?.canRestart}
+        disabledReason={
+          !perms?.canRestart
+            ? 'You do not have permission to restart workloads in this environment'
+            : undefined
+        }
       >
-        {name}
-      </div>
-      <div title={envName}>
-        <Badge tone="neutral" size="sm">
-          {envName}
-        </Badge>
-      </div>
-      <div>
-        <Badge tone="neutral" size="sm">
-          {ns}
-        </Badge>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            fontSize: 12,
-            color: 'var(--text)',
-          }}
-        >
-          <StatusDot tone={tone} />
-          {label}
-          {(d.spec?.replicas ?? 0) > 1 && (
-            <span style={{ fontSize: 11, color: 'var(--muted)' }}>
-              {d.status?.readyReplicas || 0}/{d.spec?.replicas}
-            </span>
-          )}
-        </span>
-        {extra.reason ? (
-          <span style={{ fontSize: 11, color: 'var(--muted)' }}>
-            {extra.reason}
-          </span>
-        ) : null}
-      </div>
-      <div onClick={(e) => e.stopPropagation()}>
-        {extra.accessUrl ? (
-          <a
-            href={extra.accessUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            title={extra.accessLabel || extra.accessUrl}
-            style={{
-              color: 'var(--accent, #2e90fa)',
-              fontSize: 12,
-              fontWeight: 600,
-              textDecoration: 'none',
-            }}
-          >
-            Launch
-          </a>
-        ) : extra.accessLabel ? (
-          <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-            {extra.accessLabel}
-          </span>
-        ) : (
-          <span style={{ color: 'var(--muted)' }}>—</span>
-        )}
-      </div>
-      <div style={{ fontSize: 12, color: 'var(--muted)' }}>{age(created)}</div>
-      <div
-        title={deployedBy}
-        style={{
-          fontSize: 12,
-          color: 'var(--muted)',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {deployedBy}
-      </div>
-      <div
-        style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <Button
-          variant="ghost"
-          onClick={onViewLogs}
-          disabled={!perms?.canViewLogs}
-          title={
-            !perms?.canViewLogs
-              ? 'You do not have permission to view logs in this environment'
-              : undefined
-          }
-        >
-          Logs
-        </Button>
-        <Button
-          variant="ghost"
-          onClick={onRestart}
-          disabled={!perms?.canRestart}
-          title={
-            !perms?.canRestart
-              ? 'You do not have permission to restart workloads in this environment'
-              : undefined
-          }
-        >
-          Restart
-        </Button>
-      </div>
+        Restart
+      </Button>
     </div>
   )
+}
+
+function HealthCell({
+  d,
+  envStatusClientCache,
+}: {
+  d: Deployment
+  envStatusClientCache: Record<string, unknown>
+}) {
+  const { tone, label } = rowStatus(d)
+  const extra = getExtraForApp(envStatusClientCache, d._envId, d.metadata.name)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          fontSize: 12,
+          color: 'var(--text)',
+        }}
+      >
+        <StatusDot tone={tone} />
+        {label}
+        {(d.spec?.replicas ?? 0) > 1 && (
+          <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+            {d.status?.readyReplicas || 0}/{d.spec?.replicas}
+          </span>
+        )}
+      </span>
+      {extra.reason ? (
+        <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+          {extra.reason}
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
+function AccessCell({
+  d,
+  envStatusClientCache,
+}: {
+  d: Deployment
+  envStatusClientCache: Record<string, unknown>
+}) {
+  const extra = getExtraForApp(envStatusClientCache, d._envId, d.metadata.name)
+  if (extra.accessUrl) {
+    return (
+      <a
+        href={extra.accessUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={extra.accessLabel || extra.accessUrl}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          color: 'var(--accent, #2e90fa)',
+          fontSize: 12,
+          fontWeight: 600,
+          textDecoration: 'none',
+        }}
+      >
+        Launch
+      </a>
+    )
+  }
+  if (extra.accessLabel) {
+    return (
+      <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+        {extra.accessLabel}
+      </span>
+    )
+  }
+  return <span style={{ color: 'var(--muted)' }}>—</span>
 }
 
 export function ServicesPage() {
@@ -339,11 +311,19 @@ export function ServicesPage() {
 
   const [listQuery, setListQuery] = useState<Record<string, string>>({
     sortBy: 'name',
+    sortDir: 'asc',
     filter: '',
     page: '1',
   })
   const listSort = listQuery.sortBy
+  const sortDir = (listQuery.sortDir as SortDir) ?? 'asc'
+  const search = listQuery.filter ?? ''
+  const page = Number(listQuery.page) || 1
+
   const [listSubFilter, setListSubFilter] = useState<string | null>(null)
+  const [envFilter, setEnvFilter] = useState<string | null>(null)
+  const [hiddenColumns, setHiddenColumns] =
+    useState<string[]>(readHiddenColumns)
 
   const deps = useMemo(
     () => visibleDeployments(useAppStore.getState()),
@@ -352,56 +332,98 @@ export function ServicesPage() {
   )
   useEnvStatusOnDeployments(deps, token)
 
-  const listItems: ListItem[] = useMemo(() => {
+  const envNames = useMemo(() => {
+    const names = new Set<string>()
+    for (const d of deps) if (d._envName) names.add(d._envName)
+    return [...names].sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: 'base' }),
+    )
+  }, [deps])
+
+  const sortedItems: ListItem[] = useMemo(() => {
     const base = deps.map((d: Deployment) => ({ id: serviceRowId(d), d }))
-    if (listSort === 'name') {
-      return [...base].sort((a, b) =>
-        a.d.metadata.name.localeCompare(b.d.metadata.name, undefined, {
-          sensitivity: 'base',
-        }),
-      )
-    }
+    const byName = (a: ListItem, b: ListItem) =>
+      a.d.metadata.name.localeCompare(b.d.metadata.name, undefined, {
+        sensitivity: 'base',
+      })
+
+    let cmp: (a: ListItem, b: ListItem) => number
     if (listSort === 'env') {
-      return [...base].sort((a, b) => {
+      cmp = (a, b) => {
         const ea = a.d._envName || ''
         const eb = b.d._envName || ''
         if (ea !== eb)
           return ea.localeCompare(eb, undefined, { sensitivity: 'base' })
-        return a.d.metadata.name.localeCompare(b.d.metadata.name, undefined, {
-          sensitivity: 'base',
-        })
-      })
-    }
-    if (listSort === 'status') {
+        return byName(a, b)
+      }
+    } else if (listSort === 'ns') {
+      cmp = (a, b) => {
+        const na = a.d.metadata.namespace || ''
+        const nb = b.d.metadata.namespace || ''
+        if (na !== nb)
+          return na.localeCompare(nb, undefined, { sensitivity: 'base' })
+        return byName(a, b)
+      }
+    } else if (listSort === 'status') {
       const orderIdx = (x: ListItem) =>
         STATUS_SORT_ORDER.indexOf(primaryServicePartition(x.d))
-      return [...base].sort((a, b) => {
+      cmp = (a, b) => {
         const ia = orderIdx(a)
         const ib = orderIdx(b)
         if (ia !== ib) return ia - ib
-        return a.d.metadata.name.localeCompare(b.d.metadata.name, undefined, {
-          sensitivity: 'base',
-        })
-      })
-    }
-    if (listSort === 'age') {
-      return [...base].sort((a, b) => {
+        return byName(a, b)
+      }
+    } else if (listSort === 'age') {
+      // Newest first at 'asc' — the column reads "Deployed", and most-recent
+      // at the top is the useful default for a deploy list.
+      cmp = (a, b) => {
         const at = new Date(a.d.metadata?.creationTimestamp || 0).getTime()
         const bt = new Date(b.d.metadata?.creationTimestamp || 0).getTime()
-        return bt - at // newest first
-      })
+        return bt - at
+      }
+    } else if (listSort === 'owner') {
+      cmp = (a, b) => {
+        const oa = deployedBy(a.d)
+        const ob = deployedBy(b.d)
+        if (oa !== ob)
+          return oa.localeCompare(ob, undefined, { sensitivity: 'base' })
+        return byName(a, b)
+      }
+    } else {
+      cmp = byName
     }
-    return base
-  }, [deps, listSort])
 
-  /* Sub-filter (from the summary bar) narrows the list to one health
-     partition; only active while sorting by Health, like the old UI. */
+    const out = [...base].sort(cmp)
+    return sortDir === 'desc' ? out.reverse() : out
+  }, [deps, listSort, sortDir])
+
+  /* The health sub-filter (from the summary bar) no longer depends on the
+     sort. SortableList's grouped headers used to supply that context; with
+     DataTable there is no grouping, so the filter has to stand on its own. */
   const visibleItems = useMemo(() => {
-    if (!listSubFilter || listSort !== 'status') return listItems
-    return listItems.filter(
-      (item) => primaryServicePartition(item.d) === listSubFilter,
-    )
-  }, [listItems, listSubFilter, listSort])
+    const q = search.trim().toLowerCase()
+    return sortedItems.filter((item) => {
+      if (listSubFilter && primaryServicePartition(item.d) !== listSubFilter)
+        return false
+      if (envFilter && item.d._envName !== envFilter) return false
+      if (!q) return true
+      const envN = item.d._envName || ''
+      const n = item.d.metadata.name
+      const { label } = rowStatus(item.d)
+      return `${n} ${envN} ${label}`.toLowerCase().includes(q)
+    })
+  }, [sortedItems, listSubFilter, envFilter, search])
+
+  const totalPages = Math.max(1, Math.ceil(visibleItems.length / PAGE_SIZE))
+  const clampedPage = Math.min(page, totalPages)
+  const pageItems = useMemo(
+    () =>
+      visibleItems.slice(
+        (clampedPage - 1) * PAGE_SIZE,
+        clampedPage * PAGE_SIZE,
+      ),
+    [visibleItems, clampedPage],
+  )
 
   const summary = useMemo(() => {
     const total = deps.length
@@ -419,24 +441,251 @@ export function ServicesPage() {
     return { total, running, degraded, unavailable }
   }, [deps])
 
+  function patchQuery(next: Record<string, string>) {
+    setListQuery((q) => ({ ...q, ...next }))
+  }
+
   function selectSubFilter(partition: string | null) {
-    if (partition === null || listSubFilter === partition) {
-      setListSubFilter(null)
-      return
-    }
-    setListQuery((q) => ({ ...q, sortBy: 'status', page: '1' }))
-    setListSubFilter(partition)
+    setListSubFilter(
+      partition === null || listSubFilter === partition ? null : partition,
+    )
+    patchQuery({ page: '1' })
+  }
+
+  function applySort(key: string) {
+    // The same column again flips direction; a new column starts ascending.
+    patchQuery({
+      sortBy: key,
+      sortDir: listSort === key && sortDir === 'asc' ? 'desc' : 'asc',
+      page: '1',
+    })
   }
 
   const initialLoading =
     !cache.deployments.length && cache.fetching && !cache.everLoaded
   const showEmpty = !initialLoading && !deps.length
 
-  const emptyMessage =
-    listSubFilter && listSort === 'status'
-      ? SVC_STATUS_SUBFILTER_EMPTY[listSubFilter] ||
-        'No applications match this filter.'
-      : 'No applications match'
+  const emptyMessage = listSubFilter
+    ? SVC_STATUS_SUBFILTER_EMPTY[listSubFilter] ||
+      'No applications match this filter.'
+    : 'No applications match'
+
+  const allColumns: ColumnDef<ListItem>[] = [
+    {
+      key: 'name',
+      header: 'Name',
+      sortable: true,
+      width: '16%',
+      render: ({ d }) => (
+        <span
+          style={{
+            display: 'block',
+            fontWeight: 600,
+            color: 'var(--text)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {d.metadata.name}
+        </span>
+      ),
+    },
+    {
+      key: 'env',
+      header: 'Environment',
+      sortable: true,
+      width: '12%',
+      render: ({ d }) => (
+        <span title={d._envName || '—'}>
+          <Badge tone="neutral" size="sm">
+            {d._envName || '—'}
+          </Badge>
+        </span>
+      ),
+    },
+    {
+      key: 'ns',
+      header: 'Project space',
+      sortable: true,
+      width: '11%',
+      render: ({ d }) => (
+        <Badge tone="neutral" size="sm">
+          {d.metadata.namespace}
+        </Badge>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Health',
+      sortable: true,
+      width: '15%',
+      render: ({ d }) => (
+        <HealthCell d={d} envStatusClientCache={envStatusClientCache} />
+      ),
+    },
+    {
+      key: 'access',
+      header: 'Access',
+      width: '8%',
+      render: ({ d }) => (
+        <AccessCell d={d} envStatusClientCache={envStatusClientCache} />
+      ),
+    },
+    {
+      key: 'age',
+      header: 'Deployed',
+      sortable: true,
+      width: '10%',
+      render: ({ d }) => (
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+          {age(d.metadata?.creationTimestamp)}
+        </span>
+      ),
+    },
+    {
+      key: 'owner',
+      header: 'Deployed by',
+      sortable: true,
+      width: '14%',
+      render: ({ d }) => (
+        <span
+          title={deployedBy(d)}
+          style={{
+            display: 'block',
+            fontSize: 12,
+            color: 'var(--muted)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {deployedBy(d)}
+        </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      width: '140px',
+      render: ({ d }) => (
+        <RowActions
+          d={d}
+          onViewLogs={() =>
+            navigate(
+              serviceDetailPath(
+                String(d._envId),
+                d.metadata.namespace,
+                d.metadata.name,
+                'logs',
+              ),
+            )
+          }
+        />
+      ),
+    },
+  ]
+
+  const columns = allColumns.filter((c) => !hiddenColumns.includes(c.key))
+
+  const headerActions = (
+    <>
+      <DropdownMenu
+        trigger={
+          <Button variant="secondary" leftSection={<ListFilter size={14} />}>
+            {envFilter ?? 'Environment'}
+          </Button>
+        }
+      >
+        <DropdownMenuItem
+          label="All environments"
+          icon={envFilter === null ? <Check size={14} /> : undefined}
+          onClick={() => {
+            setEnvFilter(null)
+            patchQuery({ page: '1' })
+          }}
+        />
+        {envNames.map((name) => (
+          <DropdownMenuItem
+            key={name}
+            label={name}
+            icon={envFilter === name ? <Check size={14} /> : undefined}
+            onClick={() => {
+              setEnvFilter(name)
+              patchQuery({ page: '1' })
+            }}
+          />
+        ))}
+      </DropdownMenu>
+
+      <span style={{ flex: 1 }} />
+
+      <DropdownMenu
+        align="right"
+        trigger={
+          <Button variant="secondary" leftSection={<Eye size={14} />}>
+            View
+          </Button>
+        }
+      >
+        <DropdownMenuSection label="Columns">
+          {HIDEABLE_COLUMNS.map((col) => (
+            <DropdownMenuItem
+              key={col.key}
+              label={col.label}
+              icon={
+                hiddenColumns.includes(col.key) ? undefined : (
+                  <Check size={14} />
+                )
+              }
+              onClick={() => {
+                // Computed outside the updater so the updater stays pure —
+                // StrictMode double-invokes updaters in development.
+                const next = hiddenColumns.includes(col.key)
+                  ? hiddenColumns.filter((k) => k !== col.key)
+                  : [...hiddenColumns, col.key]
+                setHiddenColumns(next)
+                writeHiddenColumns(next)
+              }}
+            />
+          ))}
+        </DropdownMenuSection>
+      </DropdownMenu>
+
+      <DropdownMenu
+        align="right"
+        trigger={
+          <Button variant="secondary" leftSection={<ArrowUpDown size={14} />}>
+            Sort
+          </Button>
+        }
+      >
+        <DropdownMenuSection label="Sort by">
+          {SERVICE_LIST_SORT.map((opt) => (
+            <DropdownMenuItem
+              key={opt.value}
+              label={opt.label}
+              icon={listSort === opt.value ? <Check size={14} /> : undefined}
+              onClick={() => applySort(opt.value)}
+            />
+          ))}
+        </DropdownMenuSection>
+        <DropdownMenuSection label="Direction">
+          <DropdownMenuItem
+            label="Ascending"
+            icon={sortDir === 'asc' ? <Check size={14} /> : undefined}
+            onClick={() => patchQuery({ sortDir: 'asc', page: '1' })}
+          />
+          <DropdownMenuItem
+            label="Descending"
+            icon={sortDir === 'desc' ? <Check size={14} /> : undefined}
+            onClick={() => patchQuery({ sortDir: 'desc', page: '1' })}
+          />
+        </DropdownMenuSection>
+      </DropdownMenu>
+    </>
+  )
 
   return (
     <div className="ash-content">
@@ -527,78 +776,40 @@ export function ServicesPage() {
           </h3>
           <p style={{ margin: 0 }}>Deploy an application to get started.</p>
         </div>
-      ) : null}
-
-      {initialLoading ? (
-        <div aria-busy>
-          <ColumnHeaders />
-          {[0, 1, 2, 3, 4].map((i) => (
-            <div key={i} style={ROW_GRID}>
-              <Skeleton height={16} />
-              <Skeleton height={16} />
-              <Skeleton height={16} />
-              <Skeleton height={16} />
-              <Skeleton height={16} />
-              <Skeleton height={16} />
-              <Skeleton height={16} />
-              <span />
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {!initialLoading && deps.length > 0 ? (
-        <SortableList<ListItem>
-          items={visibleItems}
-          sortOptions={SERVICE_LIST_SORT}
-          defaultSort="name"
-          routeQuery={listQuery}
-          onRouteChange={setListQuery}
-          searchPlaceholder="Filter applications…"
+      ) : (
+        <DataTableCard<ListItem>
+          columns={columns}
+          rows={pageItems}
+          skeleton={initialLoading}
+          skeletonRowCount={5}
           emptyMessage={emptyMessage}
-          getItemGroup={(item, sortBy) =>
-            sortBy === 'status' ? primaryServicePartition(item.d) : null
+          totalCount={visibleItems.length}
+          countLabel="applications"
+          page={clampedPage}
+          totalPages={totalPages}
+          pageSize={PAGE_SIZE}
+          onPageChange={(p) => patchQuery({ page: String(p) })}
+          sortKey={listSort}
+          sortDir={sortDir}
+          onSort={(key) => applySort(key)}
+          onRowClick={({ d }) =>
+            navigate(
+              serviceDetailPath(
+                String(d._envId),
+                d.metadata.namespace,
+                d.metadata.name,
+                'overview',
+              ),
+            )
           }
-          getGroupInfo={(key) => SVC_STATUS_GROUP[key] ?? { name: String(key) }}
-          getGroupOrder={(sortBy) =>
-            sortBy === 'status' ? STATUS_SORT_ORDER : null
-          }
-          filterItem={(item, q) => {
-            const envN = item.d._envName || ''
-            const n = item.d.metadata.name
-            const { label } = rowStatus(item.d)
-            return `${n} ${envN} ${label}`.toLowerCase().includes(q)
-          }}
-          renderColumnHeaders={() => <ColumnHeaders />}
-          renderItem={(item) => (
-            <ServiceRow
-              key={item.id}
-              d={item.d}
-              envStatusClientCache={envStatusClientCache}
-              onOpen={() =>
-                navigate(
-                  serviceDetailPath(
-                    String(item.d._envId),
-                    item.d.metadata.namespace,
-                    item.d.metadata.name,
-                    'overview',
-                  ),
-                )
-              }
-              onViewLogs={() =>
-                navigate(
-                  serviceDetailPath(
-                    String(item.d._envId),
-                    item.d.metadata.namespace,
-                    item.d.metadata.name,
-                    'logs',
-                  ),
-                )
-              }
-            />
-          )}
+          searchValue={search}
+          onSearchChange={(v) => patchQuery({ filter: v, page: '1' })}
+          searchPlaceholder="Filter applications…"
+          // Matches the header buttons, which are Button's default 'base'.
+          controlSize="base"
+          actions={headerActions}
         />
-      ) : null}
+      )}
     </div>
   )
 }
