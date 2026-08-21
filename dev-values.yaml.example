@@ -1,11 +1,14 @@
-# Local dev overrides, merged over the GUI install request (these win).
+# Template for dev-values.yaml — Helm values for installing this add-on from a
+# locally-built image, merged over the install form's request (these win). The copy
+# is gitignored: it holds your own image tag and the URL your cluster reaches your
+# host on. Only needed for the built-image loop, not for the Vite UI loop.
 #
 #   cp dev-values.yaml.example dev-values.yaml
 #   DEV_ADDON_VALUES=portainer-run=/abs/path/to/portainer-run/dev-values.yaml
 #
-# `bun run redeploy` reads image.repository and image.tag from here, so the tag it
-# builds is the one the release runs. See
-# portal-template/docs/developing-inside-portainer.md.
+# `npm run redeploy` reads image.repository and image.tag from here, so the tag it
+# builds is the one the release runs. See docs/developing-inside-portainer.md in the
+# portal-template repo.
 image:
   repository: portainer-run
   tag: local

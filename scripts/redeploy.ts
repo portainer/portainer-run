@@ -1,22 +1,23 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 /**
- * `bun run redeploy` — build the add-on image, load it onto the current cluster's
+ * `npm run redeploy` — build the add-on image, load it onto the current cluster's
  * nodes (kind / minikube / k3d / k3s / microk8s / a shared daemon), and rollout
  * restart the Deployment. One command instead of three manual, distro-specific ones.
  *
  * Does NOT install the add-on — do that once from the Addons screen with
- * DEV_ADDON_CHARTS/DEV_ADDON_VALUES set. See portal-template/docs/developing-inside-portainer.md.
+ * DEV_ADDON_CHARTS/DEV_ADDON_VALUES set. See docs/developing-inside-portainer.md
+ * in the portal-template repo.
  *
- *   bun run redeploy                     # build the dev-values.yaml image, load, restart
- *   bun run redeploy --image foo:local   # override the tag (or IMAGE=foo:local)
- *   bun run redeploy --skip-build        # reload + restart the existing image
- *   bun run redeploy --dry-run           # print the plan, touch nothing
+ *   npm run redeploy                     # build the dev-values.yaml image, load, restart
+ *   npm run redeploy --image foo:local   # override the tag (or IMAGE=foo:local)
+ *   npm run redeploy --skip-build        # reload + restart the existing image
+ *   npm run redeploy --dry-run           # print the plan, touch nothing
  */
-import { $ } from 'bun'
-import { existsSync, readFileSync } from 'fs'
-import { resolve } from 'path'
+import { execFileSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
-const REPO_ROOT = resolve(import.meta.dir, '..')
+const REPO_ROOT = resolve(import.meta.dirname, '..')
 
 interface Args {
   image?: string
@@ -37,22 +38,23 @@ type LoadPlan =
 // A load step: a human-readable label plus the action (null == nothing to run).
 interface LoadStep {
   label: string
-  run: (() => Promise<void>) | null
+  run: (() => void) | null
 }
 
-async function main() {
-  const args = parseArgs(Bun.argv.slice(2))
+function main() {
+  const args = parseArgs(process.argv.slice(2))
 
   const id = readAddonId()
   const namespace = `portainer-addon-${id}`
   const selector = `app.kubernetes.io/name=${id}`
   const { image, source } = resolveImage(args, id)
 
-  const context = (await $`kubectl config current-context`.text()).trim()
-  const plan = planForContext(context)
-  const step = loadStep(image, plan)
-  const deployments = await deploymentNames(namespace, selector)
-  const mismatched = (await deploymentImages(namespace, deployments)).filter(
+  const context = execFileSync('kubectl', ['config', 'current-context'], {
+    encoding: 'utf8',
+  }).trim()
+  const step = loadStep(image, planForContext(context))
+  const deployments = deploymentNames(namespace, selector)
+  const mismatched = deploymentImages(namespace, deployments).filter(
     (d) => d.image !== image,
   )
 
@@ -110,61 +112,91 @@ async function main() {
 
   if (!args.skipBuild) {
     log('build', `docker build -t ${image}`)
-    await $`docker build -t ${image} ${REPO_ROOT}`
+    execFileSync('docker', ['build', '-t', image, REPO_ROOT], {
+      stdio: 'inherit',
+    })
   } else {
     log('build', 'skipped (--skip-build)')
   }
 
   log('load', step.label)
-  if (step.run) await step.run()
+  step.run?.()
 
   log('restart', deployments.join(', '))
-  await $`kubectl rollout restart -n ${namespace} ${deployments}`
+  execFileSync(
+    'kubectl',
+    ['rollout', 'restart', '-n', namespace, ...deployments],
+    { stdio: 'inherit' },
+  )
   for (const deployment of deployments) {
-    await $`kubectl rollout status -n ${namespace} ${deployment} --timeout=120s`
+    execFileSync(
+      'kubectl',
+      ['rollout', 'status', '-n', namespace, deployment, '--timeout=120s'],
+      { stdio: 'inherit' },
+    )
   }
 
   console.log('')
   log('done', `${image} is live in ${namespace}.`)
 }
 
-// --- image loading ---------------------------------------------------------
+// --- steps -----------------------------------------------------------------
 
 function loadStep(image: string, plan: LoadPlan): LoadStep {
   switch (plan.kind) {
     case 'kind':
       return {
         label: `kind load docker-image (cluster ${plan.cluster})`,
-        run: async () => {
-          await $`kind load docker-image ${image} --name ${plan.cluster}`
-        },
+        run: () =>
+          execFileSync(
+            'kind',
+            ['load', 'docker-image', image, '--name', plan.cluster],
+            { stdio: 'inherit' },
+          ),
       }
-    case 'minikube':
+    case 'minikube': {
+      // Not `minikube image load`: it silently keeps the node's old image when
+      // the tag already exists there (--overwrite included, as of v1.38), and
+      // `minikube image rm` is refused while a pod still runs the image. Piping
+      // into the node's runtime re-points the tag unconditionally.
+      const importCmd = minikubeImportCommand()
       return {
-        label: 'minikube image load',
-        run: async () => void (await $`minikube image load ${image}`),
+        label: `docker save | minikube ssh ${importCmd}`,
+        run: () =>
+          execFileSync(
+            `docker save ${shQuote(image)} | minikube ssh --native-ssh=false -- ${shQuote(importCmd)}`,
+            { shell: true, stdio: 'inherit' },
+          ),
       }
+    }
     case 'k3d':
       return {
         label: `k3d image import (cluster ${plan.cluster})`,
-        run: async () =>
-          void (await $`k3d image import ${image} -c ${plan.cluster}`),
+        run: () =>
+          execFileSync('k3d', ['image', 'import', image, '-c', plan.cluster], {
+            stdio: 'inherit',
+          }),
       }
     case 'microk8s':
       // microk8s has its own containerd too; `microk8s ctr` wraps it with the
       // right socket and namespace.
       return {
         label: 'docker save | microk8s ctr images import',
-        run: async () => {
-          await $`docker save ${image} | microk8s ctr images import -`
-        },
+        run: () =>
+          execFileSync(
+            `docker save ${shQuote(image)} | microk8s ctr images import -`,
+            { shell: true, stdio: 'inherit' },
+          ),
       }
     case 'k3s':
       // k3s reads from its own containerd, not Docker — pipe a tarball in.
       return {
         label: 'docker save | sudo k3s ctr images import',
-        run: async () =>
-          void (await $`docker save ${image} | sudo k3s ctr images import -`),
+        run: () =>
+          execFileSync(
+            `docker save ${shQuote(image)} | sudo k3s ctr images import -`,
+            { shell: true, stdio: 'inherit' },
+          ),
       }
     case 'shared':
       return {
@@ -214,6 +246,94 @@ function readAddonId(): string {
   return match![1]
 }
 
+// A bare "foo" is ambiguous to Docker (implies :latest); pin our local tag.
+function normalizeTag(image: string): string {
+  return image.includes(':') ? image : `${image}:local`
+}
+
+function deploymentNames(namespace: string, selector: string): string[] {
+  let out: string
+  try {
+    out = execFileSync(
+      'kubectl',
+      ['get', 'deployment', '-n', namespace, '-l', selector, '-o', 'name'],
+      { encoding: 'utf8' },
+    )
+  } catch {
+    out = ''
+  }
+  return out
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+// The image each Deployment actually runs. Read straight from the cluster: it is
+// the only thing that says whether a restart would pick up a local build.
+function deploymentImages(
+  namespace: string,
+  deployments: string[],
+): { name: string; image: string }[] {
+  return deployments.map((name) => ({
+    name,
+    image: execFileSync(
+      'kubectl',
+      [
+        'get',
+        name,
+        '-n',
+        namespace,
+        '-o',
+        'jsonpath={.spec.template.spec.containers[0].image}',
+      ],
+      { encoding: 'utf8' },
+    ).trim(),
+  }))
+}
+
+function planForContext(context: string): LoadPlan {
+  if (context.startsWith('kind-'))
+    return { kind: 'kind', cluster: context.slice('kind-'.length) }
+  if (context.startsWith('k3d-'))
+    return { kind: 'k3d', cluster: context.slice('k3d-'.length) }
+  if (context === 'minikube') return { kind: 'minikube' }
+  if (context.includes('microk8s')) return { kind: 'microk8s' }
+  // k3s names its context "default" unless the kubeconfig was merged/renamed.
+  if (context === 'default' || context.includes('k3s')) return { kind: 'k3s' }
+  const sharedRuntimes = [
+    'docker-desktop',
+    'rancher-desktop',
+    'orbstack',
+    'colima',
+  ]
+  if (sharedRuntimes.includes(context))
+    return { kind: 'shared', runtime: context }
+  return { kind: 'unknown', context }
+}
+
+// The in-node command that reads an image tarball from stdin, per minikube
+// container runtime ("docker://…", "containerd://…", "cri-o://…").
+function minikubeImportCommand(): string {
+  let runtime = ''
+  try {
+    runtime = execFileSync(
+      'kubectl',
+      [
+        'get',
+        'nodes',
+        '-o',
+        'jsonpath={.items[0].status.nodeInfo.containerRuntimeVersion}',
+      ],
+      { encoding: 'utf8' },
+    ).trim()
+  } catch {
+    // fall through to the containerd default
+  }
+  if (runtime.startsWith('docker')) return 'docker load'
+  if (runtime.startsWith('cri-o')) return 'sudo podman load'
+  return 'sudo ctr -n k8s.io images import -'
+}
+
 // Resolve which image tag to build. Explicit flag/env win; otherwise use the
 // exact ref from dev-values.yaml so the built tag always matches what the
 // install actually runs. Falls back to <id>:local if no dev-values.yaml.
@@ -242,61 +362,9 @@ function readImageFromDevValues(): string | null {
   return tag ? `${repository}:${tag}` : repository
 }
 
-// A bare "foo" is ambiguous to Docker (implies :latest); pin our local tag.
-function normalizeTag(image: string): string {
-  return image.includes(':') ? image : `${image}:local`
-}
-
-async function deploymentNames(
-  namespace: string,
-  selector: string,
-): Promise<string[]> {
-  const out =
-    await $`kubectl get deployment -n ${namespace} -l ${selector} -o name`
-      .nothrow()
-      .text()
-  return out
-    .split('\n')
-    .map((s) => s.trim())
-    .filter(Boolean)
-}
-
-// The image each Deployment actually runs. Read straight from the cluster: it is
-// the only thing that says whether a restart would pick up a local build.
-async function deploymentImages(
-  namespace: string,
-  deployments: string[],
-): Promise<{ name: string; image: string }[]> {
-  return Promise.all(
-    deployments.map(async (name) => ({
-      name,
-      image: (
-        await $`kubectl get ${name} -n ${namespace} -o jsonpath={.spec.template.spec.containers[0].image}`
-          .nothrow()
-          .text()
-      ).trim(),
-    })),
-  )
-}
-
-function planForContext(context: string): LoadPlan {
-  if (context.startsWith('kind-'))
-    return { kind: 'kind', cluster: context.slice('kind-'.length) }
-  if (context.startsWith('k3d-'))
-    return { kind: 'k3d', cluster: context.slice('k3d-'.length) }
-  if (context === 'minikube') return { kind: 'minikube' }
-  if (context.includes('microk8s')) return { kind: 'microk8s' }
-  // k3s names its context "default" unless the kubeconfig was merged/renamed.
-  if (context === 'default' || context.includes('k3s')) return { kind: 'k3s' }
-  const sharedRuntimes = [
-    'docker-desktop',
-    'rancher-desktop',
-    'orbstack',
-    'colima',
-  ]
-  if (sharedRuntimes.includes(context))
-    return { kind: 'shared', runtime: context }
-  return { kind: 'unknown', context }
+// Single-quote for embedding in a `shell: true` command string.
+function shQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
 function log(tag: string, message: string) {
@@ -308,4 +376,4 @@ function fail(message: string): never {
   process.exit(1)
 }
 
-await main()
+main()

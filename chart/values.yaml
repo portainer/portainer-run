@@ -5,7 +5,7 @@
 image:
   repository: portainer/portainer-run # Optional. Defaults to the official Portainer DockerHub repo.
   tag: '' # Optional. tag defaults to the chart appVersion when empty.
-  pullPolicy: '' # Optional. Defaults to Always. Set to IfNotPresent (or Never) to run a locally-built image loaded into the node (e.g. `kind load docker-image`) without pulling from a registry.
+  pullPolicy: '' # Optional. Defaults to Always. IfNotPresent/Never runs an image already loaded onto the node without pulling.
 
 imagePullSecrets: [] # Optional. Only needed when pulling from a private/mirrored registry..
 storageClass: '' # Optional. StorageClass for the session-cache PVC. Empty uses the cluster default.
