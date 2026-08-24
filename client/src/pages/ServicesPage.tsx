@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowUpDown, Check, Eye, ListFilter, RefreshCw } from 'lucide-react'
+import {
+  ArrowUpDown,
+  ArrowUpRight,
+  Check,
+  Eye,
+  ListFilter,
+  RefreshCw,
+} from 'lucide-react'
 
 import { Button } from '@ds/v3-components/Button/Button'
 import { Badge } from '@ds/v3-components/Badge/Badge'
@@ -23,7 +30,6 @@ import {
   useEnvStatusOnDeployments,
   getExtraForApp,
 } from '../hooks/useEnvStatus.js'
-import { age } from '../lib/utils.js'
 import { manualRefresh } from '../services/refreshDeployments.js'
 import type { Deployment } from '../types/k8s'
 
@@ -60,8 +66,6 @@ const HIDEABLE_COLUMNS = [
   { key: 'ns', label: 'Project space' },
   { key: 'status', label: 'Health' },
   { key: 'access', label: 'Access' },
-  { key: 'age', label: 'Deployed' },
-  { key: 'owner', label: 'Deployed by' },
 ]
 
 /* Which columns are hidden is a durable preference, not part of the query —
@@ -157,6 +161,55 @@ function deployedBy(d: Deployment): string {
     d.metadata?.labels?.['io.portainer.kubernetes.application.owner.id'] ||
     '—'
   )
+}
+
+const DEPLOYED_AGO_DATE_CUTOFF_DAYS = 30
+
+/* Written-out relative time ("2 hours" + " ago") for the name subline, split
+   so the caller can emphasize the timeline value without emphasizing "ago".
+   Past the cutoff a written-out age gets stale and hard to place on a
+   timeline, so it falls back to an absolute dd-mm-yyyy date (no suffix)
+   instead. */
+function deployedAgoParts(timestamp: string | undefined): {
+  value: string
+  suffix: string
+} {
+  if (!timestamp) return { value: '—', suffix: '' }
+  const then = new Date(timestamp)
+  const ms = Date.now() - then.getTime()
+  const minutes = Math.floor(ms / 60000)
+  const hours = Math.floor(minutes / 60)
+  const days = Math.floor(hours / 24)
+
+  if (days >= DEPLOYED_AGO_DATE_CUTOFF_DAYS) {
+    const dd = String(then.getDate()).padStart(2, '0')
+    const mm = String(then.getMonth() + 1).padStart(2, '0')
+    return { value: `${dd}-${mm}-${then.getFullYear()}`, suffix: '' }
+  }
+  if (days >= 1) {
+    return { value: `${days} day${days === 1 ? '' : 's'}`, suffix: ' ago' }
+  }
+  if (hours >= 1) {
+    return { value: `${hours} hour${hours === 1 ? '' : 's'}`, suffix: ' ago' }
+  }
+  if (minutes >= 1) {
+    return {
+      value: `${minutes} minute${minutes === 1 ? '' : 's'}`,
+      suffix: ' ago',
+    }
+  }
+  return { value: 'just now', suffix: '' }
+}
+
+const BADGE_LABEL_MAX = 40
+
+/* Badge text is capped at a fixed character count rather than left to CSS
+   ellipsis alone — the column is sized for real-world names, and this only
+   kicks in for a pathologically long one. */
+function truncateBadgeLabel(value: string): string {
+  return value.length > BADGE_LABEL_MAX
+    ? `${value.slice(0, BADGE_LABEL_MAX)}…`
+    : value
 }
 
 /* Its own component rather than an inline render, because the per-row
@@ -271,6 +324,7 @@ function AccessCell({
   envStatusClientCache: Record<string, unknown>
 }) {
   const extra = getExtraForApp(envStatusClientCache, d._envId, d.metadata.name)
+  const [hovered, setHovered] = useState(false)
   if (extra.accessUrl) {
     return (
       <a
@@ -279,7 +333,12 @@ function AccessCell({
         rel="noopener noreferrer"
         title={extra.accessLabel || extra.accessUrl}
         onClick={(e) => e.stopPropagation()}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
         style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 2,
           color: 'var(--accent, #2e90fa)',
           fontSize: 12,
           fontWeight: 600,
@@ -287,6 +346,7 @@ function AccessCell({
         }}
       >
         Launch
+        {hovered && <ArrowUpRight size={12} />}
       </a>
     )
   }
@@ -374,20 +434,12 @@ export function ServicesPage() {
         return byName(a, b)
       }
     } else if (listSort === 'age') {
-      // Newest first at 'asc' — the column reads "Deployed", and most-recent
+      // Newest first at 'asc' — "Created" in the Sort menu, and most-recent
       // at the top is the useful default for a deploy list.
       cmp = (a, b) => {
         const at = new Date(a.d.metadata?.creationTimestamp || 0).getTime()
         const bt = new Date(b.d.metadata?.creationTimestamp || 0).getTime()
         return bt - at
-      }
-    } else if (listSort === 'owner') {
-      cmp = (a, b) => {
-        const oa = deployedBy(a.d)
-        const ob = deployedBy(b.d)
-        if (oa !== ob)
-          return oa.localeCompare(ob, undefined, { sensitivity: 'base' })
-        return byName(a, b)
       }
     } else {
       cmp = byName
@@ -475,45 +527,102 @@ export function ServicesPage() {
       key: 'name',
       header: 'Name',
       sortable: true,
-      width: '16%',
+      width: '27%',
       render: ({ d }) => (
-        <span
-          style={{
-            display: 'block',
-            fontWeight: 600,
-            color: 'var(--text)',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {d.metadata.name}
-        </span>
+        <div style={{ overflow: 'hidden' }}>
+          <span
+            style={{
+              display: 'block',
+              fontWeight: 600,
+              color: 'var(--text)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {d.metadata.name}
+          </span>
+          {(() => {
+            const ago = deployedAgoParts(d.metadata?.creationTimestamp)
+            return (
+              <span
+                title={`Deployed by ${deployedBy(d)}`}
+                style={{
+                  display: 'block',
+                  marginTop: 2,
+                  fontSize: 12,
+                  color: 'var(--muted)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Deployed by{' '}
+                <span style={{ fontWeight: 600 }}>{deployedBy(d)}</span>
+                {' • '}
+                <span style={{ fontWeight: 600 }}>{ago.value}</span>
+                {ago.suffix}
+              </span>
+            )
+          })()}
+        </div>
       ),
     },
     {
       key: 'env',
       header: 'Environment',
       sortable: true,
-      width: '12%',
-      render: ({ d }) => (
-        <span title={d._envName || '—'}>
-          <Badge tone="neutral" size="sm">
-            {d._envName || '—'}
-          </Badge>
-        </span>
-      ),
+      width: '14%',
+      render: ({ d }) => {
+        const full = d._envName || '—'
+        return (
+          <span title={full} style={{ display: 'block', maxWidth: '100%' }}>
+            <Badge
+              tone="neutral"
+              size="sm"
+              style={{ maxWidth: '100%', overflow: 'hidden' }}
+            >
+              <span
+                style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {truncateBadgeLabel(full)}
+              </span>
+            </Badge>
+          </span>
+        )
+      },
     },
     {
       key: 'ns',
       header: 'Project space',
       sortable: true,
-      width: '11%',
-      render: ({ d }) => (
-        <Badge tone="neutral" size="sm">
-          {d.metadata.namespace}
-        </Badge>
-      ),
+      width: '22%',
+      render: ({ d }) => {
+        const full = d.metadata.namespace
+        return (
+          <span title={full} style={{ display: 'block', maxWidth: '100%' }}>
+            <Badge
+              tone="neutral"
+              size="sm"
+              style={{ maxWidth: '100%', overflow: 'hidden' }}
+            >
+              <span
+                style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {truncateBadgeLabel(full)}
+              </span>
+            </Badge>
+          </span>
+        )
+      },
     },
     {
       key: 'status',
@@ -530,38 +639,6 @@ export function ServicesPage() {
       width: '8%',
       render: ({ d }) => (
         <AccessCell d={d} envStatusClientCache={envStatusClientCache} />
-      ),
-    },
-    {
-      key: 'age',
-      header: 'Deployed',
-      sortable: true,
-      width: '10%',
-      render: ({ d }) => (
-        <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-          {age(d.metadata?.creationTimestamp)}
-        </span>
-      ),
-    },
-    {
-      key: 'owner',
-      header: 'Deployed by',
-      sortable: true,
-      width: '14%',
-      render: ({ d }) => (
-        <span
-          title={deployedBy(d)}
-          style={{
-            display: 'block',
-            fontSize: 12,
-            color: 'var(--muted)',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {deployedBy(d)}
-        </span>
       ),
     },
     {
