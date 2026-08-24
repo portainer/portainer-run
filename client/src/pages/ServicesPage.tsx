@@ -159,6 +159,18 @@ function deployedBy(d: Deployment): string {
   )
 }
 
+const BADGE_LABEL_MAX = 40
+
+/* Badges wrap onto multiple lines rather than ellipsizing at the column's
+   pixel width, so a moderately long name still reads in full. Only a
+   pathologically long value gets hard-cut, to keep the row from growing
+   without bound. */
+function truncateBadgeLabel(value: string): string {
+  return value.length > BADGE_LABEL_MAX
+    ? `${value.slice(0, BADGE_LABEL_MAX)}…`
+    : value
+}
+
 /* Its own component rather than an inline render, because the per-row
    permission check is a hook — it needs a component that mounts once per row. */
 function RowActions({
@@ -495,31 +507,63 @@ export function ServicesPage() {
       key: 'env',
       header: 'Environment',
       sortable: true,
-      width: '12%',
-      render: ({ d }) => (
-        <span title={d._envName || '—'}>
-          <Badge tone="neutral" size="sm">
-            {d._envName || '—'}
-          </Badge>
-        </span>
-      ),
+      width: '14%',
+      render: ({ d }) => {
+        const full = d._envName || '—'
+        return (
+          <span title={full} style={{ display: 'block', maxWidth: '100%' }}>
+            <Badge
+              tone="neutral"
+              size="sm"
+              style={{ maxWidth: '100%', overflow: 'hidden' }}
+            >
+              <span
+                style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {truncateBadgeLabel(full)}
+              </span>
+            </Badge>
+          </span>
+        )
+      },
     },
     {
       key: 'ns',
       header: 'Project space',
       sortable: true,
-      width: '11%',
-      render: ({ d }) => (
-        <Badge tone="neutral" size="sm">
-          {d.metadata.namespace}
-        </Badge>
-      ),
+      width: '22%',
+      render: ({ d }) => {
+        const full = d.metadata.namespace
+        return (
+          <span title={full} style={{ display: 'block', maxWidth: '100%' }}>
+            <Badge
+              tone="neutral"
+              size="sm"
+              style={{ maxWidth: '100%', overflow: 'hidden' }}
+            >
+              <span
+                style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {truncateBadgeLabel(full)}
+              </span>
+            </Badge>
+          </span>
+        )
+      },
     },
     {
       key: 'status',
       header: 'Health',
       sortable: true,
-      width: '15%',
+      width: '13%',
       render: ({ d }) => (
         <HealthCell d={d} envStatusClientCache={envStatusClientCache} />
       ),
@@ -527,7 +571,7 @@ export function ServicesPage() {
     {
       key: 'access',
       header: 'Access',
-      width: '8%',
+      width: '7%',
       render: ({ d }) => (
         <AccessCell d={d} envStatusClientCache={envStatusClientCache} />
       ),
@@ -536,7 +580,7 @@ export function ServicesPage() {
       key: 'age',
       header: 'Deployed',
       sortable: true,
-      width: '10%',
+      width: '8%',
       render: ({ d }) => (
         <span style={{ fontSize: 12, color: 'var(--muted)' }}>
           {age(d.metadata?.creationTimestamp)}
@@ -547,7 +591,7 @@ export function ServicesPage() {
       key: 'owner',
       header: 'Deployed by',
       sortable: true,
-      width: '14%',
+      width: '11%',
       render: ({ d }) => (
         <span
           title={deployedBy(d)}
