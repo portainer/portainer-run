@@ -6,6 +6,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 
 import { addonServerPlugin } from './vite.addonServerPlugin'
+import { portainerConnectHint } from './vite.portainerConnectHint'
 
 // Served as a Portainer addon behind the gateway at this base path. The gateway
 // strips the prefix before forwarding to us; the build bakes it into asset URLs
@@ -35,7 +36,12 @@ export default defineConfig(({ mode }) => {
     base: BASE,
     // The Portainer-Run backend runs in-process (same port as the SPA);
     // no separate server process or proxy needed in dev.
-    plugins: [react(), tailwindcss(), addonServerPlugin(BASE)],
+    plugins: [
+      react(),
+      tailwindcss(),
+      addonServerPlugin(BASE),
+      portainerConnectHint(BASE, devPort),
+    ],
     resolve: {
       alias: {
         '@': resolve(__dirname, 'src'),
@@ -50,6 +56,10 @@ export default defineConfig(({ mode }) => {
     server: {
       port: devPort,
       strictPort: true,
+      // Bind IPv4 explicitly. Vite's default host is `localhost`, which Node binds
+      // to ::1 alone on macOS, and Portainer's addon gateway reaches a dev server
+      // over IPv4 (mirrord's IPv6 support is off), so the default is unreachable.
+      host: '127.0.0.1',
       // The addon page loads from Portainer's dev server (:8999) while Vite runs
       // here; point the HMR socket straight at Vite so reload works across origins.
       hmr: { protocol: 'ws', host: 'localhost', clientPort: devPort },
