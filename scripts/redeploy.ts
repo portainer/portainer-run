@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * `npm run redeploy` — build the add-on image, load it onto the current cluster's
+ * `pnpm run redeploy` — build the add-on image, load it onto the current cluster's
  * nodes (kind / minikube / k3d / k3s / microk8s / a shared daemon), and rollout
  * restart the Deployment. One command instead of three manual, distro-specific ones.
  *
@@ -8,13 +8,13 @@
  * DEV_ADDON_CHARTS/DEV_ADDON_VALUES set. See docs/developing-inside-portainer.md
  * in the portal-template repo.
  *
- *   npm run redeploy                     # build the dev-values.yaml image, load, restart
- *   npm run redeploy --image foo:local   # override the tag (or IMAGE=foo:local)
- *   npm run redeploy --skip-build        # reload + restart the existing image
- *   npm run redeploy --dry-run           # print the plan, touch nothing
+ *   pnpm run redeploy                     # build the dev-values.yaml image, load, restart
+ *   pnpm run redeploy --image foo:local   # override the tag (or IMAGE=foo:local)
+ *   pnpm run redeploy --skip-build        # reload + restart the existing image
+ *   pnpm run redeploy --dry-run           # print the plan, touch nothing
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { copyFileSync, existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const REPO_ROOT = resolve(import.meta.dirname, '..')
@@ -47,6 +47,7 @@ function main() {
   const id = readAddonId()
   const namespace = `portainer-addon-${id}`
   const selector = `app.kubernetes.io/name=${id}`
+  if (!args.dryRun) ensureDevValues()
   const { image, source } = resolveImage(args, id)
 
   const context = execFileSync('kubectl', ['config', 'current-context'], {
@@ -75,7 +76,7 @@ function main() {
       'restart',
       deployments.length > 0
         ? deployments.join(', ')
-        : `(none found — install "${id}" from the Addons screen first)`,
+        : '(not installed yet — build and load only)',
     )
     for (const d of mismatched) {
       log(
@@ -84,16 +85,6 @@ function main() {
       )
     }
     return
-  }
-
-  // A restart only helps if the add-on is already installed. Check first so we
-  // fail with a useful message instead of a bare "No resources found".
-  if (deployments.length === 0) {
-    fail(
-      `No add-on Deployment found in ${namespace} (selector ${selector}).\n` +
-        `Install "${id}" once from the Addons screen first — with DEV_ADDON_CHARTS/\n` +
-        `DEV_ADDON_VALUES pointing at this repo — then re-run redeploy.`,
-    )
   }
 
   // A restart only reloads the image the Deployment already references. Installed
@@ -121,6 +112,18 @@ function main() {
 
   log('load', step.label)
   step.run?.()
+
+  // Before the first install there is nothing to restart, and the image has to be
+  // on the node already: the release pins this tag with IfNotPresent, so a kubelet
+  // that cannot find it falls back to a registry that has no such image.
+  if (deployments.length === 0) {
+    log('install', `image ready — "${id}" is not installed yet`)
+    console.log(
+      `\n  Install it from the Addons screen, with DEV_ADDON_CHARTS and\n` +
+        `  DEV_ADDON_VALUES pointing at this repo. Then re-run redeploy per change.\n`,
+    )
+    return
+  }
 
   log('restart', deployments.join(', '))
   execFileSync(
@@ -221,7 +224,7 @@ function parseArgs(argv: string[]): Args {
   const args: Args = { skipBuild: false, dryRun: false }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
-    // `bun run redeploy -- --dry-run` forwards the separator; npm strips it.
+    // `pnpm run redeploy -- --dry-run` forwards the separator; npm strips it.
     if (arg === '--') {
       continue
     } else if (arg === '--image') {
@@ -347,6 +350,17 @@ function resolveImage(
   const fromValues = readImageFromDevValues()
   if (fromValues) return { image: fromValues, source: 'dev-values.yaml' }
   return { image: `${id}:local`, source: 'default' }
+}
+
+// The install reads dev-values.yaml for the image tag, so seed it from the example
+// rather than have the first run build a tag the release will not reference.
+function ensureDevValues() {
+  const path = resolve(REPO_ROOT, 'dev-values.yaml')
+  const example = resolve(REPO_ROOT, 'dev-values.yaml.example')
+  if (existsSync(path) || !existsSync(example)) return
+
+  copyFileSync(example, path)
+  log('values', 'created dev-values.yaml from the example — edit it to taste')
 }
 
 function readImageFromDevValues(): string | null {
