@@ -1,4 +1,4 @@
-# Host deps conflict with `bun install` inside the image (COPY client/ ./).
+# Host deps conflict with the image's own `npm install` (COPY client/ ./).
 client/node_modules
 server/node_modules
 node_modules
