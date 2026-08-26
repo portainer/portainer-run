@@ -142,6 +142,9 @@ export function VibeEditTab({
           gitTargetId: gitOpsInfo.gitTargetId,
           branch: gitOpsInfo.gitBranch,
           gitPath,
+          // Sent so the server can check the hostname is not already claimed
+          // by an app in another namespace before committing the change.
+          envId,
           appName: name,
           ns: namespace,
           exposeType,
