@@ -5,6 +5,7 @@ import {
   baseDomain,
   credentialHealth,
   ensureHydrated,
+  gatewayUrl,
   isConfigured,
 } from './settings.js'
 import { handleRequest } from './handler.js'
@@ -60,6 +61,9 @@ httpServer.listen(PORT, async () => {
   console.log(`    Cache:     ${CACHE_FILE}`)
   console.log(
     `    Domain:    ${baseDomain() || '(not set — NodePort fallback)'}`,
+  )
+  console.log(
+    `    Gateway:   ${gatewayUrl() || '(not set — MCP deploys disabled)'}`,
   )
   console.log(
     // An add-on that read Portainer and found nothing stored is new.

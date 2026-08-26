@@ -16,6 +16,11 @@ import crypto from 'node:crypto'
 import { encryptionKey, gatewayUrl } from '../settings.js'
 import db from '../db/db.js'
 
+const NO_GATEWAY =
+  'No file relay is configured, so MCP deploys are disabled. Set GATEWAY_URL in ' +
+  'Portainer-Run Settings. Portainer hosts one at https://run-gateway.portainer.ai, ' +
+  'but app source transits the relay — egress-restricted installs should host their own.'
+
 // ---------------------------------------------------------------------------
 // Instance identity — derived from ENCRYPTION_KEY, stable across restarts
 // ---------------------------------------------------------------------------
@@ -90,12 +95,7 @@ async function ensurePsk() {
  * The AI coding assistant uploads files directly to uploadUrl.
  */
 export async function requestUploadSession() {
-  if (!gatewayUrl()) {
-    throw new Error(
-      'GATEWAY_URL is not configured on this Portainer-Run instance. ' +
-        'Set GATEWAY_URL=https://run-gateway.portainer.ai in your environment.',
-    )
-  }
+  if (!gatewayUrl()) throw new Error(NO_GATEWAY)
 
   let psk = await ensurePsk()
 
@@ -132,11 +132,7 @@ export async function requestUploadSession() {
  * that vibe.js expects.
  */
 export async function fetchStagedFiles(sessionId) {
-  if (!gatewayUrl()) {
-    throw new Error(
-      'GATEWAY_URL is not configured on this Portainer-Run instance.',
-    )
-  }
+  if (!gatewayUrl()) throw new Error(NO_GATEWAY)
 
   const res = await fetch(
     `${gatewayUrl()}/download/${encodeURIComponent(sessionId)}`,
