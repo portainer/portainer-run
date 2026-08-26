@@ -6,11 +6,17 @@ import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 
 import { addonServerPlugin } from './vite.addonServerPlugin'
+import { portainerConnectHint } from './vite.portainerConnectHint'
 
 // Served as a Portainer addon behind the gateway at this base path. The gateway
 // strips the prefix before forwarding to us; the build bakes it into asset URLs
 // and the router basename so the browser requests everything under the prefix.
 const BASE = process.env.ADDON_BASE_PATH || '/addons/portainer-run/'
+
+// Local dev server port. 5174, not Vite's 5173, so this add-on and the reference
+// add-on (portal-template) can run at once; strictPort would fail on a clash.
+// Override with VITE_DEV_PORT; the HMR socket must target the same port.
+const devPort = Number(process.env.VITE_DEV_PORT) || 5174
 
 export default defineConfig(({ mode }) => {
   // Root .env holds the server config (PORTAINER_URL, etc.); reuse it here so
@@ -30,7 +36,12 @@ export default defineConfig(({ mode }) => {
     base: BASE,
     // The Portainer-Run backend runs in-process (same port as the SPA);
     // no separate server process or proxy needed in dev.
-    plugins: [react(), tailwindcss(), addonServerPlugin(BASE)],
+    plugins: [
+      react(),
+      tailwindcss(),
+      addonServerPlugin(BASE),
+      portainerConnectHint(BASE, devPort),
+    ],
     resolve: {
       alias: {
         '@': resolve(__dirname, 'src'),
@@ -43,8 +54,15 @@ export default defineConfig(({ mode }) => {
     },
     build: { outDir: 'dist', assetsDir: 'assets' },
     server: {
-      port: 5173,
+      port: devPort,
       strictPort: true,
+      // Bind IPv4 explicitly. Vite's default host is `localhost`, which Node binds
+      // to ::1 alone on macOS, and Portainer's addon gateway reaches a dev server
+      // over IPv4 (mirrord's IPv6 support is off), so the default is unreachable.
+      host: '127.0.0.1',
+      // The addon page loads from Portainer's dev server (:8999) while Vite runs
+      // here; point the HMR socket straight at Vite so reload works across origins.
+      hmr: { protocol: 'ws', host: '127.0.0.1', clientPort: devPort },
       // The design system ships TypeScript source directly; allow Vite to
       // transform it even though it lives outside the project root.
       fs: {

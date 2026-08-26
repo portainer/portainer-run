@@ -224,16 +224,15 @@ Restoring the original value recovers everything with no further action.
 
 ## Local development
 
-The repo uses [Bun](https://bun.sh) for installs, scripts, and the Vite build.
+Node 22.18+ and [pnpm](https://pnpm.io) 10+.
 
 ```bash
-bun install
-bun run dev
+pnpm install
+pnpm run dev
 ```
 
-The container image builds and runs on Node instead (see the `Dockerfile`), so the
-server code stays free of Bun-specific APIs — SQLite comes from `node:sqlite`. Node 22.5
-or newer is required to run `server/server.js` directly.
+Nothing here runs under Bun: SQLite comes from `node:sqlite`, which sets that floor,
+and the container image installs and runs on Node too (see the `Dockerfile`).
 
 ## Environment variables
 

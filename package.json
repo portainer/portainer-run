@@ -4,14 +4,15 @@
   "type": "module",
   "version": "0.0.0",
   "scripts": {
-    "dev": "bun run --cwd client dev",
+    "dev": "pnpm --dir client run dev",
     "start": "node server/server.js",
     "test": "node --test \"server/**/*.test.js\" \"test/**/*.test.js\"",
-    "build": "bun run --cwd client build",
-    "preview": "bun run --cwd client preview",
+    "build": "pnpm --dir client run build",
+    "preview": "pnpm --dir client run preview",
     "docker:run": "bash scripts/docker-run.sh",
-    "lint": "bun run --cwd client lint",
-    "typecheck": "bun run --cwd client typecheck",
+    "redeploy": "node scripts/redeploy.ts",
+    "lint": "pnpm --dir client run lint",
+    "typecheck": "pnpm --dir client run typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky install"
@@ -20,5 +21,8 @@
     "husky": "^8.0.3",
     "lint-staged": "^17.0.7",
     "prettier": "^3.4.2"
+  },
+  "engines": {
+    "node": ">=22.18"
   }
 }
