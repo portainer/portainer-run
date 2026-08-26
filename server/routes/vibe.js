@@ -1044,7 +1044,7 @@ async function findStackConflict(req, { envId, ns, appName }) {
 /**
  * Reject a hostname another app already claims. Best-effort by design: a standard
  * user's listing is narrowed to the namespaces they can access, so a clash hiding
- * in one of those is undetectable, and a check that cannot run never blocks the
+ * outside those namespaces is undetectable, and a check that cannot run never blocks the
  * deploy.
  *
  * @returns {Promise<string|null>} the error message when the hostname is taken
