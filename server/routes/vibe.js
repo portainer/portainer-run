@@ -988,12 +988,16 @@ async function listVisibleIngresses(req, envId) {
   const target = resolvePortainerTarget()
   if (!target) return null
 
+  // Validate envId is numeric to prevent path injection into the Portainer API
+  const safeEnvId = String(envId)
+  if (!/^\d+$/.test(safeEnvId)) return null
+
   try {
     const data = await portainerRequest(
       target,
       extractToken(req),
       'GET',
-      `/api/kubernetes/${envId}/ingresses?withServices=false`,
+      `/api/kubernetes/${safeEnvId}/ingresses?withServices=false`,
     )
     return Array.isArray(data) ? data : null
   } catch (err) {
