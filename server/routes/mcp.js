@@ -409,14 +409,15 @@ async function toolListIngressClasses(req, args) {
 // The browser UI fills runtime/runtimeImage/startCmd/workDir/port before calling
 // the deploy backend. The MCP path has no UI, so without this it would always
 // deploy a bare node:22-slim image with no start command — which crashloops.
-// Keep this in sync with the RUNTIMES table in VibeDeploy.jsx.
+// Keep this in sync with the RUNTIMES table in client/src/pages/deploy/runtimes.ts.
 // ---------------------------------------------------------------------------
 
+// Unprivileged image on 8080: stock nginx chowns as root and dies under drop-ALL.
 const NGINX_RUNTIME = {
   id: 'nginx',
-  image: 'nginx:alpine',
+  image: 'nginxinc/nginx-unprivileged:alpine',
   defaultCmd: () => "nginx -g 'daemon off;'",
-  port: 80,
+  port: 8080,
   workDir: '/usr/share/nginx/html',
 }
 
