@@ -47,12 +47,10 @@ function main() {
   const id = readAddonId()
   const namespace = `portainer-addon-${id}`
   const selector = `app.kubernetes.io/name=${id}`
-  if (!args.dryRun) ensureDevValues()
+  if (!args.dryRun) ensureDevValues(id)
   const { image, source } = resolveImage(args, id)
 
-  const context = execFileSync('kubectl', ['config', 'current-context'], {
-    encoding: 'utf8',
-  }).trim()
+  const context = currentContext()
   const step = loadStep(image, planForContext(context))
   const deployments = deploymentNames(namespace, selector)
   const mismatched = deploymentImages(namespace, deployments).filter(
@@ -87,20 +85,6 @@ function main() {
     return
   }
 
-  // A restart only reloads the image the Deployment already references. Installed
-  // without DEV_ADDON_VALUES it still points at the published image, so the
-  // restart succeeds, a new pod starts, and the old build is served — the one
-  // failure here with no visible symptom. Checked before building so it costs
-  // seconds rather than a full image build.
-  if (mismatched.length > 0) {
-    fail(
-      `${mismatched.map((d) => `${d.name} runs ${d.image}`).join('\n')}\n` +
-        `but this builds ${image}, so a restart would redeploy the same image.\n\n` +
-        `Reinstall "${id}" from the Addons screen with DEV_ADDON_CHARTS/\n` +
-        `DEV_ADDON_VALUES pointing at this repo, so the release runs your build.`,
-    )
-  }
-
   if (!args.skipBuild) {
     log('build', `docker build -t ${image}`)
     execFileSync('docker', ['build', '-t', image, REPO_ROOT], {
@@ -113,14 +97,31 @@ function main() {
   log('load', step.label)
   step.run?.()
 
-  // Before the first install there is nothing to restart, and the image has to be
-  // on the node already: the release pins this tag with IfNotPresent, so a kubelet
-  // that cannot find it falls back to a registry that has no such image.
+  // Neither case below can restart into your build, but both end in an install, and
+  // an install needs the image on the node already: the release pins this tag with
+  // IfNotPresent, so a kubelet that cannot find it falls back to a registry that has
+  // no such image. So build and load first, then stop.
   if (deployments.length === 0) {
     log('install', `image ready — "${id}" is not installed yet`)
     console.log(
       `\n  Install it from the Addons screen, with DEV_ADDON_CHARTS and\n` +
         `  DEV_ADDON_VALUES pointing at this repo. Then re-run redeploy per change.\n`,
+    )
+    return
+  }
+
+  // A restart only reloads the image the Deployment already references. Installed
+  // without DEV_ADDON_VALUES it still points at the published image, so the restart
+  // succeeds, a new pod starts, and the old build is served — the one failure here
+  // with no visible symptom.
+  if (mismatched.length > 0) {
+    log('reinstall', 'image ready — the release runs a different one')
+    console.log(
+      `\n  ${mismatched.map((d) => `${d.name} runs ${d.image}`).join('\n  ')}\n` +
+        `  but this builds ${image}, so a restart would redeploy the same image.\n\n` +
+        `  Reinstall "${id}" from the Addons screen, with DEV_ADDON_CHARTS and\n` +
+        `  DEV_ADDON_VALUES pointing at this repo. The image is on the node now, so\n` +
+        `  the new release runs your build straight away.\n`,
     )
     return
   }
@@ -352,15 +353,47 @@ function resolveImage(
   return { image: `${id}:local`, source: 'default' }
 }
 
+// kubectl exits non-zero with no context set, which execFileSync surfaces as a raw
+// Node stack. Say what to do instead.
+function currentContext(): string {
+  try {
+    return execFileSync('kubectl', ['config', 'current-context'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim()
+  } catch {
+    fail(
+      'No kubectl context is set, so there is no cluster to build into.\n' +
+        'Point kubectl at your local cluster — the dev server enters the same one:\n\n' +
+        '  kubectl config get-contexts\n' +
+        '  kubectl config use-context <name>',
+    )
+  }
+}
+
 // The install reads dev-values.yaml for the image tag, so seed it from the example
 // rather than have the first run build a tag the release will not reference.
-function ensureDevValues() {
+function ensureDevValues(id: string) {
   const path = resolve(REPO_ROOT, 'dev-values.yaml')
   const example = resolve(REPO_ROOT, 'dev-values.yaml.example')
   if (existsSync(path) || !existsSync(example)) return
 
   copyFileSync(example, path)
-  log('values', 'created dev-values.yaml from the example — edit it to taste')
+  log('values', `created ${path}`)
+  // Absolute, because the server resolves these from its own cwd, and pastable so
+  // nobody has to hand-expand a placeholder.
+  console.log(
+    [
+      '',
+      '  Check that file, then add these to your portainer-suite checkout, in',
+      '  package/server-ee/dev/mirrord/local.env, and restart the dev server:',
+      '  Keep existing add-on lines; each line appends this add-on.',
+      '',
+      `    export DEV_ADDON_CHARTS=\${DEV_ADDON_CHARTS:+$DEV_ADDON_CHARTS,}${id}=${resolve(REPO_ROOT, 'chart')}`,
+      `    export DEV_ADDON_VALUES=\${DEV_ADDON_VALUES:+$DEV_ADDON_VALUES,}${id}=${path}`,
+      '',
+    ].join('\n'),
+  )
 }
 
 function readImageFromDevValues(): string | null {

@@ -10,7 +10,7 @@
 image:
   repository: portainer-run
   tag: local
-  # Use the node-loaded image; never reach a registry.
+  # Use the node-loaded image when present; otherwise the kubelet tries a registry.
   pullPolicy: IfNotPresent
 # This add-on's server calls Portainer, which in the dev rig runs on your host — so
 # the chart default (portainer.portainer.svc.cluster.local) points at nothing. Reach

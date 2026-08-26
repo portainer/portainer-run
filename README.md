@@ -224,7 +224,7 @@ Restoring the original value recovers everything with no further action.
 
 ## Local development
 
-Node 22.5+ and [pnpm](https://pnpm.io) 10+.
+Node 22.18+ and [pnpm](https://pnpm.io) 10+.
 
 ```bash
 pnpm install
