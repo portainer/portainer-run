@@ -62,7 +62,7 @@ export default defineConfig(({ mode }) => {
       host: '127.0.0.1',
       // The addon page loads from Portainer's dev server (:8999) while Vite runs
       // here; point the HMR socket straight at Vite so reload works across origins.
-      hmr: { protocol: 'ws', host: 'localhost', clientPort: devPort },
+      hmr: { protocol: 'ws', host: '127.0.0.1', clientPort: devPort },
       // The design system ships TypeScript source directly; allow Vite to
       // transform it even though it lives outside the project root.
       fs: {

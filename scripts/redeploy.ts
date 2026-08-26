@@ -229,7 +229,12 @@ function parseArgs(argv: string[]): Args {
     if (arg === '--') {
       continue
     } else if (arg === '--image') {
-      args.image = argv[++i]
+      const value = argv[++i]
+      // Without this an unvalued --image silently falls through to dev-values.yaml,
+      // and you rebuild a tag you did not ask for.
+      if (!value || value.startsWith('-'))
+        fail('--image needs a value, e.g. --image app:local')
+      args.image = value
     } else if (arg === '--skip-build') {
       args.skipBuild = true
     } else if (arg === '--dry-run') {
