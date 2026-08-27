@@ -22,8 +22,8 @@ export function portainerRequest(
   body,
   contentType = 'application/json',
 ) {
-  const machine = machineToken()
-  const usedMachineCredential = Boolean(machine) && token === machine
+  const usedMachineCredential =
+    token.startsWith('paddon_') && token === machineToken()
 
   return new Promise((resolve, reject) => {
     const headers = { 'Content-Type': contentType, Accept: 'application/json' }
