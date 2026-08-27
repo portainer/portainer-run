@@ -85,8 +85,14 @@ function fail(name, file, e) {
   return entry
 }
 
+/** Latched, so a credential that disappears is told apart from one never issued. */
+let everIssued = false
+
 export function machineToken() {
-  return read(TOKEN_FILE).content?.toString('utf8').trim() || ''
+  const token = read(TOKEN_FILE).content?.toString('utf8').trim() || ''
+  if (token) everIssued = true
+
+  return token
 }
 
 /** Portainer's own TLS certificate, or null where it serves plain HTTP. */
@@ -96,6 +102,14 @@ export function portainerCA() {
 
 export function hasMachineCredential() {
   return machineToken() !== ''
+}
+
+/**
+ * Whether a credential this add-on was issued has since gone. Repair
+ * republishes the Secret, so unlike never having one, this has a remedy.
+ */
+export function credentialWithdrawn() {
+  return everIssued && !hasMachineCredential()
 }
 
 /**

@@ -26,6 +26,8 @@ import { handleMcp } from './routes/mcp.js'
 import { handleSetup } from './routes/setup.js'
 import { resolveCallerIdentity } from './lib/identity.js'
 
+const PROBE_PROOF_WAIT_MS = 2_000
+
 /**
  * @param {import('http').IncomingMessage} req
  * @param {import('http').ServerResponse} res
@@ -62,9 +64,16 @@ export async function handleRequest(req, res) {
   // probes: this one answers 401 so Portainer can offer a repair, where a
   // Kubernetes probe would restart the pod and fix nothing.
   if (pathname === '/healthz') {
-    // Portainer polls this, so let its probe pick up a repaired Secret. Not
-    // awaited, so the probe does not wait on a round trip to answer.
-    void ensureHydrated().catch(() => {})
+    // Awaited, or the probe that finds a fault still answers from before the
+    // check, and the add-on list stops polling once everything is healthy.
+    // Bounded under Portainer's 3s probe timeout: a late answer reads as an
+    // add-on that is down.
+    await Promise.race([
+      ensureHydrated().catch(() => {}),
+      new Promise((resolve) =>
+        setTimeout(resolve, PROBE_PROOF_WAIT_MS).unref(),
+      ),
+    ])
 
     const status = credentialHealth()
     const code = { ok: 200, 'credential-invalid': 401 }[status] ?? 503
