@@ -142,6 +142,7 @@ export function VibeEditTab({
           gitTargetId: gitOpsInfo.gitTargetId,
           branch: gitOpsInfo.gitBranch,
           gitPath,
+          envId,
           appName: name,
           ns: namespace,
           exposeType,

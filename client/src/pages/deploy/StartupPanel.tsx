@@ -1,4 +1,4 @@
-import { Check, Loader2, X } from 'lucide-react'
+import { ArrowLeft, Check, Loader2, X } from 'lucide-react'
 
 import { Button } from '@ds/v3-components/Button/Button'
 import { Timeline, TimelineItem } from '@ds/v3-components/Timeline/Timeline'
@@ -13,8 +13,11 @@ interface StartupPanelProps {
   url: string | null
   errorMsg: string | null
   failStage: 'deploy' | 'start' | null
+  /** The server confirmed it rejected the deploy before writing anything. */
+  retryable: boolean
   onFinish: () => void
   onReset: () => void
+  onEditDetails: () => void
   onKeepWaiting: () => void
 }
 
@@ -31,8 +34,10 @@ export function StartupPanel({
   url,
   errorMsg,
   failStage,
+  retryable,
   onFinish,
   onReset,
+  onEditDetails,
   onKeepWaiting,
 }: StartupPanelProps) {
   const spinner = <Loader2 size={12} className="animate-spin" />
@@ -121,9 +126,11 @@ export function StartupPanel({
       </div>
       <StartupActions
         phase={phase}
+        retryable={retryable}
         url={url}
         onFinish={onFinish}
         onReset={onReset}
+        onEditDetails={onEditDetails}
         onKeepWaiting={onKeepWaiting}
       />
     </div>
@@ -132,15 +139,19 @@ export function StartupPanel({
 
 function StartupActions({
   phase,
+  retryable,
   url,
   onFinish,
   onReset,
+  onEditDetails,
   onKeepWaiting,
 }: {
   phase: StartupPhase | null
+  retryable: boolean
   url: string | null
   onFinish: () => void
   onReset: () => void
+  onEditDetails: () => void
   onKeepWaiting: () => void
 }) {
   if (phase === 'ready') {
@@ -162,7 +173,22 @@ function StartupActions({
   if (phase === 'error') {
     return (
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
-        <Button onClick={onFinish}>View application</Button>
+        {/* Split on what the server actually reported, not on the failure
+            stage: only a rejection raised before anything was committed is safe
+            to correct and retry. Anything else — a post-commit failure, a lost
+            response, a start failure — may have left a real app behind, so we
+            keep the link to it and do not invite a retry that would orphan it. */}
+        {retryable ? (
+          <Button
+            variant="ghost"
+            leftSection={<ArrowLeft size={13} />}
+            onClick={onEditDetails}
+          >
+            Back to details
+          </Button>
+        ) : (
+          <Button onClick={onFinish}>View application</Button>
+        )}
         <Button variant="ghost" onClick={onReset}>
           Start over
         </Button>

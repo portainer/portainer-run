@@ -18,6 +18,11 @@ import yaml from 'js-yaml'
 import { resolvePortainerTarget } from '../resolve-portainer.js'
 import { resolveCallerIdentity, extractToken } from '../lib/identity.js'
 import { portainerRequest } from '../lib/portainer-api.js'
+import { findHostConflict, hostConflictMessage } from '../lib/ingress-host.js'
+import {
+  findStackNameConflict,
+  stackNameConflictMessage,
+} from '../lib/stack-name.js'
 
 /**
  * Handle all /api/vibe/* routes.
@@ -84,6 +89,7 @@ export async function handleVibe(req, res, pathname) {
 }
 
 // --- sanitize helpers (mirrors gitops.js) ---
+
 function sanitizeStackName(name) {
   return name.replace(/[^a-z0-9-]/gi, '-').toLowerCase()
 }
@@ -753,6 +759,33 @@ async function handleVibeDeploy(req, res) {
     buildManifestPath({ pathPrefix: envPrefix, ns, appName: safeApp }),
   )
 
+  // Portainer enforces stack-name uniqueness only at stack creation — the very
+  // last step, by which point the manifest is committed and the app's Secrets
+  // exist. Check first so a duplicate name is a clean rejection instead.
+  const stackConflict = await findStackConflict(req, {
+    envId,
+    ns,
+    appName: safeApp,
+  })
+  // retryable: rejected before ensureBranch, so nothing was written to git or
+  // the cluster and the user can correct the name and try again safely.
+  if (stackConflict)
+    return json(res, 409, { error: stackConflict, retryable: true })
+
+  // Reject a hostname another app already claims before anything is committed to
+  // git or applied to the cluster — the controller would otherwise admit only the
+  // first Ingress and silently serve the wrong app at this URL.
+  if (exposeType === 'Ingress') {
+    const hostConflict = await findIngressHostConflict(req, {
+      envId,
+      ns,
+      appName: safeApp,
+      host: ingress?.host,
+    })
+    if (hostConflict)
+      return json(res, 409, { error: hostConflict, retryable: true })
+  }
+
   try {
     // 1. Ensure branch exists
     await ensureBranch(conn.payload, branch)
@@ -915,6 +948,18 @@ async function handleVibeDeploy(req, res) {
       manifestPath,
       stack: err?.stack,
     })
+    // A stack-name clash Portainer caught that we could not see (GET /api/stacks
+    // hides stacks the caller has no access to) is the caller's problem to fix,
+    // not a server fault — keep it a 409 with a message that says what to do.
+    // Matched on the stack-creation URL specifically: a 409 from anywhere else in
+    // this flow is not a name clash and must not be described as one.
+    if (err?.status === 409 && err?.url?.includes('/api/stacks/create/')) {
+      // Not retryable: this fires after commitFiles and the Secrets, so the
+      // work is already on disk and a retry under a new name would orphan it.
+      return json(res, 409, {
+        error: stackNameConflictMessage({ name: safeApp }, ns),
+      })
+    }
     return json(res, 500, { error: err.message || 'Deploy failed' })
   }
 }
@@ -922,6 +967,101 @@ async function handleVibeDeploy(req, res) {
 // ---------------------------------------------------------------------------
 // Kubernetes Secret creation via Portainer proxy
 // ---------------------------------------------------------------------------
+
+/**
+ * List the Ingresses the caller can see, so a hostname clash can be found before
+ * anything is written to git or the cluster.
+ *
+ * Portainer's own cluster-level ingress endpoint does the access filtering for us:
+ * it lists cluster-wide with a privileged client and then, for a standard user,
+ * narrows the result to that user's accessible namespaces. So one call is correct
+ * for admins and standard users alike — no per-namespace fan-out, and no raw
+ * Kubernetes proxy (which is NOT filtered by Portainer's access policies and would
+ * leak every namespace).
+ *
+ * withServices=false skips Portainer's service-correlation pass, which we do not need.
+ *
+ * @returns {Promise<object[]|null>} K8sIngressInfo structs, or null when the
+ *   listing failed and no check is possible
+ */
+async function listVisibleIngresses(req, envId) {
+  const target = resolvePortainerTarget()
+  if (!target) return null
+
+  // Validate envId is numeric to prevent path injection into the Portainer API
+  const safeEnvId = String(envId)
+  if (!/^\d+$/.test(safeEnvId)) return null
+
+  try {
+    const data = await portainerRequest(
+      target,
+      extractToken(req),
+      'GET',
+      `/api/kubernetes/${safeEnvId}/ingresses?withServices=false`,
+    )
+    return Array.isArray(data) ? data : null
+  } catch (err) {
+    console.warn('[vibe] ingress host check skipped', {
+      message: err?.message || String(err),
+      envId,
+    })
+    return null
+  }
+}
+
+/**
+ * Find a Portainer stack that already owns this name in this namespace.
+ *
+ * Best-effort for the same reason the hostname check is: GET /api/stacks is
+ * filtered to the stacks the caller is authorized to see, while Portainer's own
+ * uniqueness check reads every stack in the datastore. So a stack the caller
+ * cannot see still fails at creation time — which is why the 409 from Portainer
+ * is still surfaced rather than assumed away.
+ *
+ * @returns {Promise<string|null>} the error message when the name is taken
+ */
+async function findStackConflict(req, { envId, ns, appName }) {
+  const target = resolvePortainerTarget()
+  if (!target) return null
+
+  let stacks
+  try {
+    stacks = await portainerRequest(
+      target,
+      extractToken(req),
+      'GET',
+      '/api/stacks',
+    )
+  } catch (err) {
+    console.warn('[vibe] stack name check skipped', {
+      message: err?.message || String(err),
+      envId,
+    })
+    return null
+  }
+  if (!Array.isArray(stacks)) return null
+
+  const conflict = findStackNameConflict(stacks, { envId, ns, name: appName })
+  return conflict ? stackNameConflictMessage(conflict, ns) : null
+}
+
+/**
+ * Reject a hostname another app already claims. Best-effort by design: a standard
+ * user's listing is narrowed to the namespaces they can access, so a clash hiding
+ * outside those namespaces is undetectable, and a check that cannot run never blocks the
+ * deploy.
+ *
+ * @returns {Promise<string|null>} the error message when the hostname is taken
+ */
+async function findIngressHostConflict(req, { envId, ns, appName, host }) {
+  if (!host) return null
+
+  const ingresses = await listVisibleIngresses(req, envId)
+  if (!ingresses) return null
+
+  const conflict = findHostConflict(ingresses, host, { ns, appName })
+  return conflict ? hostConflictMessage(host, conflict) : null
+}
 
 /**
  * Creates (or replaces) a Kubernetes Secret via the Portainer Kubernetes proxy.
@@ -1116,7 +1256,7 @@ async function handleVibeUpdate(req, res) {
 /**
  * POST /api/vibe/update-exposure
  * Body: {
- *   gitTargetId, branch, gitPath, appName, ns,
+ *   gitTargetId, branch, gitPath, appName, ns, envId?,
  *   exposeType: 'none' | 'NodePort' | 'LoadBalancer' | 'Ingress',
  *   port: number,
  *   ingress?: { host, path, ingressClass }
@@ -1137,6 +1277,7 @@ async function handleVibeUpdateExposure(req, res) {
     gitPath,
     appName,
     ns,
+    envId,
     exposeType,
     port,
     ingress,
@@ -1156,6 +1297,19 @@ async function handleVibeUpdateExposure(req, res) {
     !conn.shared
   ) {
     return json(res, 403, { error: 'Forbidden — git target not accessible' })
+  }
+
+  // Same hostname guard as the initial deploy — changing the host here can
+  // collide with an app in another namespace just as easily. Skipped when the
+  // caller did not send envId, since there is then nothing to check against.
+  if (exposeType === 'Ingress' && envId) {
+    const hostConflict = await findIngressHostConflict(req, {
+      envId,
+      ns,
+      appName: sanitizeStackName(appName),
+      host: ingress?.host,
+    })
+    if (hostConflict) return json(res, 409, { error: hostConflict })
   }
 
   try {
