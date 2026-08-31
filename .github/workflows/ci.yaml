@@ -31,9 +31,8 @@ jobs:
             echo "value=${{ github.ref_name }}" >> $GITHUB_OUTPUT
           fi
 
-  build:
+  validate:
     runs-on: ubuntu-latest
-    needs: tag
     steps:
       # Exchange the org's GitHub App credentials for a short-lived, narrowly
       # scoped installation token so checkout can pull the private design-system
@@ -69,6 +68,41 @@ jobs:
       - name: '[validation] run tests'
         run: npm test
 
+  # One job per target arch, built in parallel on native runners (org-level
+  # ubuntu-latest-arm64 runner group for arm64) — no QEMU. Node's V8 JIT
+  # crashes with SIGILL under QEMU user-mode emulation, which is why the
+  # previous single-job multi-arch build hung and timed out. Same pattern as
+  # portainer-idp's build-images job.
+  build:
+    name: build (linux/${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    needs: [tag, validate]
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-latest-arm64
+    steps:
+      # Short-lived token — design-system is a separate private repo the
+      # default token can't see.
+      - name: '[preparation] fetch GitHub App token'
+        id: fetch-token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
+        with:
+          app-id: ${{ secrets.PORTAINER_BOT_ID }}
+          private-key: ${{ secrets.PORTAINER_BOT_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: portainer-run,design-system
+          permission-contents: read
+
+      - name: '[preparation] checkout the current branch'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          submodules: recursive
+          token: ${{ steps.fetch-token.outputs.token }}
+
       - name: '[preparation] capture git commit'
         id: git-info
         run: echo "sha=$(git log -1 --format=%h)" >> "$GITHUB_OUTPUT"
@@ -77,13 +111,13 @@ jobs:
         id: build-date
         run: echo "date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
 
-      - name: '[preparation] set up QEMU'
-        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
-
       - name: '[preparation] set up Docker Buildx'
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
 
-      - name: '[execution] build multi-arch image and export as OCI tarball'
+      # --- pull_request path: fork-safe, no registry credentials ---
+      # Each leg exports a single-arch OCI tarball artifact; the privileged
+      # ci-publish workflow assembles them into one multi-arch tag and pushes.
+      - name: '[execution] build single-arch image and export as OCI tarball'
         if: github.event_name == 'pull_request'
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
         with:
@@ -92,35 +126,40 @@ jobs:
           context: .
           push: false
           load: false
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/${{ matrix.arch }}
           build-args: |
             PORTAINER_RUN_VERSION=${{ needs.tag.outputs.value }}
             GIT_COMMIT=${{ steps.git-info.outputs.sha }}
             BUILD_DATE=${{ steps.build-date.outputs.date }}
           tags: ${{ env.IMAGE_NAME }}:${{ needs.tag.outputs.value }}
-          outputs: type=oci,dest=/tmp/image.tar
-
-      - name: '[execution] save image tag metadata'
-        if: github.event_name == 'pull_request'
-        run: |
-          echo "${{ needs.tag.outputs.value }}" > /tmp/image-tag.txt
+          outputs: type=oci,dest=/tmp/image-${{ matrix.arch }}.tar
 
       - name: '[execution] upload image artifact'
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: pr-image
-          path: /tmp/image.tar
+          name: pr-image-${{ matrix.arch }}
+          path: /tmp/image-${{ matrix.arch }}.tar
           retention-days: 1
 
+      # The tag artifact only needs to exist once — the amd64 leg writes it.
+      - name: '[execution] save image tag metadata'
+        if: github.event_name == 'pull_request' && matrix.arch == 'amd64'
+        run: |
+          echo "${{ needs.tag.outputs.value }}" > /tmp/image-tag.txt
+
       - name: '[execution] upload image tag artifact'
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && matrix.arch == 'amd64'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: pr-image-tag
           path: /tmp/image-tag.txt
           retention-days: 1
 
+      # --- push path: trusted code, push by digest ---
+      # Pushes by digest only (no tag); the manifest job below assembles the
+      # per-arch digests into one multi-arch tag.
+      # https://docs.docker.com/build/ci/github-actions/multi-platform/#distribute-build-across-multiple-runners
       - name: '[preparation] log in to registry'
         if: github.event_name != 'pull_request'
         uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
@@ -128,19 +167,63 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: '[execution] build and push multi-arch image'
+      - name: '[execution] build and push single-arch image by digest'
         if: github.event_name != 'pull_request'
+        id: build
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
         with:
-          # Use the local checkout (with the submodule already fetched) as the
-          # build context, so BuildKit doesn't re-clone the repo over SSH.
           context: .
-          push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/${{ matrix.arch }}
           build-args: |
             PORTAINER_RUN_VERSION=${{ needs.tag.outputs.value }}
             GIT_COMMIT=${{ steps.git-info.outputs.sha }}
             BUILD_DATE=${{ steps.build-date.outputs.date }}
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.tag.outputs.value }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
           sbom: true
           provenance: mode=max
+
+      - name: '[post] export digest'
+        if: github.event_name != 'pull_request'
+        run: |
+          mkdir -p /tmp/digests
+          digest='${{ steps.build.outputs.digest }}'
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: '[post] upload digest artifact'
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: digests-${{ matrix.arch }}
+          path: /tmp/digests/*
+          retention-days: 1
+
+  # Assembles the two per-arch digests pushed above into one multi-arch tag.
+  # push events only — PR images are assembled by the ci-publish workflow,
+  # which is the only place PR-path registry credentials live.
+  manifest:
+    runs-on: ubuntu-latest
+    needs: [tag, build]
+    if: github.event_name != 'pull_request'
+    steps:
+      - name: '[preparation] download digest artifacts'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: digests-*
+          path: /tmp/digests
+          merge-multiple: true
+
+      - name: '[preparation] set up Docker Buildx'
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
+      - name: '[preparation] log in to registry'
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: '[execution] create and push multi-arch manifest'
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.tag.outputs.value }} \
+            $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
