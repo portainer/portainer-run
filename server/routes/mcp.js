@@ -408,7 +408,7 @@ async function toolListIngressClasses(req, args) {
 //
 // The browser UI fills runtime/runtimeImage/startCmd/workDir/port before calling
 // the deploy backend. The MCP path has no UI, so without this it would always
-// deploy a bare node:22-slim image with no start command — which crashloops.
+// deploy a bare node:22 image with no start command — which crashloops.
 // Keep this in sync with the RUNTIMES table in client/src/pages/deploy/runtimes.ts.
 // ---------------------------------------------------------------------------
 
