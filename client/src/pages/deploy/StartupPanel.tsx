@@ -1,4 +1,4 @@
-import { Check, Loader2, X } from 'lucide-react'
+import { ArrowLeft, Check, Loader2, X } from 'lucide-react'
 
 import { Button } from '@ds/v3-components/Button/Button'
 import { Timeline, TimelineItem } from '@ds/v3-components/Timeline/Timeline'
@@ -179,8 +179,12 @@ function StartupActions({
             response, a start failure — may have left a real app behind, so we
             keep the link to it and do not invite a retry that would orphan it. */}
         {retryable ? (
-          <Button variant="ghost" onClick={onEditDetails}>
-            ← Back to details
+          <Button
+            variant="ghost"
+            leftSection={<ArrowLeft size={13} />}
+            onClick={onEditDetails}
+          >
+            Back to details
           </Button>
         ) : (
           <Button onClick={onFinish}>View application</Button>
