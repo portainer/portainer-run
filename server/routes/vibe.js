@@ -1098,12 +1098,18 @@ async function checkWildcardTlsSecret(req, { envId, ns }) {
   const target = resolvePortainerTarget()
   if (!target || !envId) return false
 
+  // Validate envId is numeric to prevent path injection into the Portainer
+  // API, same as listVisibleIngresses; ns is free-form request data, so it
+  // must be encoded rather than interpolated raw into the URL path.
+  const safeEnvId = String(envId)
+  if (!/^\d+$/.test(safeEnvId)) return false
+
   try {
     await portainerRequest(
       target,
       extractToken(req),
       'GET',
-      `/api/endpoints/${envId}/kubernetes/api/v1/namespaces/${ns}/secrets/${WILDCARD_TLS_SECRET_NAME}`,
+      `/api/endpoints/${safeEnvId}/kubernetes/api/v1/namespaces/${encodeURIComponent(ns)}/secrets/${WILDCARD_TLS_SECRET_NAME}`,
     )
     return true
   } catch (err) {
