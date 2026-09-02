@@ -1113,10 +1113,14 @@ async function checkWildcardTlsSecret(req, { envId, ns }) {
     )
     return true
   } catch (err) {
-    // A 404 is the normal, expected "not present yet" case — not worth logging.
-    if (err?.status !== 404) {
+    // 404 (secret not present yet) and 401/403 (caller can't read Secrets in
+    // this namespace — expected whenever the deploying user's own RBAC
+    // doesn't grant it, per this function's own best-effort contract above)
+    // are all normal, expected outcomes — not worth logging.
+    if (![401, 403, 404].includes(err?.status)) {
       console.warn('[vibe] wildcard TLS secret check skipped', {
         message: err?.message || String(err),
+        status: err?.status,
         envId,
         ns,
       })
