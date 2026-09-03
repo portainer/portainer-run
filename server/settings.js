@@ -79,8 +79,12 @@ export function isConfigured() {
   return encryptionKey().length >= MIN_ENCRYPTION_KEY_LENGTH
 }
 
+// Unset disables MCP deploys: the relay carries app source, so egress is the operator's call.
 export function gatewayUrl() {
-  return getSetting('GATEWAY_URL').replace(/\/$/, '')
+  const raw = getSetting('GATEWAY_URL').trim()
+  if (!raw) return ''
+  const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
+  return url.replace(/\/+$/, '')
 }
 
 export function baseDomain() {
@@ -115,6 +119,7 @@ export function settingsStatus() {
     lastError,
     hasCredential: hasMachineCredential(),
     credential: credentialHealth(),
+    gateway: gatewayUrl(),
   }
 }
 
