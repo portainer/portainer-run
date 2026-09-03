@@ -20,6 +20,10 @@ import { resolveCallerIdentity, extractToken } from '../lib/identity.js'
 import { portainerRequest } from '../lib/portainer-api.js'
 import { findHostConflict, hostConflictMessage } from '../lib/ingress-host.js'
 import {
+  wildcardTlsBlock,
+  WILDCARD_TLS_SECRET_NAME,
+} from '../lib/ingress-tls.js'
+import {
   findStackNameConflict,
   stackNameConflictMessage,
 } from '../lib/stack-name.js'
@@ -357,6 +361,7 @@ function buildVibeManifests({
   exposeType,
   servicePorts,
   ingress,
+  hasWildcardTlsSecret,
   gitopsAnnotations,
   gitRepoUrl,
   gitBranch,
@@ -627,6 +632,13 @@ function buildVibeManifests({
           ...(ingress.ingressClass
             ? { ingressClassName: ingress.ingressClass }
             : {}),
+          // Reference the wildcard secret only when the caller already
+          // confirmed it exists in this namespace — never guessed at here,
+          // since a tls: block naming a Secret that doesn't exist is worse
+          // than no tls: block at all.
+          ...(hasWildcardTlsSecret
+            ? { tls: wildcardTlsBlock(ingress.host) }
+            : {}),
           rules: [
             {
               host: ingress.host,
@@ -852,6 +864,13 @@ async function handleVibeDeploy(req, res) {
     const initCredToken = isGitSource ? sourceGitToken : gitToken
     const initCredUsername = isGitSource ? sourceGitUsername : gitUsername
 
+    // Checked fresh on every deploy, never cached — see
+    // checkWildcardTlsSecret's own doc for why.
+    const hasWildcardTlsSecret =
+      exposeType === 'Ingress' && ingress?.host
+        ? await checkWildcardTlsSecret(req, { envId, ns })
+        : false
+
     const manifests = buildVibeManifests({
       appName: safeApp,
       ns,
@@ -860,6 +879,7 @@ async function handleVibeDeploy(req, res) {
       exposeType: exposeType || 'none',
       servicePorts: servicePorts || [3000],
       ingress: ingress || {},
+      hasWildcardTlsSecret,
       gitopsAnnotations,
       gitRepoUrl: initCloneUrl,
       gitBranch: initBranch,
@@ -1061,6 +1081,52 @@ async function findIngressHostConflict(req, { envId, ns, appName, host }) {
 
   const conflict = findHostConflict(ingresses, host, { ns, appName })
   return conflict ? hostConflictMessage(host, conflict) : null
+}
+
+/**
+ * Whether the app's own namespace already has the wildcard TLS secret —
+ * checked fresh on every deploy rather than cached anywhere, so a secret
+ * added, rotated, or removed between deploys is always picked up on the next
+ * one. Best-effort like every other pre-deploy check here: a namespace the
+ * caller cannot read, or a Portainer/network hiccup, means "no secret found",
+ * not a hard failure — Ingress creation must never break over this optional
+ * enhancement.
+ *
+ * @returns {Promise<boolean>}
+ */
+async function checkWildcardTlsSecret(req, { envId, ns }) {
+  const target = resolvePortainerTarget()
+  if (!target || !envId) return false
+
+  // Validate envId is numeric to prevent path injection into the Portainer
+  // API, same as listVisibleIngresses; ns is free-form request data, so it
+  // must be encoded rather than interpolated raw into the URL path.
+  const safeEnvId = String(envId)
+  if (!/^\d+$/.test(safeEnvId)) return false
+
+  try {
+    await portainerRequest(
+      target,
+      extractToken(req),
+      'GET',
+      `/api/endpoints/${safeEnvId}/kubernetes/api/v1/namespaces/${encodeURIComponent(ns)}/secrets/${WILDCARD_TLS_SECRET_NAME}`,
+    )
+    return true
+  } catch (err) {
+    // 404 (secret not present yet) and 401/403 (caller can't read Secrets in
+    // this namespace — expected whenever the deploying user's own RBAC
+    // doesn't grant it, per this function's own best-effort contract above)
+    // are all normal, expected outcomes — not worth logging.
+    if (![401, 403, 404].includes(err?.status)) {
+      console.warn('[vibe] wildcard TLS secret check skipped', {
+        message: err?.message || String(err),
+        status: err?.status,
+        envId,
+        ns,
+      })
+    }
+    return false
+  }
 }
 
 /**
@@ -1357,6 +1423,13 @@ async function handleVibeUpdateExposure(req, res) {
       newDocs.push(serializeManifests([svc]).trim())
 
       if (exposeType === 'Ingress' && ingress?.host) {
+        // Checked fresh on every deploy, never cached — see
+        // checkWildcardTlsSecret's own doc for why.
+        const hasWildcardTlsSecret = await checkWildcardTlsSecret(req, {
+          envId,
+          ns,
+        })
+
         const ing = {
           apiVersion: 'networking.k8s.io/v1',
           kind: 'Ingress',
@@ -1377,6 +1450,9 @@ async function handleVibeUpdateExposure(req, res) {
             // annotation above is kept for legacy controllers).
             ...(ingress.ingressClass
               ? { ingressClassName: ingress.ingressClass }
+              : {}),
+            ...(hasWildcardTlsSecret
+              ? { tls: wildcardTlsBlock(ingress.host) }
               : {}),
             rules: [
               {
