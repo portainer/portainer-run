@@ -23,6 +23,7 @@ import {
   wildcardTlsBlock,
   WILDCARD_TLS_SECRET_NAME,
 } from '../lib/ingress-tls.js'
+import { pomeriumAnnotations } from '../lib/ingress-pomerium.js'
 import {
   findStackNameConflict,
   stackNameConflictMessage,
@@ -623,6 +624,7 @@ function buildVibeManifests({
             ? {
                 ...annotations,
                 'kubernetes.io/ingress.class': ingress.ingressClass,
+                ...pomeriumAnnotations(ingress.ingressClass),
               }
             : annotations,
         },
@@ -1441,6 +1443,7 @@ async function handleVibeUpdateExposure(req, res) {
               ? {
                   annotations: {
                     'kubernetes.io/ingress.class': ingress.ingressClass,
+                    ...pomeriumAnnotations(ingress.ingressClass),
                   },
                 }
               : {}),
