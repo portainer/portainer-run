@@ -16,42 +16,6 @@
 // drifted between the UI and MCP (#88).
 // ---------------------------------------------------------------------------
 
-const STATIC_EXTENSIONS = new Set([
-  '.html',
-  '.htm',
-  '.css',
-  '.js',
-  '.mjs',
-  '.json',
-  '.ts',
-  '.png',
-  '.jpg',
-  '.jpeg',
-  '.gif',
-  '.svg',
-  '.ico',
-  '.webp',
-  '.woff',
-  '.woff2',
-  '.ttf',
-  '.eot',
-  '.otf',
-  '.mp4',
-  '.webm',
-  '.mp3',
-  '.ogg',
-  '.pdf',
-  '.txt',
-  '.md',
-  '.xml',
-  '.csv',
-])
-
-function isStaticFile(name) {
-  const dot = name.lastIndexOf('.')
-  return dot >= 0 && STATIC_EXTENSIONS.has(name.slice(dot).toLowerCase())
-}
-
 // Some runtime images de-privilege at startup: they start as root, chown their
 // working/cache dirs to a worker user, and bind a privileged port. With ALL
 // capabilities dropped they fail at boot ("Operation not permitted" on chown).
@@ -244,12 +208,8 @@ export function detectRuntime(files) {
   for (const rt of RUNTIMES) {
     if (rt.detect?.(names)) return rt
   }
-  // Static site: every file is a static asset. The no-match case lands here
-  // too — nginx is the safe fallback either way.
-  const nonEnv = files.filter((f) => !f.name.endsWith('.env.example'))
-  if (nonEnv.length > 0 && nonEnv.every((f) => isStaticFile(f.name))) {
-    return NGINX_RUNTIME
-  }
+  // Anything not recognised as node, python, php or ruby — a static site, an
+  // empty upload, a lone .env.example, an unknown file type — is served by nginx.
   return NGINX_RUNTIME
 }
 
