@@ -416,7 +416,7 @@ export function ServiceDetailPage() {
                   // git annotations means no cleanup and no checkbox, and the
                   // delete still reports success.
                   disabled={!d || !perms?.canDelete}
-                  title={
+                  disabledReason={
                     !perms?.canDelete
                       ? 'You do not have permission to delete workloads in this environment'
                       : undefined

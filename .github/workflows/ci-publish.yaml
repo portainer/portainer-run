@@ -27,11 +27,13 @@ jobs:
       github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - name: '[preparation] download image artifact'
+      # One single-arch OCI tarball per arch, built on native runners in ci.
+      - name: '[preparation] download image artifacts'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: pr-image
+          pattern: pr-image-*
           path: /tmp
+          merge-multiple: true
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -69,7 +71,8 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: '[execution] push image to registry'
-        # Extract the pre-built OCI tarball and push via imagetools create.
+        # Extract the two pre-built single-arch OCI tarballs and assemble them
+        # into one multi-arch tag via imagetools create.
         # Specify the tag explicitly in the oci-layout reference — Docker 28+ /
         # BuildKit v0.29+ no longer resolves an untagged oci-layout reference
         # and defaults to :latest, which won't exist in the layout.
@@ -79,11 +82,14 @@ jobs:
         # The fork's code was compiled in the sandboxed ci workflow — we never
         # execute it here.
         run: |
-          mkdir /tmp/image-oci
-          tar -xf /tmp/image.tar -C /tmp/image-oci
+          for arch in amd64 arm64; do
+            mkdir "/tmp/image-oci-${arch}"
+            tar -xf "/tmp/image-${arch}.tar" -C "/tmp/image-oci-${arch}"
+          done
           docker buildx imagetools create \
             --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.value }} \
-            "oci-layout:///tmp/image-oci:${{ steps.tag.outputs.value }}"
+            "oci-layout:///tmp/image-oci-amd64:${{ steps.tag.outputs.value }}" \
+            "oci-layout:///tmp/image-oci-arm64:${{ steps.tag.outputs.value }}"
 
       - name: '[execution] post PR comment'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0

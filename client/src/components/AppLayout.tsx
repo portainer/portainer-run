@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useMemo, useState } from 'react'
+import { forwardRef, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Box, Home, MessageSquare, type LucideIcon } from 'lucide-react'
 
@@ -106,19 +106,28 @@ const ShellLink = forwardRef<
   return <Link ref={ref} to={to ?? '#'} {...rest} />
 })
 
-function useShellBreadcrumbs(): BreadcrumbItem[] {
+function useShellBreadcrumbs(appSwitcher?: ReactNode): BreadcrumbItem[] {
   const { pathname } = useLocation()
   const items = getBreadcrumbItems(pathname)
+  const isAppRoute = appFromPath(pathname) !== null
   return [
     {
       label: '',
       icon: <Home size={14} />,
       linkProps: { to: ROUTES.dashboard },
     },
-    ...items.map((item: { label: string; to?: string; current?: boolean }) => ({
-      label: item.label,
-      linkProps: item.to ? { to: item.to } : undefined,
-    })),
+    ...items.map(
+      (item: { label: string; to?: string; current?: boolean }, i: number) => ({
+        label: item.label,
+        linkProps: item.to ? { to: item.to } : undefined,
+        // On an app route getBreadcrumbItems always emits
+        // [Applications, <app name>, …], so index 1 is the app crumb — the
+        // one the switcher replaces. Matching on the label instead would
+        // misfire on an app named after a tab.
+        switcher:
+          isAppRoute && i === 1 && appSwitcher ? appSwitcher : undefined,
+      }),
+    ),
   ]
 }
 
@@ -260,7 +269,71 @@ export function AppLayout() {
       .flatMap((s) => s.items)
       .find((item) => pathname.startsWith(item.path))?.id ?? ''
 
-  const breadcrumbs = useShellBreadcrumbs()
+  /* Every app the user can reach, as switcher items. Labels are the bare app
+     name: nearly every user can deploy into a single environment, so the
+     environment adds noise to every row to disambiguate a case they will not
+     hit. Ids stay the full env/ns/name key, so apps that do share a name
+     across environments remain distinct targets. */
+  const appSwitcherItems = useMemo(() => {
+    const visibleEnvIds = new Set(
+      environments
+        .filter((e) => !disabledEnvs?.[String(e.Id)])
+        .map((e) => String(e.Id)),
+    )
+    return deployments
+      .filter((d) => visibleEnvIds.has(String(d._envId)))
+      .map((d) => ({
+        envId: String(d._envId),
+        namespace: d.metadata?.namespace ?? '',
+        name: d.metadata?.name ?? '',
+      }))
+      .filter((r) => r.name)
+      .map((r) => ({ id: favoriteKey(r), label: r.name, target: r }))
+      .sort((a, b) =>
+        a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }),
+      )
+  }, [environments, disabledEnvs, deployments])
+
+  /* Keep the tab when switching apps — going from one app's Logs to another's
+     Logs is the point of switching here. */
+  const currentTab = useMemo(() => {
+    const segs = pathname.split('/').filter(Boolean)
+    return segs[0] === 'applications' && segs.length >= 5
+      ? decodeURIComponent(segs[4])
+      : 'overview'
+  }, [pathname])
+
+  /* Only once the current app is actually in the list: ApplicationSwitcher
+     falls back to items[0] when `selected` matches nothing, which would show
+     the wrong app (or crash on an empty list) while the cache is still
+     loading. Until then the crumb stays plain text. */
+  const currentAppId = currentApp ? favoriteKey(currentApp) : null
+  const appSwitcher =
+    currentAppId &&
+    appSwitcherItems.length > 1 &&
+    appSwitcherItems.some((i) => i.id === currentAppId) ? (
+      <ApplicationSwitcher
+        inlineMode
+        selected={currentAppId}
+        items={appSwitcherItems.map(({ id, label }) => ({ id, label }))}
+        searchable={appSwitcherItems.length > 7}
+        dropdownLabel="Applications"
+        onChange={(id: string) => {
+          const hit = appSwitcherItems.find((i) => i.id === id)
+          if (!hit || id === currentAppId) return
+          navigate(
+            serviceDetailPath(
+              hit.target.envId,
+              hit.target.namespace,
+              hit.target.name,
+              currentTab,
+            ),
+          )
+        }}
+      />
+    ) : undefined
+
+  const breadcrumbs = useShellBreadcrumbs(appSwitcher)
 
   // Other products are separately served apps, not routes in this SPA.
   function handleProductChange(id: string) {
@@ -271,7 +344,6 @@ export function AppLayout() {
 
   return (
     <div
-      className={currentApp ? undefined : 'pr-hide-fav-star'}
       style={{
         display: 'flex',
         width: '100%',
@@ -279,10 +351,6 @@ export function AppLayout() {
         overflow: 'hidden',
       }}
     >
-      {/* Only app detail pages can be favorited. The design-system header always
-          renders its star button, so hide it everywhere else via its stable
-          aria-label rather than patching the read-only submodule. */}
-      <style>{`.pr-hide-fav-star button[aria-label="Add to favourites"],.pr-hide-fav-star button[aria-label="Remove from favourites"]{display:none}`}</style>
       {/* App shell shrinks to make room for the assistant panel instead of being
           covered by it. */}
       <div style={{ flex: 1, minWidth: 0, height: '100vh' }}>
@@ -304,6 +372,7 @@ export function AppLayout() {
             />
           )}
           breadcrumbs={breadcrumbs}
+          showStar={!!currentApp}
           starred={starred}
           onStarToggle={
             currentApp ? () => toggleFavorite(currentApp) : undefined
