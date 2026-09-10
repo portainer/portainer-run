@@ -25,9 +25,10 @@
 
     "paths": {
       "@/*": ["./src/*"],
-      "@ds/*": ["./design-system/src/*"]
+      "@ds/*": ["./design-system/src/*"],
+      "@shared/*": ["../shared/*"]
     }
   },
-  "include": ["src"],
+  "include": ["src", "../shared"],
   "exclude": ["node_modules", "design-system"]
 }

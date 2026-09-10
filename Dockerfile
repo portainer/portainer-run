@@ -6,6 +6,9 @@ WORKDIR /build
 COPY client/package.json ./
 RUN npm install
 COPY client/ ./
+# Runtime catalogue, imported through the @shared alias (resolved to ../shared,
+# matching the repo layout). Must land beside /build, not inside it.
+COPY shared/ /shared/
 RUN npm run build
 
 # Stage 2: Install server dependencies
@@ -30,6 +33,10 @@ COPY --from=build-ui /build/dist ./client/dist
 
 # Server source
 COPY server/ ./server/
+
+# Runtime catalogue shared by the server, the MCP path and the client build.
+# Sibling of server/ here, as in the repo, so ../shared/runtimes.js resolves.
+COPY shared/ ./shared/
 
 # Server node_modules (js-yaml only)
 COPY --from=build-server /deps/node_modules ./server/node_modules
