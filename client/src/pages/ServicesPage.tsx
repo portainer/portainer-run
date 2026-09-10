@@ -866,7 +866,7 @@ export function ServicesPage() {
           skeletonRowCount={5}
           emptyMessage={emptyMessage}
           totalCount={visibleItems.length}
-          countLabel="applications"
+          countLabel={{ one: 'application', other: 'applications' }}
           page={clampedPage}
           totalPages={totalPages}
           pageSize={PAGE_SIZE}
