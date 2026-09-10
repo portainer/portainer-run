@@ -434,12 +434,13 @@ export function ServicesPage() {
         return byName(a, b)
       }
     } else if (listSort === 'age') {
-      // Newest first at 'asc' — "Created" in the Sort menu, and most-recent
-      // at the top is the useful default for a deploy list.
+      // Plain ascending (oldest first) so the header arrow means the same
+      // thing on every column; applySort picks 'desc' when this column is
+      // first chosen, which is what puts the newest deploy at the top.
       cmp = (a, b) => {
         const at = new Date(a.d.metadata?.creationTimestamp || 0).getTime()
         const bt = new Date(b.d.metadata?.creationTimestamp || 0).getTime()
-        return bt - at
+        return at - bt
       }
     } else {
       cmp = byName
@@ -505,10 +506,14 @@ export function ServicesPage() {
   }
 
   function applySort(key: string) {
-    // The same column again flips direction; a new column starts ascending.
+    // The same column again flips direction. A new column starts ascending,
+    // except Created, where newest-first is the useful default for a deploy
+    // list.
+    const flipped: SortDir = sortDir === 'asc' ? 'desc' : 'asc'
+    const initial: SortDir = key === 'age' ? 'desc' : 'asc'
     patchQuery({
       sortBy: key,
-      sortDir: listSort === key && sortDir === 'asc' ? 'desc' : 'asc',
+      sortDir: listSort === key ? flipped : initial,
       page: '1',
     })
   }
