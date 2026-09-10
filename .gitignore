@@ -5,3 +5,6 @@ dist/
 data
 bun.lock
 .eslintcache
+
+# Local addon-dev overrides (DEV_ADDON_VALUES) — never committed
+dev-values.yaml

@@ -1,0 +1,22 @@
+# Template for dev-values.yaml — Helm values merged over the install form's request
+# (yours win), so the release runs your locally-built image. `pnpm run redeploy`
+# creates the copy on its first run and reads image.repository and image.tag back from
+# it, so the tag it builds is the one the release runs. Only needed for the image loop,
+# not the Vite UI loop. The copy is gitignored.
+#
+# Inert until the rig points at it: set DEV_ADDON_VALUES in
+# portainer-suite/package/server-ee/dev/mirrord/local.env — see
+# docs/developing-inside-portainer.md in the portal-template repo.
+image:
+  repository: portainer-run
+  tag: local
+  # Use the node-loaded image when present; otherwise the kubelet tries a registry.
+  pullPolicy: IfNotPresent
+# This add-on's server calls Portainer, which in the dev rig runs on your host — so
+# the chart default (portainer.portainer.svc.cluster.local) points at nothing. Reach
+# your host instead; how depends on the cluster:
+#   Docker/Rancher Desktop: https://host.docker.internal:9443
+#   kind or k3d on Linux:   https://<your host LAN IP>:9443
+#   minikube:               https://host.minikube.internal:9443
+#configMap:
+#  PORTAINER_URL: https://host.docker.internal:9443

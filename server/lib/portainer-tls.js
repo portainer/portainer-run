@@ -7,6 +7,7 @@
 import https from 'node:https'
 import http from 'node:http'
 import { portainerCA, portainerCAUnreadable } from '../machine-credential.js'
+import { noteOutcome } from './credential-fault.js'
 
 /** Without this, a blackholed Portainer hangs every request queued behind it. */
 const READ_TIMEOUT_MS = 10_000
@@ -139,9 +140,17 @@ function verifyPeer(req, socket) {
   // for a binding this does not rely on, and expiry has no republishing of its
   // own — a Repair would hand back the same certificate, with no way out.
   const leaf = socket.getPeerCertificate(false)?.raw
-  if (leaf && publishedCertificates(ca).some((der) => der.equals(leaf))) return
+  if (leaf && publishedCertificates(ca).some((der) => der.equals(leaf))) {
+    noteOutcome({ certificateTrusted: true })
+    return
+  }
 
-  if (socket.authorized) return
+  if (socket.authorized) {
+    noteOutcome({ certificateTrusted: true })
+    return
+  }
+
+  noteOutcome({ certificateTrusted: false })
 
   const err = new Error(
     "Portainer's TLS certificate is neither the one published with the add-on " +

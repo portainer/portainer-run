@@ -11,11 +11,13 @@
 import { portainerRequest } from './lib/portainer-api.js'
 import { resolvePortainerTarget } from './resolve-portainer.js'
 import {
+  credentialWithdrawn,
   hasMachineCredential,
   machineToken,
   machineTokenUnreadable,
   portainerCAUnreadable,
 } from './machine-credential.js'
+import { credentialFailure } from './lib/credential-fault.js'
 
 const ADDON_ID = 'portainer-run'
 
@@ -52,8 +54,6 @@ let hydratedAt = null
 let lastError = null
 /** @type {Promise<boolean> | null} */
 let inFlight = null
-/** Why this add-on's own credential last failed: null, 'rejected' or 'certificate'. */
-let credentialFailure = null
 /** Whether Portainer holds this add-on's ENCRYPTION_KEY. */
 let keyCameFromPortainer = false
 /**
@@ -133,10 +133,12 @@ export function credentialHealth() {
   // cannot present, so ask that before asking whether it works.
   if (credentialUnreadable()) return 'credential-invalid'
 
-  // A credential since removed has nothing left to repair.
+  if (credentialWithdrawn()) return 'credential-invalid'
+
+  // Never issued one: nothing to repair.
   if (!hasMachineCredential()) return 'ok'
 
-  if (credentialFailure) return 'credential-invalid'
+  if (credentialFailure()) return 'credential-invalid'
   // Env-seeded settings skip hydration, so never hydrating is not a fault.
   if (hydratedAt === null && !isConfigured()) return 'settings-unavailable'
 
@@ -155,31 +157,25 @@ const HYDRATE_RETRY_INTERVAL = 15_000
 let lastHydrateAttempt = 0
 
 /**
- * Which half of the credential failed. A refused token and an untrusted
- * certificate need the same repair, so /healthz reports which one it was
- * without echoing the upstream message to an unauthenticated caller.
- *
- * @returns {'rejected' | 'certificate' | null}
+ * How long a hydrated add-on trusts its last proof that the credential works.
+ * Nothing expires the settings themselves; an add-on nobody is using makes no
+ * other call to find a credential broken since.
  */
-function failureCause(e) {
-  if (e?.status === 401 || e?.status === 403) return 'rejected'
+const CREDENTIAL_PROOF_TTL = 5 * 60_000
 
-  const code = e?.code
-  if (
-    typeof code === 'string' &&
-    (code.includes('CERT') || code.startsWith('ERR_TLS'))
-  ) {
-    return 'certificate'
-  }
+function overdueForProof() {
+  // Env seeds were never proved by a call, so there is nothing to re-prove.
+  if (hydratedAt === null) return false
 
-  return null
+  return Date.now() - hydratedAt >= CREDENTIAL_PROOF_TTL
 }
 
-/** @returns {'rejected' | 'certificate' | 'unreadable' | undefined} */
+/** @returns {'rejected' | 'certificate' | 'unreadable' | 'withdrawn' | undefined} */
 export function credentialFault() {
   if (credentialUnreadable()) return 'unreadable'
+  if (credentialWithdrawn()) return 'withdrawn'
 
-  return credentialFailure ?? undefined
+  return credentialFailure() ?? undefined
 }
 
 /**
@@ -201,7 +197,7 @@ async function hydrate(adminToken) {
   // that credential has been refused, so a broken one can be recovered without
   // uninstalling.
   const asAdmin =
-    Boolean(adminToken) && (!machine || credentialFailure !== null)
+    Boolean(adminToken) && (!machine || credentialFailure() !== null)
   const token = asAdmin ? adminToken : machine
   if (!token) {
     lastError =
@@ -231,16 +227,9 @@ async function hydrate(adminToken) {
     hydratedAt = Date.now()
     lastError = null
     keyCameFromPortainer = 'ENCRYPTION_KEY' in fetched
-    // A borrowed admin token says nothing about this add-on's credential, so a
-    // fetch that worked around a broken one leaves the fault standing.
-    if (!asAdmin) credentialFailure = null
     return true
   } catch (e) {
     lastError = e instanceof Error ? e.message : String(e)
-    // Only a recognised cause replaces a recorded one. A 500 says nothing about
-    // the credential, and letting it clear a known rejection would report the
-    // add-on healthy with nothing left to retry.
-    if (!asAdmin) credentialFailure = failureCause(e) ?? credentialFailure
     return false
   }
 }
@@ -293,7 +282,7 @@ export function refetch(adminToken) {
 export function ensureHydrated(adminToken) {
   // Settings can be live from an env seed or an earlier fetch while the
   // credential is not, so being configured is not on its own a reason to stop.
-  if (isConfigured() && credentialHealth() === 'ok')
+  if (isConfigured() && credentialHealth() === 'ok' && !overdueForProof())
     return Promise.resolve(true)
   if (!machineToken() && !adminToken) return Promise.resolve(false)
   if (inFlight) return inFlight

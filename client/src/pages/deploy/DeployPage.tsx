@@ -193,6 +193,10 @@ export function VibeDeploy() {
   const [startupFailStage, setStartupFailStage] = useState<
     'deploy' | 'start' | null
   >(null)
+  // Set only when the server confirms it rejected the deploy before writing
+  // anything. Defaults false so an unknown failure is treated as "an app may
+  // exist" rather than offering a retry that could orphan what was created.
+  const [startupRetryable, setStartupRetryable] = useState(false)
   // Cancels the poll loop on unmount / navigation; sp used by "keep waiting".
   const startupCancelRef = useRef(false)
   const startupSpRef = useRef<DeployStagedParams | null>(null)
@@ -730,6 +734,7 @@ export function VibeDeploy() {
     setStartupUrl(null)
     setStartupErrorMsg(null)
     setStartupFailStage(null)
+    setStartupRetryable(false)
     setStartupPhase('deploying')
     try {
       const res = await serverFetch('/api/vibe/deploy', {
@@ -757,7 +762,12 @@ export function VibeDeploy() {
         }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
+      if (!res.ok) {
+        // The server is the only side that knows whether it got as far as
+        // committing; `errMessage` would flatten that away.
+        setStartupRetryable(Boolean(data?.retryable))
+        throw new Error(data?.error || `HTTP ${res.status}`)
+      }
       // Deploy accepted — now wait for the app to actually come up. Kick off the
       // background cache refreshes so the Applications list is warm once we finish.
       schedulePostDeployRefreshes()
@@ -850,6 +860,7 @@ export function VibeDeploy() {
     setStartupUrl(null)
     setStartupErrorMsg(null)
     setStartupFailStage(null)
+    setStartupRetryable(false)
     setFiles([])
     setStagedParams(null)
     setRuntimeConfirmed(false)
@@ -862,6 +873,23 @@ export function VibeDeploy() {
     setIngHost('')
     setIngClass('')
     goTo('files')
+  }
+
+  // Return to the details step with everything the user entered still in place,
+  // so a rejected deploy can be corrected rather than retyped. Mirrors the
+  // storage step's Back button: the staged params are rebuilt by
+  // confirmDeployConfig on the way forward, so dropping them here is safe.
+  function editDeployDetails() {
+    startupCancelRef.current = true
+    setStartupPhase(null)
+    setStartupReason(null)
+    setStartupUrl(null)
+    setStartupErrorMsg(null)
+    setStartupFailStage(null)
+    setStartupRetryable(false)
+    setDeployConfigConfirmed(false)
+    setStagedParams(null)
+    goTo('details')
   }
 
   function finishToServices() {
@@ -1123,8 +1151,10 @@ export function VibeDeploy() {
                   url={startupUrl}
                   errorMsg={startupErrorMsg}
                   failStage={startupFailStage}
+                  retryable={startupRetryable}
                   onFinish={finishToServices}
                   onReset={resetDeployForm}
+                  onEditDetails={editDeployDetails}
                   onKeepWaiting={resumeWaiting}
                 />
               )

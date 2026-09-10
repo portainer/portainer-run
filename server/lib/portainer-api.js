@@ -1,5 +1,7 @@
 import { portainerAuthHeaders } from './identity.js'
 import { portainerHttpRequest } from './portainer-tls.js'
+import { noteOutcome } from './credential-fault.js'
+import { machineToken } from '../machine-credential.js'
 
 /**
  * Request Portainer's API. `token` is either the inbound caller's own
@@ -20,6 +22,9 @@ export function portainerRequest(
   body,
   contentType = 'application/json',
 ) {
+  const usedMachineCredential =
+    token.startsWith('paddon_') && token === machineToken()
+
   return new Promise((resolve, reject) => {
     const headers = { 'Content-Type': contentType, Accept: 'application/json' }
     if (token) Object.assign(headers, portainerAuthHeaders(token))
@@ -33,6 +38,7 @@ export function portainerRequest(
         upRes.on('data', (c) => chunks.push(c))
         upRes.on('end', () => {
           const text = Buffer.concat(chunks).toString('utf8')
+          noteOutcome({ usedMachineCredential, status: upRes.statusCode })
           if (upRes.statusCode >= 400) {
             // Keep the method/path/status alongside Portainer's own message so a
             // routing 404 ("Not Found") is distinguishable from a resource 404.
