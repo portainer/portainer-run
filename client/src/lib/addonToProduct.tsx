@@ -12,7 +12,11 @@ export function addonToProduct(addon: AddonsAddonListItem): SwitcherProduct {
     // fall back to the full description until the catalog serves shortDescription.
     description: addon.shortDescription ?? addon.description!,
     available: true,
-    logo: <img src={addon.icon} alt={addon.displayName} />,
+    // An add-on declares its own icon path, which may be absent or may 404
+    // under whatever base path it is mounted at. The switcher's avatar handles
+    // that miss itself, so this stays a plain image; the alt is empty because
+    // the switcher prints the label right beside it.
+    logo: <img src={addon.icon} alt="" />,
     path: addon.path!,
   }
 }
