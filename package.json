@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "pnpm --dir client run dev",
     "start": "node server/server.js",
-    "test": "node --test \"server/**/*.test.js\" \"test/**/*.test.js\"",
+    "test": "node --test \"server/**/*.test.js\" \"test/**/*.test.js\" && pnpm --filter portainer-run-ui test",
     "build": "pnpm --dir client run build",
     "preview": "pnpm --dir client run preview",
     "docker:run": "bash scripts/docker-run.sh",
