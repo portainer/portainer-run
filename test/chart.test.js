@@ -67,6 +67,20 @@ describe('chart', { skip: hasHelm ? false : 'helm is not installed' }, () => {
     assert.doesNotMatch(out, /SOME_OTHER_KEY/)
   })
 
+  // The label is what hides the namespace holding Run's machine token from
+  // list_namespaces, so users can't deploy alongside it.
+  test('the namespace is labelled as a Portainer system namespace', () => {
+    const namespace = render()
+      .split(/^---$/m)
+      .find((doc) => /^kind: Namespace$/m.test(doc))
+
+    assert.ok(namespace, 'no Namespace was rendered')
+    assert.match(
+      namespace,
+      /^metadata:\n(?:  .*\n)*  labels:\n(?:    .*\n)*    io\.portainer\.kubernetes\.namespace\.system: "true"$/m,
+    )
+  })
+
   // A fresh render cannot show why this is maxSurge and not Recreate — see the
   // template.
   test('the deployment replaces its pod rather than surging a second one', () => {
