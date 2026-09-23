@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Stage 1: Build the Vite client
-FROM node:24-alpine AS build-ui
+FROM node:25-alpine AS build-ui
 WORKDIR /build
 # pnpm version comes from package.json's `packageManager` field.
 RUN corepack enable
@@ -19,7 +19,7 @@ RUN pnpm --filter portainer-run-ui run build
 
 # Stage 2: Install server dependencies
 # node:sqlite is built into Node — no native build tools needed
-FROM node:24-alpine AS build-server
+FROM node:25-alpine AS build-server
 WORKDIR /build
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -32,7 +32,7 @@ COPY server/package.json ./server/
 RUN pnpm --filter portainer-run-server deploy --prod --legacy --ignore-scripts /deps
 
 # Stage 3: Slim runtime image
-FROM node:24-alpine AS runtime
+FROM node:25-alpine AS runtime
 
 # Not needed at runtime (only used to install deps during the build stages) — strip them to
 # shrink the image and reduce CVE surface.
