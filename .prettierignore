@@ -1,4 +1,5 @@
 dist
+pnpm-lock.yaml
 client/design-system
 
 # Helm templates use Go template syntax ({{ ... }}), which isn't valid YAML

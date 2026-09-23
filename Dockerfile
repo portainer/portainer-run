@@ -3,20 +3,33 @@
 # Stage 1: Build the Vite client
 FROM node:24-alpine AS build-ui
 WORKDIR /build
-COPY client/package.json ./
-RUN npm install
-COPY client/ ./
+# pnpm version comes from package.json's `packageManager` field.
+RUN corepack enable
+# Workspace manifests first, for layer caching. Every package.json the lockfile
+# names must be present or --frozen-lockfile rejects it.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY client/package.json ./client/
+COPY server/package.json ./server/
+RUN pnpm install --frozen-lockfile --filter portainer-run-ui
+COPY client/ ./client/
 # Runtime catalogue, imported through the @shared alias (resolved to ../shared,
-# matching the repo layout). Must land beside /build, not inside it.
-COPY shared/ /shared/
-RUN npm run build
+# matching the repo layout).
+COPY shared/ ./shared/
+RUN pnpm --filter portainer-run-ui run build
 
 # Stage 2: Install server dependencies
 # node:sqlite is built into Node — no native build tools needed
 FROM node:24-alpine AS build-server
-WORKDIR /deps
-COPY server/package.json ./
-RUN npm install --omit=dev
+WORKDIR /build
+RUN corepack enable
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY client/package.json ./client/
+COPY server/package.json ./server/
+# Workspace node_modules are symlinks into the root store, so they can't be
+# copied out on their own. deploy writes a self-contained copy to /deps
+# (--legacy: pnpm 10 otherwise needs injected workspace packages).
+# --ignore-scripts skips the root `prepare` (husky), a dev dependency --prod omits.
+RUN pnpm --filter portainer-run-server deploy --prod --legacy --ignore-scripts /deps
 
 # Stage 3: Slim runtime image
 FROM node:24-alpine AS runtime
@@ -29,7 +42,7 @@ RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack 
 WORKDIR /app
 
 # Client build artifacts
-COPY --from=build-ui /build/dist ./client/dist
+COPY --from=build-ui /build/client/dist ./client/dist
 
 # Server source
 COPY server/ ./server/
