@@ -1,4 +1,4 @@
-# Consumes portainer/github-actions@v2.1.0's shared workflows. Single image
+# Consumes portainer/github-actions@v1.0.0's shared workflows. Single image
 # here — job ids keep the -app-image suffix so a second image would just be
 # another build-*-image/scout-*-image pair (see portainer-command).
 #
@@ -29,7 +29,7 @@ permissions:
 
 jobs:
   validate:
-    uses: portainer/github-actions/.github/workflows/validate.yml@c6962d0fe3ced9317896ea5bf0520056105407f2 # v2.1.0
+    uses: portainer/github-actions/.github/workflows/validate.yml@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
     with:
       runtime: node
       package-manager: pnpm
@@ -45,7 +45,7 @@ jobs:
 
   build-app-image:
     needs: [validate]
-    uses: portainer/github-actions/.github/workflows/build-image.yml@c6962d0fe3ced9317896ea5bf0520056105407f2 # v2.1.0
+    uses: portainer/github-actions/.github/workflows/build-image.yml@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
     with:
       image-name: portainer-run
       app-repositories: portainer-run,design-system
@@ -62,7 +62,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    uses: portainer/github-actions/.github/workflows/scout.yml@c6962d0fe3ced9317896ea5bf0520056105407f2 # v2.1.0
+    uses: portainer/github-actions/.github/workflows/scout.yml@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
     with:
       image: ${{ needs.build-app-image.outputs.image-ref }}
       # Deliberate choice for this migration, despite this repo being GA:
@@ -81,4 +81,4 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: portainer/github-actions/.github/workflows/publish-chart.yml@c6962d0fe3ced9317896ea5bf0520056105407f2 # v2.1.0
+    uses: portainer/github-actions/.github/workflows/publish-chart.yml@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
