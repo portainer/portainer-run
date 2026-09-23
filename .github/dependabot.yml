@@ -1,0 +1,35 @@
+version: 2
+updates:
+  # Keep third-party GitHub Actions pinned to fresh, checksummed versions.
+  # Dependabot rewrites the pinned SHA and updates the `# vX.Y.Z` comment.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+
+  # Base image (node) updates for the Dockerfile.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+
+  # App dependencies (package.json). Dependabot's npm ecosystem reads the
+  # manifest and understands the pnpm workspace; group non-major bumps to
+  # cut noise.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # Dependabot resolves versions itself and rewrites the lockfile, so
+    # pnpm-workspace.yaml's minimumReleaseAge never sees its updates — it
+    # needs its own cooldown. Version updates only; security updates are
+    # never held back.
+    cooldown:
+      default-days: 7
+    groups:
+      npm-minor-patch:
+        patterns: ['*']
+        update-types: [minor, patch]
