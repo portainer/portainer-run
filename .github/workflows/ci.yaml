@@ -53,20 +53,40 @@ jobs:
           submodules: recursive
           token: ${{ steps.fetch-token.outputs.token }}
 
+      # pnpm version comes from package.json's `packageManager` field.
+      - name: '[preparation] set up pnpm'
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
       # Node 24 to match the image, and for glob support in the test script.
       - name: '[preparation] set up node'
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24
+          cache: pnpm
+
+      - name: '[preparation] install dependencies'
+        run: pnpm install --frozen-lockfile
 
       - name: '[validation] check server syntax'
         run: node --check server/server.js
+
+      - name: '[validation] check formatting'
+        run: pnpm run format:check
+
+      - name: '[validation] run lint'
+        run: pnpm run lint
+
+      - name: '[validation] run typecheck'
+        run: pnpm run typecheck
 
       - name: '[preparation] install helm'
         uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
 
       - name: '[validation] run tests'
-        run: npm test
+        run: pnpm test
+
+      - name: '[validation] run client tests'
+        run: pnpm --filter portainer-run-ui test
 
   # One job per target arch, built in parallel on native runners (org-level
   # ubuntu-latest-arm64 runner group for arm64) — no QEMU. Node's V8 JIT

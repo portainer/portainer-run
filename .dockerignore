@@ -1,7 +1,6 @@
-# Host deps conflict with the image's own `npm install` (COPY client/ ./).
-client/node_modules
-server/node_modules
-node_modules
+# Host deps conflict with the image's own `pnpm install` (COPY client/ ./client/).
+# Any depth, so client/design-system/node_modules is excluded too.
+**/node_modules
 .git
 .env
 data

@@ -1,5 +1,4 @@
 #!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
-pnpm run format
-cd client && pnpm exec lint-staged
+pnpm exec lint-staged

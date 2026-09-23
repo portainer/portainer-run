@@ -3,8 +3,12 @@ dist/
 .idea/
 .env
 data
-bun.lock
 .eslintcache
+
+# One workspace, one lockfile at the root. A pnpm run inside a package that
+# misses the workspace writes its own; keep it out of commits.
+/client/pnpm-lock.yaml
+/server/pnpm-lock.yaml
 
 # Local addon-dev overrides (DEV_ADDON_VALUES) — never committed
 dev-values.yaml

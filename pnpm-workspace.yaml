@@ -1,0 +1,11 @@
+# client/design-system is a submodule with its own pnpm project and lockfile;
+# listing the packages explicitly keeps it out of this workspace.
+packages:
+  - client
+  - server
+
+# Supply-chain cooldown: never resolve versions published <7 days ago. A
+# compromised release is usually detected and yanked within that window
+# before pnpm will pick it up. Escape hatch for an urgent fix is
+# `minimumReleaseAgeExclude: ['pkg@1.2.3']`.
+minimumReleaseAge: 10080
