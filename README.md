@@ -224,7 +224,7 @@ Restoring the original value recovers everything with no further action.
 
 ## Local development
 
-Node 22.18+ and [pnpm](https://pnpm.io). The pnpm version is pinned by `packageManager` in `package.json`; pnpm (or `corepack enable`) switches to it automatically.
+Node 22.22.1+ (`engines` in `package.json`) and [pnpm](https://pnpm.io). The pnpm version is pinned by `packageManager` in `package.json`; pnpm (or `corepack enable`) switches to it automatically.
 
 ```bash
 git submodule update --init   # client/design-system, needed to build and typecheck
@@ -234,8 +234,9 @@ pnpm run dev
 
 The root, `client/` and `server/` are one pnpm workspace with a single `pnpm-lock.yaml`, so one `pnpm install` covers all three. Commit the lockfile with any dependency change: CI and the image install with `--frozen-lockfile` and reject a stale one. New versions are held back for 7 days (`minimumReleaseAge` in `pnpm-workspace.yaml`).
 
-Nothing here runs under Bun: SQLite comes from `node:sqlite`, which sets that floor,
-and the container image installs and runs on Node too (see the `Dockerfile`).
+The 22.22.1 floor is lint-staged's, the highest of any locked dependency. Nothing
+here runs under Bun: SQLite comes from `node:sqlite`, and the container image
+installs and runs on Node too (see the `Dockerfile`).
 
 ## Environment variables
 
