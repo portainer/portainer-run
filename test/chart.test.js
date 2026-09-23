@@ -77,7 +77,7 @@ describe('chart', { skip: hasHelm ? false : 'helm is not installed' }, () => {
     assert.ok(namespace, 'no Namespace was rendered')
     assert.match(
       namespace,
-      /^ {4}io\.portainer\.kubernetes\.namespace\.system: "true"$/m,
+      /^metadata:\n(?:  .*\n)*  labels:\n(?:    .*\n)*    io\.portainer\.kubernetes\.namespace\.system: "true"$/m,
     )
   })
 
