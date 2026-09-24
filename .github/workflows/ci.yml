@@ -1,249 +1,84 @@
+# Consumes portainer/github-actions@v1.0.0's shared workflows. Single image
+# here — job ids keep the -app-image suffix so a second image would just be
+# another build-*-image/scout-*-image pair (see portainer-command).
+#
+# Renamed from ci.yaml to ci.yml as part of this migration, matching every
+# other add-on repo's convention.
+#
+# Drops the previous fork-safe two-stage design (build without secrets on a
+# PR, publish separately via ci-publish.yaml's workflow_run trigger). This
+# repo is genuinely public, unlike its siblings, but takes no external PRs in
+# practice (confirmed: every recent PR came from within the org) — the extra
+# complexity bought no real protection. build-image.yml builds and pushes
+# directly in one job, same as every other migrated repo.
+
 name: ci
 
 on:
-  push:
-    branches: ['develop']
   pull_request:
-    branches: ['develop']
-    types: [opened, reopened, synchronize]
-  workflow_dispatch:
+    branches: [develop, 'release/**']
+  push:
+    branches: [develop, 'release/**']
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
-  id-token: write
-
-env:
-  REGISTRY: portainerci
-  IMAGE_NAME: portainer-run
 
 jobs:
-  tag:
-    runs-on: ubuntu-latest
-    outputs:
-      value: ${{ steps.resolve.outputs.value }}
-    steps:
-      - name: '[preparation] resolve image tag'
-        id: resolve
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "value=pr-${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
-          else
-            echo "value=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-          fi
-
   validate:
-    runs-on: ubuntu-latest
-    steps:
-      # Exchange the org's GitHub App credentials for a short-lived, narrowly
-      # scoped installation token so checkout can pull the private design-system
-      # submodule (the default GITHUB_TOKEN can't see a separate repo).
-      - name: '[preparation] fetch GitHub App token'
-        id: fetch-token
-        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
-        with:
-          app-id: ${{ secrets.PORTAINER_BOT_ID }}
-          private-key: ${{ secrets.PORTAINER_BOT_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: portainer-run,design-system
-          permission-contents: read
+    uses: portainer/github-actions/.github/workflows/validate.yml@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
+    with:
+      runtime: node
+      package-manager: pnpm
+      app-repositories: portainer-run,design-system
+      # NOT enforce-no-secrets-guard: this chart legitimately renders a
+      # Secret (a generated ENCRYPTION_KEY carried across helm upgrade) —
+      # the exact exception chart-render-guard's own description names
+      # this repo for, confirmed by actually rendering the chart before
+      # deciding.
+    secrets:
+      app-id: ${{ secrets.PORTAINER_BOT_ID }}
+      app-private-key: ${{ secrets.PORTAINER_BOT_KEY }}
 
-      - name: '[preparation] checkout the current branch'
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          submodules: recursive
-          token: ${{ steps.fetch-token.outputs.token }}
+  build-app-image:
+    needs: [validate]
+    uses: portainer/github-actions/.github/workflows/build-image.yml@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
+    with:
+      image-name: portainer-run
+      app-repositories: portainer-run,design-system
+    secrets:
+      app-id: ${{ secrets.PORTAINER_BOT_ID }}
+      app-private-key: ${{ secrets.PORTAINER_BOT_KEY }}
+      registry-username: ${{ secrets.DOCKER_HUB_USERNAME }}
+      registry-password: ${{ secrets.DOCKER_HUB_PASSWORD }}
 
-      # pnpm version comes from package.json's `packageManager` field.
-      - name: '[preparation] set up pnpm'
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+  scout-app-image:
+    needs: [build-app-image]
+    # A job's own permissions: replaces the workflow-level default, not adds
+    # to it — contents: read must be explicit here or scout.yml gets none.
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: portainer/github-actions/.github/workflows/scout.yml@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
+    with:
+      image: ${{ needs.build-app-image.outputs.image-ref }}
+      # Deliberate choice for this migration, despite this repo being GA:
+      # Scout didn't scan anything at all before this migration, so
+      # non-blocking is the safer default to land with — revisit tightening
+      # to blocking once there's a track record of clean scans.
+      non-blocking: true
+    secrets:
+      registry-username: ${{ secrets.DOCKER_HUB_USERNAME }}
+      registry-password: ${{ secrets.DOCKER_HUB_PASSWORD }}
 
-      # Node 24 to match the image, and for glob support in the test script.
-      - name: '[preparation] set up node'
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - name: '[preparation] install dependencies'
-        run: pnpm install --frozen-lockfile
-
-      - name: '[validation] check server syntax'
-        run: node --check server/server.js
-
-      - name: '[validation] check formatting'
-        run: pnpm run format:check
-
-      - name: '[validation] run lint'
-        run: pnpm run lint
-
-      - name: '[validation] run typecheck'
-        run: pnpm run typecheck
-
-      - name: '[preparation] install helm'
-        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
-
-      - name: '[validation] run tests'
-        run: pnpm test
-
-      - name: '[validation] run client tests'
-        run: pnpm --filter portainer-run-ui test
-
-  # One job per target arch, built in parallel on native runners (org-level
-  # ubuntu-latest-arm64 runner group for arm64) — no QEMU. Node's V8 JIT
-  # crashes with SIGILL under QEMU user-mode emulation, which is why the
-  # previous single-job multi-arch build hung and timed out. Same pattern as
-  # portainer-idp's build-images job.
-  build:
-    name: build (linux/${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
-    needs: [tag, validate]
-    strategy:
-      matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-latest
-          - arch: arm64
-            runner: ubuntu-latest-arm64
-    steps:
-      # Short-lived token — design-system is a separate private repo the
-      # default token can't see.
-      - name: '[preparation] fetch GitHub App token'
-        id: fetch-token
-        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
-        with:
-          app-id: ${{ secrets.PORTAINER_BOT_ID }}
-          private-key: ${{ secrets.PORTAINER_BOT_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: portainer-run,design-system
-          permission-contents: read
-
-      - name: '[preparation] checkout the current branch'
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          submodules: recursive
-          token: ${{ steps.fetch-token.outputs.token }}
-
-      - name: '[preparation] capture git commit'
-        id: git-info
-        run: echo "sha=$(git log -1 --format=%h)" >> "$GITHUB_OUTPUT"
-
-      - name: '[preparation] generate build date'
-        id: build-date
-        run: echo "date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
-
-      - name: '[preparation] set up Docker Buildx'
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
-
-      # --- pull_request path: fork-safe, no registry credentials ---
-      # Each leg exports a single-arch OCI tarball artifact; the privileged
-      # ci-publish workflow assembles them into one multi-arch tag and pushes.
-      - name: '[execution] build single-arch image and export as OCI tarball'
-        if: github.event_name == 'pull_request'
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
-        with:
-          # Use the local checkout (with the submodule already fetched) as the
-          # build context, so BuildKit doesn't re-clone the repo over SSH.
-          context: .
-          push: false
-          load: false
-          platforms: linux/${{ matrix.arch }}
-          build-args: |
-            PORTAINER_RUN_VERSION=${{ needs.tag.outputs.value }}
-            GIT_COMMIT=${{ steps.git-info.outputs.sha }}
-            BUILD_DATE=${{ steps.build-date.outputs.date }}
-          tags: ${{ env.IMAGE_NAME }}:${{ needs.tag.outputs.value }}
-          outputs: type=oci,dest=/tmp/image-${{ matrix.arch }}.tar
-
-      - name: '[execution] upload image artifact'
-        if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: pr-image-${{ matrix.arch }}
-          path: /tmp/image-${{ matrix.arch }}.tar
-          retention-days: 1
-
-      # The tag artifact only needs to exist once — the amd64 leg writes it.
-      - name: '[execution] save image tag metadata'
-        if: github.event_name == 'pull_request' && matrix.arch == 'amd64'
-        run: |
-          echo "${{ needs.tag.outputs.value }}" > /tmp/image-tag.txt
-
-      - name: '[execution] upload image tag artifact'
-        if: github.event_name == 'pull_request' && matrix.arch == 'amd64'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: pr-image-tag
-          path: /tmp/image-tag.txt
-          retention-days: 1
-
-      # --- push path: trusted code, push by digest ---
-      # Pushes by digest only (no tag); the manifest job below assembles the
-      # per-arch digests into one multi-arch tag.
-      # https://docs.docker.com/build/ci/github-actions/multi-platform/#distribute-build-across-multiple-runners
-      - name: '[preparation] log in to registry'
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: '[execution] build and push single-arch image by digest'
-        if: github.event_name != 'pull_request'
-        id: build
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
-        with:
-          context: .
-          platforms: linux/${{ matrix.arch }}
-          build-args: |
-            PORTAINER_RUN_VERSION=${{ needs.tag.outputs.value }}
-            GIT_COMMIT=${{ steps.git-info.outputs.sha }}
-            BUILD_DATE=${{ steps.build-date.outputs.date }}
-          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
-          sbom: true
-          provenance: mode=max
-
-      - name: '[post] export digest'
-        if: github.event_name != 'pull_request'
-        run: |
-          mkdir -p /tmp/digests
-          digest='${{ steps.build.outputs.digest }}'
-          touch "/tmp/digests/${digest#sha256:}"
-
-      - name: '[post] upload digest artifact'
-        if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: digests-${{ matrix.arch }}
-          path: /tmp/digests/*
-          retention-days: 1
-
-  # Assembles the two per-arch digests pushed above into one multi-arch tag.
-  # push events only — PR images are assembled by the ci-publish workflow,
-  # which is the only place PR-path registry credentials live.
-  manifest:
-    runs-on: ubuntu-latest
-    needs: [tag, build]
-    if: github.event_name != 'pull_request'
-    steps:
-      - name: '[preparation] download digest artifacts'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: digests-*
-          path: /tmp/digests
-          merge-multiple: true
-
-      - name: '[preparation] set up Docker Buildx'
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
-
-      - name: '[preparation] log in to registry'
-        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: '[execution] create and push multi-arch manifest'
-        working-directory: /tmp/digests
-        run: |
-          docker buildx imagetools create \
-            --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.tag.outputs.value }} \
-            $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
+  # Needs both build and scout, so the chart publishes after scanning, not
+  # alongside it. Only publishes on a push event — PRs never publish one.
+  publish-chart:
+    needs: [build-app-image, scout-app-image]
+    permissions:
+      contents: read
+      packages: write
+    uses: portainer/github-actions/.github/workflows/publish-chart.yml@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0

@@ -1,129 +1,125 @@
+# GA add-on — must be dispatched from a release/X.Y branch (the shared
+# enforce-release-branch default is true; this repo doesn't opt out, unlike
+# the beta add-ons). See portal-template/portainer-command for the same
+# pattern applied at the other tier.
+#
+# resolve-image-tag strips a leading "v" and normalizes the version, so
+# every job below reads the clean value straight from build-app-image's tag
+# output — no separate normalize job needed for the image tag itself.
+#
+# The one exception is normalize-version below: PORTAINER_RUN_VERSION gets
+# baked into the frontend bundle (Dockerfile ARG PORTAINER_RUN_VERSION,
+# footer) as a build-arg INPUT to build-app-image, which runs before that
+# same call's own resolve-image-tag step has produced its cleaned value —
+# so it can't be sourced from build-app-image's own output the way the
+# image tag is. Same shape as portainer-command's APP_VERSION. CI/dev
+# builds never set this build-arg at all (see ci.yml) — a real, visible
+# change from before, when ci.yml did stamp the pr-<n>/branch tag in; those
+# builds now fall back to the app's own 'dev' default instead. Confirmed
+# cosmetic-only (a footer string), never load-bearing. A follow-up would be
+# needed to align with how other add-ons pick up their version string, if
+# that's wanted here too.
+#
+# pre-release defaults true (the safe, non-consequential path) — set it
+# false for a real release.
+
 name: release
-run-name: '${{ github.event.inputs.version }} pre-release'
+run-name: "${{ inputs.pre-release && 'Pre-release' || 'Release' }} ${{ github.event.repository.name }}:${{ github.event.inputs.version }}"
+
+concurrency:
+  group: release-publish-${{ github.repository }}
+  cancel-in-progress: false
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'portainer-run version. e.g. 0.x.x, 0.x.x-beta or v0.x.x'
+        description: 'Version (e.g. 1.0.0)'
         required: true
+      pre-release:
+        type: boolean
+        default: true
+        description: 'Pre-release (portainerci/dev-charts)'
 
 permissions:
-  contents: write
-  id-token: write
-
-env:
-  REGISTRY: portainer
-  IMAGE_NAME: portainer-run
+  contents: read
 
 jobs:
-  validate:
-    name: validate
+  normalize-version:
     runs-on: ubuntu-latest
-    steps:
-      - name: '[preparation] checkout the current branch'
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: '[validation] check server syntax'
-        run: node --check server/server.js
-
-  validate-chart:
-    name: validate-chart
-    runs-on: ubuntu-latest
-    steps:
-      - name: '[preparation] checkout the current branch'
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: '[preparation] set up helm'
-        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
-
-      - name: '[validation] lint chart'
-        run: helm lint chart/
-
-      - name: '[validation] template chart (dry-run render)'
-        run: helm template portainer-run chart/ > /dev/null
-
-  create-release:
-    name: create-release
-    runs-on: ubuntu-latest
-    needs: [validate, validate-chart]
     outputs:
-      version: ${{ steps.normalize.outputs.value }}
+      value: ${{ steps.strip.outputs.value }}
     steps:
-      - name: '[preparation] normalize version'
-        id: normalize
-        run: |
-          version="${{ github.event.inputs.version }}"
-          echo "value=${version#v}" >> "$GITHUB_OUTPUT"
-
-      - name: '[execution] create a pre-release'
-        run: |
-          gh release create \
-            "${{ github.event.inputs.version }}" \
-            --repo portainer/portainer-run \
-            --title "${{ github.event.inputs.version }}" \
-            --target develop \
-            --prerelease \
-            --generate-notes
+      - id: strip
+        run: echo "value=${VERSION#v}" >> "$GITHUB_OUTPUT"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
 
-  publish-images:
-    name: publish-images
-    runs-on: ubuntu-latest
-    needs: [create-release]
-    steps:
-      # Exchange the org's GitHub App credentials for a short-lived, narrowly
-      # scoped installation token so checkout can pull the private design-system
-      # submodule (the default GITHUB_TOKEN can't see a separate repo).
-      - name: '[preparation] fetch GitHub App token'
-        id: fetch-token
-        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
-        with:
-          app-id: ${{ secrets.PORTAINER_BOT_ID }}
-          private-key: ${{ secrets.PORTAINER_BOT_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: portainer-run,design-system
-          permission-contents: read
+  validate:
+    uses: portainer/github-actions/.github/workflows/validate.yml@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
+    with:
+      runtime: node
+      package-manager: pnpm
+      app-repositories: portainer-run,design-system
+    secrets:
+      app-id: ${{ secrets.PORTAINER_BOT_ID }}
+      app-private-key: ${{ secrets.PORTAINER_BOT_KEY }}
 
-      - name: '[preparation] checkout the current branch'
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          submodules: recursive
-          token: ${{ steps.fetch-token.outputs.token }}
+  build-app-image:
+    needs: [validate, normalize-version]
+    uses: portainer/github-actions/.github/workflows/build-image.yml@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
+    with:
+      image-name: portainer-run
+      registry-namespace: ${{ inputs.pre-release && 'portainerci' || 'portainer' }}
+      image-tag: ${{ github.event.inputs.version }}
+      app-repositories: portainer-run,design-system
+      build-args: |
+        PORTAINER_RUN_VERSION=${{ needs.normalize-version.outputs.value }}
+    secrets:
+      app-id: ${{ secrets.PORTAINER_BOT_ID }}
+      app-private-key: ${{ secrets.PORTAINER_BOT_KEY }}
+      registry-username: ${{ secrets.DOCKER_HUB_USERNAME }}
+      registry-password: ${{ secrets.DOCKER_HUB_PASSWORD }}
 
-      - name: '[preparation] capture git commit'
-        id: git-info
-        run: echo "sha=$(git log -1 --format=%h)" >> "$GITHUB_OUTPUT"
+  scout-app-image:
+    needs: [build-app-image]
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: portainer/github-actions/.github/workflows/scout.yml@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
+    with:
+      image: ${{ needs.build-app-image.outputs.image-ref }}
+      # Non-blocking on every path here, including pre-release — see ci.yml.
+      non-blocking: true
+    secrets:
+      registry-username: ${{ secrets.DOCKER_HUB_USERNAME }}
+      registry-password: ${{ secrets.DOCKER_HUB_PASSWORD }}
 
-      - name: '[preparation] generate build date'
-        id: build-date
-        run: echo "date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+  # needs both build and scout (chart publishes after scanning, not
+  # alongside). build-app-image stays listed even though scout already
+  # depends on it — outputs are only readable from a job you directly need.
+  publish-chart:
+    needs: [build-app-image, scout-app-image]
+    permissions:
+      contents: read
+      packages: write
+    uses: portainer/github-actions/.github/workflows/publish-chart.yml@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
+    with:
+      image-tag: ${{ needs.build-app-image.outputs.tag }}
+      chart-oci-registry: ${{ inputs.pre-release && 'oci://ghcr.io/portainer/dev-charts' || 'oci://ghcr.io/portainer/charts' }}
 
-      - name: '[preparation] set up QEMU'
-        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
-
-      - name: '[preparation] set up Docker Buildx'
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
-
-      - name: '[preparation] log in to registry'
-        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: '[execution] build and push multi-arch image'
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
-        with:
-          # Use the local checkout (with the submodule already fetched) as the
-          # build context, so BuildKit doesn't re-clone the repo over SSH.
-          context: .
-          push: true
-          platforms: linux/amd64,linux/arm64
-          build-args: |
-            PORTAINER_RUN_VERSION=${{ needs.create-release.outputs.version }}
-            GIT_COMMIT=${{ steps.git-info.outputs.sha }}
-            BUILD_DATE=${{ steps.build-date.outputs.date }}
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.create-release.outputs.version }}
-          sbom: true
-          provenance: mode=max
+  # Real release only. Only caller job that grants contents: write — keeps
+  # ci/pre-release from needing a permission they never use.
+  publish-release:
+    needs: [build-app-image, publish-chart, scout-app-image]
+    if: '!inputs.pre-release'
+    permissions:
+      contents: write
+    uses: portainer/github-actions/.github/workflows/publish-github-release.yml@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
+    with:
+      version: ${{ needs.build-app-image.outputs.tag }}
+      image-refs: |
+        ${{ needs.build-app-image.outputs.image-ref }}
+    secrets:
+      registry-username: ${{ secrets.DOCKER_HUB_USERNAME }}
+      registry-password: ${{ secrets.DOCKER_HUB_PASSWORD }}

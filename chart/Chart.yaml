@@ -3,14 +3,9 @@ name: portainer-run
 description: Portainer-Run — AI-assisted deployment companion for Portainer, served as a Portainer addon.
 type: application
 
-# Chart version — SemVer 2 (three segments). Bump on a change to the chart
-# or its templates alongside a release, and keep it pinned to the appVersion.
-#
-# The `promote-release` github action will override the version and the appVersion
-# with the github release version.
-version: 1.3.1
-
-# Application version — the Portainer-Run release this chart ships. Free-form,
-# so it carries the full release string. Used as the image tag when
-# image.tag is left empty.
-appVersion: '1.3.1'
+# version and appVersion are both set to the release version at publish time
+# (see docs/releases.md) — the values below are placeholders, bumped here to
+# match the actual current latest release so the now-continuous dev chart
+# publishing doesn't claim a version behind the real product.
+version: 1.3.3
+appVersion: '1.3.3'

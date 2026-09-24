@@ -1,0 +1,21 @@
+# Findings gitleaks is right to raise and that we have looked at, one line each.
+#
+# Fingerprints, not path or rule exclusions, on purpose: this allows *these
+# occurrences* and nothing else. A new secret in the same file, or the same string
+# re-introduced in a new commit, still fails the build — which is the whole value of the
+# scan. Re-check this file whenever a line is added: an entry here is a claim that
+# somebody read the finding, not that the file is uninteresting.
+
+# --- Not a key: a documentation placeholder in a curl example. ----------------------
+#
+# `09fa5e9` (2026-06-12, "add MCP, add feature flags, add vibe deploy source from git")
+# added a README example for checking the MCP endpoint with curl, with the header
+# `Authorization: Bearer YOUR_TOKEN`. `YOUR_TOKEN` is a literal placeholder for the
+# reader to replace. It authorises nothing and never did, but it matches the
+# `curl-auth-header` rule.
+#
+# The example left the README in `e33f9f9` (2026-07-16), so the current tree is clean.
+# This entry exists only because gitleaks scans history, and the commit that added the
+# line is still reachable. A fingerprint retires only when the commit does: deleting this
+# line because the README no longer contains the example turns `secrets` red again.
+09fa5e9216b6587fedd6e81ffb7ab08a52e57aa5:README.md:curl-auth-header:156

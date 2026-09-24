@@ -1,0 +1,14 @@
+name: pr
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    uses: portainer/github-actions/.github/workflows/pr-title.yml@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
+    with:
+      title: ${{ github.event.pull_request.title }}
