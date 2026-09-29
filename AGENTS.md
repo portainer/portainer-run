@@ -14,7 +14,8 @@ stays server-side, serves `/env-status/` and the `/mcp` endpoint, and keeps
 Git targets in SQLite (`node:sqlite`) under `data/`.
 
 Runtime is **Node + pnpm**. Use `pnpm`, never `npm` or `yarn`. Nothing here
-runs under Bun.
+runs under Bun. Local development needs Node 22.22.1+ (`engines` in
+`package.json`); the image builds and runs on Node 24 (`Dockerfile`).
 
 Layout:
 
@@ -58,9 +59,14 @@ with `--frozen-lockfile`. New package versions are held back for 7 days
   rules in
   [portal-template's security.md](https://github.com/portainer/portal-template/blob/develop/docs/security.md)
   apply here too.
-- **User credentials never appear in server logs, and AI API keys never reach
-  the browser.** Calls made on a user's behalf carry that user's credential;
-  the add-on's machine credential is only for reading its own settings.
+- **User credentials never appear in server logs.** Calls made on a user's
+  behalf carry that user's credential; the add-on's machine credential is
+  only for reading its own settings.
+- **Stored AI keys never go back to the browser.** An administrator types a
+  key into Setup or Settings, and the browser sends it to Portainer's config
+  store as a sensitive value. After that Portainer never returns it (the form
+  shows a mask), and only the server reads it, to call the provider. Keep
+  that flow; don't add a route that echoes a stored key.
 - **The server speaks plain HTTP only.** TLS terminates at the add-on
   gateway. Don't add certificates or TLS listeners.
 - **`ENCRYPTION_KEY` is fixed for the life of an install.** It encrypts Git
@@ -69,15 +75,22 @@ with `--frozen-lockfile`. New package versions are held back for 7 days
 - **`client/design-system/` is a read-only git submodule.** Never create, edit
   or delete files inside it. Import it via `@ds/*`; `@/*` maps to
   `client/src/`.
-- Never hardcode `/addons/portainer-run/` in client code; use
-  `import.meta.env.BASE_URL`.
-- Branch off and open PRs into `develop`. Branch names, commit messages and PR
+- Never hardcode `/addons/portainer-run/`. The client build bakes the mount
+  path in from `ADDON_BASE_PATH` at build time, so client code uses
+  `import.meta.env.BASE_URL`. The gateway strips the prefix before forwarding,
+  so server routes match root-relative paths (`/api/...`, `/mcp`).
+- Branch off and open PRs into `develop` by default. A fix for a release
+  line that already shipped goes into its `release/X.Y` branch instead, then
+  gets cherry-picked forward to `develop`
+  ([docs/releases.md](docs/releases.md)). Branch names, commit messages and PR
   titles follow
   [portal-template's git conventions](https://github.com/portainer/portal-template/blob/develop/docs/guidelines/git-conventions.md):
   `<type>(<scope>): <subject> [<linear-id>]` and
   `<type>/<linear-id>/<short-desc>`.
 - **Never skip hooks** (`git commit --no-verify` is not allowed), and never
-  commit secrets, `.env*` files, or anything under `data/`.
+  commit secrets or credentials: a real `.env`, a `dev-values.yaml`, or
+  anything under `data/`. The tracked `*.example` files are templates. Keep
+  them up to date, with placeholder values only.
 - Don't hand-edit versions in `chart/Chart.yaml` or `chart/values.yaml`;
   releases are driven by CI ([docs/releases.md](docs/releases.md)).
 
