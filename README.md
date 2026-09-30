@@ -30,6 +30,8 @@ There is no separate Dashboard page. Applications serves that role.
 
 **Deploy** is the path for source files produced by AI coding tools. Drop the files the AI tool generated, and Portainer-Run handles runtime detection, dependency installation, git commit, and Kubernetes deployment automatically. No Dockerfile, no CI pipeline, no container registry required.
 
+You can upload project folders, individual files, or ZIP archives. ZIP extraction and text decoding run locally in a bundled, same-origin Web Worker to keep the interface responsive for large archives without relaxing Portainer's Content Security Policy. ZIP extraction errors are displayed rather than silently discarding the files.
+
 The runtime is detected from the file structure. A `package.json` maps to Node.js. A `requirements.txt` maps to Python. A `Gemfile` maps to Ruby. `.php` files map to PHP with Apache. Everything else defaults to nginx for static HTML, CSS, and JavaScript.
 
 On deploy, up to three init containers run before the app starts: the first clones source files from git into a PersistentVolume, the second runs the dependency installer (`npm install`, `pip install`, and so on) in the correct runtime image, and the third writes a `.env` file from the entered environment variables. None of this requires a build step. Every application is deployed with sane resource requests and limits: a request of 0.1 CPU and 1Gi of memory, and a limit of 1 CPU and 4Gi of memory. These values live in the committed manifest, so a platform administrator can adjust them in git if a workload needs more.

@@ -230,15 +230,29 @@ export function VibeEditTab({
     setError('')
   }
 
-  function onInputFiles(fileList: FileList | null) {
-    if (!fileList || !fileList.length) return
-    void readFileList(fileList).then(mergeFiles)
+  function onInputFiles(input: HTMLInputElement) {
+    const fileList = input.files
+    if (!fileList?.length) return
+    void readFileList(fileList)
+      .then(mergeFiles)
+      .catch(handleUploadError)
+      .finally(() => {
+        input.value = ''
+      })
   }
 
   async function onDrop(e: React.DragEvent) {
     e.preventDefault()
-    const result = await readDropEvent(e)
-    if (result) mergeFiles(result)
+    try {
+      const result = await readDropEvent(e)
+      if (result) mergeFiles(result)
+    } catch (error) {
+      handleUploadError(error)
+    }
+  }
+
+  function handleUploadError(error: unknown) {
+    setError(`Unable to read uploaded files: ${errMessage(error)}`)
   }
 
   async function handleUpdate() {
@@ -296,14 +310,14 @@ export function VibeEditTab({
         webkitdirectory=""
         multiple
         style={{ display: 'none' }}
-        onChange={(e) => onInputFiles(e.target.files)}
+        onChange={(event) => onInputFiles(event.currentTarget)}
       />
       <input
         ref={filesRef}
         type="file"
         multiple
         style={{ display: 'none' }}
-        onChange={(e) => onInputFiles(e.target.files)}
+        onChange={(event) => onInputFiles(event.currentTarget)}
       />
     </>
   )

@@ -1,5 +1,6 @@
-import type { Dispatch, SetStateAction } from 'react'
+import { useState, type Dispatch, type SetStateAction } from 'react'
 
+import { Alert } from '@ds/v3-components/Alert/Alert'
 import { Button } from '@ds/v3-components/Button/Button'
 import type { FileNode } from '@ds/v3-components/FilePicker/FilePicker'
 import { FormControl, Input } from '@ds/v3-components/FormField/FormField'
@@ -7,6 +8,7 @@ import { SegmentedControl } from '@ds/v3-components/Segmented/Segmented'
 import { Select } from '@ds/v3-components/Select/Select'
 
 import { readFileList, type UploadedFile } from '../../lib/fileIntake'
+import { errMessage } from '../../lib/errors'
 import { MONO_FONT } from '../service-detail/detailUi'
 import { GitFolderTree } from './GitFolderTree'
 import { DropZone, FileRow } from './DeployStepUi'
@@ -67,6 +69,8 @@ export function FilesStep({
   loadGitDir,
   onGitFolderSelect,
 }: FilesStepProps) {
+  const [uploadError, setUploadError] = useState('')
+
   return (
     <div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -90,8 +94,12 @@ export function FilesStep({
         {/* Upload source */}
         {sourceType === 'upload' && (
           <>
+            {uploadError && <Alert tone="danger" title={uploadError} />}
             {files.length === 0 ? (
-              <DropZone onFiles={onFilesAdded} />
+              <DropZone
+                onFiles={handleFilesAdded}
+                onError={handleUploadError}
+              />
             ) : (
               <>
                 <div
@@ -138,20 +146,14 @@ export function FilesStep({
                     webkitdirectory=""
                     multiple
                     style={{ display: 'none' }}
-                    onChange={(e) => {
-                      if (e.target.files?.length)
-                        void readFileList(e.target.files).then(onFilesAdded)
-                    }}
+                    onChange={(event) => onInputFiles(event.currentTarget)}
                   />
                   <input
                     id="vibe-add-files"
                     type="file"
                     multiple
                     style={{ display: 'none' }}
-                    onChange={(e) => {
-                      if (e.target.files?.length)
-                        void readFileList(e.target.files).then(onFilesAdded)
-                    }}
+                    onChange={(event) => onInputFiles(event.currentTarget)}
                   />
                   <Button
                     variant="ghost"
@@ -265,4 +267,24 @@ export function FilesStep({
       </div>
     </div>
   )
+
+  function handleFilesAdded(incoming: Array<UploadedFile>) {
+    setUploadError('')
+    onFilesAdded(incoming)
+  }
+
+  function handleUploadError(error: unknown) {
+    setUploadError(`Unable to read uploaded files: ${errMessage(error)}`)
+  }
+
+  function onInputFiles(input: HTMLInputElement) {
+    const fileList = input.files
+    if (!fileList?.length) return
+    void readFileList(fileList)
+      .then(handleFilesAdded)
+      .catch(handleUploadError)
+      .finally(() => {
+        input.value = ''
+      })
+  }
 }

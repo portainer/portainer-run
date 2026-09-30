@@ -1,4 +1,4 @@
-import { unzip } from 'fflate'
+import type { ZipWorkerResponse } from './zip.worker'
 
 /**
  * File-intake helpers shared by the Deploy wizard and the service Edit tab.
@@ -16,30 +16,38 @@ export interface UploadedFile {
 
 export async function extractZip(file: File): Promise<UploadedFile[]> {
   const arrayBuffer = await file.arrayBuffer()
-  const uint8 = new Uint8Array(arrayBuffer)
   return new Promise((resolve, reject) => {
-    unzip(uint8, (err, files) => {
-      if (err) {
-        reject(err)
+    const worker = new Worker(new URL('./zip.worker.ts', import.meta.url), {
+      type: 'module',
+    })
+
+    worker.onmessage = ({ data }: MessageEvent<ZipWorkerResponse>) => {
+      worker.terminate()
+      if (data.status === 'success') {
+        resolve(data.files)
         return
       }
-      const results: UploadedFile[] = []
-      for (const [relPath, data] of Object.entries(files)) {
-        if (relPath.endsWith('/')) continue // directory entry
-        if (relPath.startsWith('__MACOSX/') || relPath.includes('/__MACOSX/'))
-          continue
-        const parts = relPath.split('/')
-        const name = parts[parts.length - 1]
-        if (!name) continue
-        results.push({
-          name,
-          size: data.length,
-          text: new TextDecoder().decode(data),
-          webkitRelativePath: relPath,
-        })
-      }
-      resolve(results)
-    })
+      reject(new Error(data.message))
+    }
+    worker.onerror = (event) => {
+      event.preventDefault()
+      fail(new Error(event.message || 'ZIP extraction worker failed'))
+    }
+    worker.onmessageerror = () => {
+      fail(new Error('Unable to read the ZIP extraction result'))
+    }
+
+    try {
+      worker.postMessage(arrayBuffer, [arrayBuffer])
+    } catch (error) {
+      worker.terminate()
+      reject(error)
+    }
+
+    function fail(error: Error) {
+      worker.terminate()
+      reject(error)
+    }
   })
 }
 

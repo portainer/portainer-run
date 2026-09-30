@@ -14,20 +14,15 @@ import { MONO_FONT } from '../service-detail/detailUi'
 /** Drag-and-drop / browse target for uploading a project folder or files. */
 export function DropZone({
   onFiles,
+  onError,
 }: {
   onFiles: (files: UploadedFile[]) => void
+  onError: (error: unknown) => void
 }) {
   const [dragging, setDragging] = useState(false)
   const [hover, setHover] = useState(false)
   const folderRef = useRef<HTMLInputElement>(null)
   const filesRef = useRef<HTMLInputElement>(null)
-
-  async function onDrop(e: React.DragEvent) {
-    e.preventDefault()
-    setDragging(false)
-    const result = await readDropEvent(e)
-    if (result) onFiles(result)
-  }
 
   const active = dragging || hover
   const accent = 'var(--accent, #2e90fa)'
@@ -47,20 +42,14 @@ export function DropZone({
         webkitdirectory=""
         multiple
         style={{ display: 'none' }}
-        onChange={(e) => {
-          if (e.target.files?.length)
-            void readFileList(e.target.files).then(onFiles)
-        }}
+        onChange={(event) => onInputFiles(event.currentTarget)}
       />
       <input
         ref={filesRef}
         type="file"
         multiple
         style={{ display: 'none' }}
-        onChange={(e) => {
-          if (e.target.files?.length)
-            void readFileList(e.target.files).then(onFiles)
-        }}
+        onChange={(event) => onInputFiles(event.currentTarget)}
       />
       <div
         role="button"
@@ -148,6 +137,28 @@ export function DropZone({
       </div>
     </>
   )
+
+  function onInputFiles(input: HTMLInputElement) {
+    const fileList = input.files
+    if (!fileList?.length) return
+    void readFileList(fileList)
+      .then(onFiles)
+      .catch(onError)
+      .finally(() => {
+        input.value = ''
+      })
+  }
+
+  async function onDrop(event: React.DragEvent) {
+    event.preventDefault()
+    setDragging(false)
+    try {
+      const result = await readDropEvent(event)
+      if (result) onFiles(result)
+    } catch (error) {
+      onError(error)
+    }
+  }
 }
 
 /** A single uploaded-file row with a runtime/env tag and a remove control. */
