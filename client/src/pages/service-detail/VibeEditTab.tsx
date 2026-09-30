@@ -230,9 +230,15 @@ export function VibeEditTab({
     setError('')
   }
 
-  function onInputFiles(fileList: FileList | null) {
-    if (!fileList || !fileList.length) return
-    void readFileList(fileList).then(mergeFiles).catch(handleUploadError)
+  function onInputFiles(input: HTMLInputElement) {
+    const fileList = input.files
+    if (!fileList?.length) return
+    void readFileList(fileList)
+      .then(mergeFiles)
+      .catch(handleUploadError)
+      .finally(() => {
+        input.value = ''
+      })
   }
 
   async function onDrop(e: React.DragEvent) {
@@ -304,14 +310,14 @@ export function VibeEditTab({
         webkitdirectory=""
         multiple
         style={{ display: 'none' }}
-        onChange={(e) => onInputFiles(e.target.files)}
+        onChange={(event) => onInputFiles(event.currentTarget)}
       />
       <input
         ref={filesRef}
         type="file"
         multiple
         style={{ display: 'none' }}
-        onChange={(e) => onInputFiles(e.target.files)}
+        onChange={(event) => onInputFiles(event.currentTarget)}
       />
     </>
   )

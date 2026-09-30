@@ -42,14 +42,14 @@ export function DropZone({
         webkitdirectory=""
         multiple
         style={{ display: 'none' }}
-        onChange={(e) => onInputFiles(e.target.files)}
+        onChange={(event) => onInputFiles(event.currentTarget)}
       />
       <input
         ref={filesRef}
         type="file"
         multiple
         style={{ display: 'none' }}
-        onChange={(e) => onInputFiles(e.target.files)}
+        onChange={(event) => onInputFiles(event.currentTarget)}
       />
       <div
         role="button"
@@ -138,9 +138,15 @@ export function DropZone({
     </>
   )
 
-  function onInputFiles(fileList: FileList | null) {
+  function onInputFiles(input: HTMLInputElement) {
+    const fileList = input.files
     if (!fileList?.length) return
-    void readFileList(fileList).then(onFiles).catch(onError)
+    void readFileList(fileList)
+      .then(onFiles)
+      .catch(onError)
+      .finally(() => {
+        input.value = ''
+      })
   }
 
   async function onDrop(event: React.DragEvent) {

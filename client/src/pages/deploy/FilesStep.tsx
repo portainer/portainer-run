@@ -146,14 +146,14 @@ export function FilesStep({
                     webkitdirectory=""
                     multiple
                     style={{ display: 'none' }}
-                    onChange={(e) => onInputFiles(e.target.files)}
+                    onChange={(event) => onInputFiles(event.currentTarget)}
                   />
                   <input
                     id="vibe-add-files"
                     type="file"
                     multiple
                     style={{ display: 'none' }}
-                    onChange={(e) => onInputFiles(e.target.files)}
+                    onChange={(event) => onInputFiles(event.currentTarget)}
                   />
                   <Button
                     variant="ghost"
@@ -277,8 +277,14 @@ export function FilesStep({
     setUploadError(`Unable to read uploaded files: ${errMessage(error)}`)
   }
 
-  function onInputFiles(fileList: FileList | null) {
+  function onInputFiles(input: HTMLInputElement) {
+    const fileList = input.files
     if (!fileList?.length) return
-    void readFileList(fileList).then(handleFilesAdded).catch(handleUploadError)
+    void readFileList(fileList)
+      .then(handleFilesAdded)
+      .catch(handleUploadError)
+      .finally(() => {
+        input.value = ''
+      })
   }
 }

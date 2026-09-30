@@ -21,6 +21,15 @@ const uploadedFile: UploadedFile = {
   webkitRelativePath: 'index.html',
 }
 
+const selectedArchive = new File(['zip'], 'app.zip')
+const selectedPath = 'C:\\fakepath\\app.zip'
+const pickerCases = [
+  { hasFiles: false, folderPicker: false },
+  { hasFiles: false, folderPicker: true },
+  { hasFiles: true, folderPicker: false },
+  { hasFiles: true, folderPicker: true },
+]
+
 let container: HTMLDivElement
 let root: Root
 
@@ -39,26 +48,52 @@ afterEach(async () => {
 })
 
 describe('FilesStep upload errors', () => {
-  it.each([false, true])(
-    'shows picker errors and clears them after a successful retry (existing files: %s)',
-    async (hasFiles) => {
+  it.each(pickerCases)(
+    'resets failed selections and allows retry (folder: $folderPicker, existing files: $hasFiles)',
+    async ({ hasFiles, folderPicker }) => {
       const props = defaultProps(hasFiles ? [uploadedFile] : [])
       await act(async () => root.render(<FilesStep {...props} />))
       vi.mocked(readFileList).mockRejectedValueOnce(
         new Error('invalid zip data'),
       )
 
-      await selectFiles()
+      const input = await selectFiles(folderPicker)
 
+      expect(input.value).toBe('')
       expect(container.querySelector('[role="alert"]')?.textContent).toContain(
         'Unable to read uploaded files: invalid zip data',
       )
       expect(props.onFilesAdded).not.toHaveBeenCalled()
 
       vi.mocked(readFileList).mockResolvedValueOnce([uploadedFile])
-      await selectFiles()
+      const retriedInput = await selectFiles(folderPicker)
 
+      expect(retriedInput.value).toBe('')
       expect(container.querySelector('[role="alert"]')).toBeNull()
+      expect(props.onFilesAdded).toHaveBeenCalledWith([uploadedFile])
+      expect(readFileList).toHaveBeenCalledTimes(2)
+    },
+  )
+
+  it.each(pickerCases)(
+    'keeps the selection until reading settles (folder: $folderPicker, existing files: $hasFiles)',
+    async ({ hasFiles, folderPicker }) => {
+      const props = defaultProps(hasFiles ? [uploadedFile] : [])
+      await act(async () => root.render(<FilesStep {...props} />))
+      let resolveRead: (files: Array<UploadedFile>) => void = () => {}
+      const pendingRead = new Promise<Array<UploadedFile>>((resolve) => {
+        resolveRead = resolve
+      })
+      vi.mocked(readFileList).mockReturnValueOnce(pendingRead)
+
+      const input = await selectFiles(folderPicker)
+
+      expect(input.value).toBe(selectedPath)
+      expect(props.onFilesAdded).not.toHaveBeenCalled()
+
+      await act(async () => resolveRead([uploadedFile]))
+
+      expect(input.value).toBe('')
       expect(props.onFilesAdded).toHaveBeenCalledWith([uploadedFile])
     },
   )
@@ -85,18 +120,22 @@ describe('FilesStep upload errors', () => {
   })
 })
 
-async function selectFiles() {
-  const input = container.querySelector(
-    'input[type="file"]:not([webkitdirectory])',
+async function selectFiles(folderPicker: boolean) {
+  const input = container.querySelector<HTMLInputElement>(
+    folderPicker
+      ? 'input[type="file"][webkitdirectory]'
+      : 'input[type="file"]:not([webkitdirectory])',
   )
   if (!input) throw new Error('File picker not found')
-  Object.defineProperty(input, 'files', {
-    configurable: true,
-    value: [new File(['zip'], 'app.zip')],
+  if (input.value === selectedPath) return input
+  Object.defineProperties(input, {
+    value: { configurable: true, writable: true, value: selectedPath },
+    files: { configurable: true, value: [selectedArchive] },
   })
   await act(async () => {
     input.dispatchEvent(new Event('change', { bubbles: true }))
   })
+  return input
 }
 
 function defaultProps(
