@@ -232,13 +232,21 @@ export function VibeEditTab({
 
   function onInputFiles(fileList: FileList | null) {
     if (!fileList || !fileList.length) return
-    void readFileList(fileList).then(mergeFiles)
+    void readFileList(fileList).then(mergeFiles).catch(handleUploadError)
   }
 
   async function onDrop(e: React.DragEvent) {
     e.preventDefault()
-    const result = await readDropEvent(e)
-    if (result) mergeFiles(result)
+    try {
+      const result = await readDropEvent(e)
+      if (result) mergeFiles(result)
+    } catch (error) {
+      handleUploadError(error)
+    }
+  }
+
+  function handleUploadError(error: unknown) {
+    setError(`Unable to read uploaded files: ${errMessage(error)}`)
   }
 
   async function handleUpdate() {
