@@ -3,8 +3,9 @@
  * `pnpm run test:lifecycle`: installs the latest GA release from the chart registry, tests it,
  * upgrades it to this checkout's chart, tests again and uninstalls, all on a throwaway kind cluster,
  * then checks the uninstall left nothing behind but what the chart keeps on purpose
- * (portal-template's docs/addon-helm-chart-guidelines.md). With no GA release yet, it installs this
- * checkout's chart and upgrades it to itself. CI runs it on pushes to develop and release/** (validate-all.yml).
+ * (portal-template's docs/addon-helm-chart-guidelines.md). The latest GA release is this repo's
+ * highest X.Y.Z tag; with none yet, it installs this checkout's chart and upgrades it to itself. CI
+ * runs it on pushes to develop and release/** (validate-all.yml).
  *
  * It creates its own cluster with its own kubeconfig, in a temp directory, so it never touches
  * ~/.kube/config or your current context. Needs docker, kind, helm and kubectl, and the
@@ -114,18 +115,28 @@ function imageValues(image: string): string[] {
   ]
 }
 
-// The latest GA chart version, or undefined when none is published or it can't be read.
+// The latest GA release, or undefined before the first one. release.yml tags every GA release
+// X.Y.Z in this repo, so the tags say whether a GA chart must exist; the registry can't, since
+// GHCR answers 403 alike for a missing package and a refused one. Once a GA tag exists, failing to
+// read its chart fails the test rather than silently upgrading this chart to itself.
 function latestGaVersion(): string | undefined {
-  try {
-    const chart = helm('show', 'chart', GA_CHART)
-    return /^version:\s*(\S+)/m.exec(chart)?.[1]
-  } catch {
-    return undefined
+  const tags = run('git', ['ls-remote', '--tags', '--refs', 'origin'])
+    .split('\n')
+    .map((line) => /refs\/tags\/v?(\d+)\.(\d+)\.(\d+)$/.exec(line))
+    .filter((match) => match !== null)
+    .map((match) => match.slice(1, 4).map(Number))
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2])
+  const latest = tags.at(-1)?.join('.')
+  if (!latest) return undefined
+  const chart = helm('show', 'chart', GA_CHART, '--version', latest)
+  if (!new RegExp(`^version:\\s*${latest}$`, 'm').test(chart)) {
+    throw new Error(`${GA_CHART}:${latest} isn't chart version ${latest}`)
   }
+  return latest
 }
 
 // Installs the GA release when there is one, with its own default image, as a customer has it.
-// Otherwise this checkout's chart, after the same client-side dry run Portainer does.
+// Otherwise this checkout's chart. Either way after the client-side dry run Portainer does.
 function install(image: string, gaVersion: string | undefined): void {
   const source = gaVersion
     ? [GA_CHART, '--version', gaVersion]
@@ -138,7 +149,7 @@ function install(image: string, gaVersion: string | undefined): void {
     '--create-namespace',
     '--take-ownership',
   ]
-  if (!gaVersion) helm('install', ...args, '--dry-run=client')
+  helm('install', ...args, '--dry-run=client')
   helm('install', ...args, '--wait', '--timeout', '3m')
 }
 
@@ -237,24 +248,45 @@ function parseObjects(json: string): KubeObject[] {
 const objectName = (object: KubeObject) =>
   `${object.kind.toLowerCase()}/${object.metadata.name}`
 
+interface Claim {
+  pattern: RegExp
+  retained: boolean
+}
+
 // The PVCs a StatefulSet's volumeClaimTemplates create are named <template>-<statefulset>-<n>,
 // and outlive it unless its retention policy deletes them.
-function retainedClaims(objects: KubeObject[]): RegExp[] {
+function statefulSetClaims(objects: KubeObject[]): Claim[] {
   return objects
     .filter((object) => object.kind === 'StatefulSet')
-    .filter(
-      (set) =>
-        set.spec?.persistentVolumeClaimRetentionPolicy?.whenDeleted !==
-        'Delete',
-    )
     .flatMap((set) =>
-      (set.spec?.volumeClaimTemplates ?? []).map(
-        (template) =>
-          new RegExp(
-            `^persistentvolumeclaim/${template.metadata.name}-${set.metadata.name}-\\d+$`,
-          ),
-      ),
+      (set.spec?.volumeClaimTemplates ?? []).map((template) => ({
+        pattern: new RegExp(
+          `^persistentvolumeclaim/${template.metadata.name}-${set.metadata.name}-\\d+$`,
+        ),
+        retained:
+          set.spec?.persistentVolumeClaimRetentionPolicy?.whenDeleted !==
+          'Delete',
+      })),
     )
+}
+
+// The StatefulSets' PVCs, found by name. A volumeClaimTemplate's labels are the chart's to set, so
+// a claim without the release label is invisible to leftovers().
+function claimLeftovers(claims: Claim[]): KubeObject[] {
+  if (claims.length === 0) return []
+  const pvcs = parseObjects(
+    kubectl(
+      'get',
+      'persistentvolumeclaim',
+      '--namespace',
+      NAMESPACE,
+      '--output',
+      'json',
+    ),
+  )
+  return pvcs.filter((pvc) =>
+    claims.some((claim) => claim.pattern.test(objectName(pvc))),
+  )
 }
 
 // Objects carrying the release's label, which also finds ones created at runtime and not in the
@@ -293,9 +325,14 @@ function leftovers(): KubeObject[] {
   return [namespaced, clusterWide, releases].flatMap(parseObjects)
 }
 
-function uninstallCleanly(): void {
+// The claims of the StatefulSets the release has now.
+const currentClaims = () => statefulSetClaims(liveObjects(releaseInventory()))
+
+// installedClaims are the claims from before the upgrade: a StatefulSet the upgrade removed or
+// renamed is gone, but its retained PVCs are still there.
+function uninstallCleanly(installedClaims: Claim[]): void {
   const inventory = releaseInventory()
-  const claims = retainedClaims(liveObjects(inventory))
+  const claims = [...installedClaims, ...currentClaims()]
   helm(
     'uninstall',
     RELEASE,
@@ -323,11 +360,16 @@ function uninstallCleanly(): void {
   // retained PVCs. It's listed, so a reviewer can check it's meant to be.
   const kept = new Set<string>()
   const left = new Set<string>()
-  for (const object of [...liveObjects(inventory), ...leftovers()]) {
+  const remaining = [
+    ...liveObjects(inventory),
+    ...leftovers(),
+    ...claimLeftovers(claims),
+  ]
+  for (const object of remaining) {
     const name = objectName(object)
     const keep =
       object.metadata.annotations?.[KEEP_ANNOTATION] === 'keep' ||
-      claims.some((claim) => claim.test(name))
+      claims.some((claim) => claim.retained && claim.pattern.test(name))
     ;(keep ? kept : left).add(name)
   }
   if (kept.size > 0)
@@ -356,10 +398,11 @@ function main(): void {
         : `No GA release of ${GA_CHART} to upgrade from; upgrading this chart to itself`,
     )
     install(image, gaVersion)
+    const installedClaims = currentClaims()
     helmTest()
     upgrade(image)
     helmTest()
-    uninstallCleanly()
+    uninstallCleanly(installedClaims)
     console.log(
       'Lifecycle: install, test, upgrade, test and uninstall all succeeded, cleanly',
     )
