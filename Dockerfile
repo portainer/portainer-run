@@ -10,12 +10,17 @@ RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY client/package.json ./client/
 COPY server/package.json ./server/
-RUN pnpm install --frozen-lockfile --filter portainer-run-ui
+# The server's dependencies too, so the license check sees everything that ships.
+RUN pnpm install --frozen-lockfile --filter portainer-run-ui --filter portainer-run-server
 COPY client/ ./client/
 # Runtime catalogue, imported through the @shared alias (resolved to ../shared,
 # matching the repo layout).
 COPY shared/ ./shared/
-RUN pnpm --filter portainer-run-ui run build
+# The root build checks the bundle for external loads and the production
+# licenses, and writes client/dist/THIRD_PARTY_NOTICES.txt, which ships below.
+COPY scripts/ ./scripts/
+COPY third-party-licenses.json ./
+RUN pnpm run build
 
 # Stage 2: Install server dependencies
 # node:sqlite is built into Node — no native build tools needed
