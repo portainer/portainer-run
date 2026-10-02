@@ -6,9 +6,13 @@
  *
  *   node scripts/check-licenses.ts                                    # check only
  *   node scripts/check-licenses.ts --notices build/THIRD_PARTY_NOTICES.txt
+ *   node scripts/check-licenses.ts --release                          # pending fails too
  *
  * Only production dependencies count: devDependencies run at build time and never ship. Anything
  * that isn't a Green license needs an entry in third-party-licenses.json, approved by the FOSSCC.
+ * An entry still `pending` approval only warns, so day-to-day CI keeps working while the FOSSCC
+ * decides. release.yml runs --release before a GA release, where it's an error, so nothing pending
+ * ships in a GA image.
  */
 import { execFileSync } from 'node:child_process'
 import {
@@ -47,6 +51,7 @@ const RED = new Set([
   'CC-BY-SA-4.0',
   'CC-BY-NC-4.0',
 ])
+const OPERATORS = new Set(['AND', 'OR', 'WITH', '(', ')'])
 
 // LICENSE, LICENCE.md, COPYING, NOTICE and the like, at a package's root.
 const LICENSE_FILE = /^(licen[cs]e|copying|notice)/i
@@ -96,6 +101,8 @@ interface PnpmLicenseEntry {
 interface Report {
   errors: string[]
   warnings: string[]
+  // --release: a pending approval is an error, not a warning.
+  release: boolean
 }
 
 function listProductionPackages(): Installed[] {
@@ -126,19 +133,23 @@ function listProductionPackages(): Installed[] {
 /**
  * Whether an SPDX expression is satisfiable with Green licenses alone: an OR needs one Green
  * side, an AND needs both. `X WITH <exception>` isn't in the policy table, so it never passes.
- * Anything malformed fails, since an unknown token is never Green.
+ * Anything malformed fails: an unbalanced parenthesis, a missing operand, or a token left over.
  */
 function isGreen(expression: string): boolean {
   const tokens = expression.replace(/[()]/g, ' $& ').trim().split(/\s+/)
   let pos = 0
+  const malformed = new Error('malformed SPDX expression')
   const atom = (): boolean => {
     const token = tokens[pos++]
     if (token === '(') {
       const value = anyOf()
-      pos++ // the closing ')'
+      if (tokens[pos++] !== ')') throw malformed
       return value
     }
+    if (token === undefined || OPERATORS.has(token)) throw malformed
     if (tokens[pos] === 'WITH') {
+      const exception = tokens[pos + 1]
+      if (exception === undefined || OPERATORS.has(exception)) throw malformed
       pos += 2
       return false
     }
@@ -160,7 +171,12 @@ function isGreen(expression: string): boolean {
     }
     return value
   }
-  return anyOf()
+  try {
+    const value = anyOf()
+    return pos === tokens.length && value
+  } catch {
+    return false
+  }
 }
 
 function category(id: string): string {
@@ -171,18 +187,27 @@ function category(id: string): string {
 }
 
 function describe(expression: string): string {
-  const ids = expression
-    .split(/[\s()]+/)
-    .filter((t) => t && !['AND', 'OR', 'WITH'].includes(t))
+  const ids = expression.split(/[\s()]+/).filter((t) => t && !OPERATORS.has(t))
   return ids.map((id) => `${id}: ${category(id)}`).join(', ')
 }
 
-function pendingWarning(
+function reportPending(
+  report: Report,
   subject: string,
   license: string,
   reason: string | undefined,
-): string {
-  return `${subject} (${license}) is allowed pending FOSSCC approval: ${reason ?? 'no reason given'}`
+): void {
+  const why = reason ?? 'no reason given'
+  if (report.release) {
+    report.errors.push(
+      `${subject} (${license}) is still pending FOSSCC approval, so a GA release can't ship it. ` +
+        `Get the approval and mark it approved in ${CONFIG_FILE}, or remove it. Pending: ${why}`,
+    )
+  } else {
+    report.warnings.push(
+      `${subject} (${license}) is allowed pending FOSSCC approval: ${why}`,
+    )
+  }
 }
 
 function checkPackage(pkg: Installed, config: Config, report: Report): void {
@@ -200,7 +225,7 @@ function checkPackage(pkg: Installed, config: Config, report: Report): void {
         `${exception.license}. It needs FOSSCC approval again.`,
     )
   } else if (exception.status === 'pending') {
-    report.warnings.push(pendingWarning(id, pkg.license, exception.reason))
+    reportPending(report, id, pkg.license, exception.reason)
   }
 }
 
@@ -224,9 +249,7 @@ function checkBundledFiles(config: Config, report: Report): void {
   for (const files of config.bundledFiles) {
     if (isGreen(files.license)) continue
     if (files.status === 'pending') {
-      report.warnings.push(
-        pendingWarning(files.name, files.license, files.reason),
-      )
+      reportPending(report, files.name, files.license, files.reason)
     } else if (files.status !== 'approved') {
       report.errors.push(
         `${files.name} (${files.path}) is licensed ${files.license} (${describe(files.license)}), ` +
@@ -303,12 +326,21 @@ function summary(packages: Installed[]): string {
 }
 
 function main(): void {
-  const { values } = parseArgs({ options: { notices: { type: 'string' } } })
+  const { values } = parseArgs({
+    options: {
+      notices: { type: 'string' },
+      release: { type: 'boolean', default: false },
+    },
+  })
   const config = JSON.parse(
     readFileSync(join(REPO_ROOT, CONFIG_FILE), 'utf8'),
   ) as Config
   const packages = listProductionPackages()
-  const report: Report = { errors: [], warnings: [] }
+  const report: Report = {
+    errors: [],
+    warnings: [],
+    release: values.release,
+  }
 
   for (const pkg of packages) checkPackage(pkg, config, report)
   checkStaleExceptions(packages, config, report)

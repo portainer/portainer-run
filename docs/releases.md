@@ -63,7 +63,9 @@ Then: **Actions → release → Run workflow** → set **Use workflow from** to
   `portainer/portainer-run:<version>`, the real chart to
   `oci://ghcr.io/portainer/charts`, and creates the GitHub Release, marked
   latest — all in this one dispatch. There is no separate promotion step,
-  and the release isn't created unless the image actually exists.
+  and the release isn't created unless the image actually exists. It fails
+  before building anything if a license in `third-party-licenses.json` is
+  still pending FOSSCC approval, which only warns everywhere else.
 
 > `chart/Chart.yaml` and `chart/values.yaml` are never hand-edited or
 > committed per release — the values checked into the repo are placeholders,

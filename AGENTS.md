@@ -75,9 +75,11 @@ The functions that already did when the rule landed carry an
 (`.jscpd.json`), on unused files, dependencies and exports (`knip.jsonc`), and
 on a production dependency whose license isn't Green under Portainer's FOSS
 policy (`scripts/check-licenses.ts`). Anything else needs the FOSSCC's
-approval, recorded in `third-party-licenses.json` with the reason. The build
-writes the notices to `client/dist/THIRD_PARTY_NOTICES.txt`, which ships in
-the image.
+approval, recorded in `third-party-licenses.json` with the reason. While the
+request is open the entry is `pending`, which only warns, so CI keeps working;
+a real release fails until it's `approved` (`check-licenses.ts --release`, in
+`release.yml`). The build writes the notices to
+`client/dist/THIRD_PARTY_NOTICES.txt`, which ships in the image.
 
 Commit `pnpm-lock.yaml` with any dependency change: CI and the image install
 with `--frozen-lockfile`. New package versions are held back for 7 days
