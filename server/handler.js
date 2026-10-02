@@ -32,6 +32,7 @@ const PROBE_PROOF_WAIT_MS = 2_000
  * @param {import('http').IncomingMessage} req
  * @param {import('http').ServerResponse} res
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (41); split it once it has tests to refactor against
 export async function handleRequest(req, res) {
   const parsed = url.parse(req.url)
   const pathname = parsed.pathname || '/'

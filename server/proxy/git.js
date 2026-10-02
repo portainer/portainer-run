@@ -987,6 +987,7 @@ export async function testGitConnection(payload) {
   return withTlsContext(payload, () => testGitConnectionImpl(payload))
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (46); split it once it has tests to refactor against
 async function testGitConnectionImpl(payload) {
   const { provider, repo, url: baseUrl } = payload
   const headers = buildHeaders(payload)

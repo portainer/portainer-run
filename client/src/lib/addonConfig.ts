@@ -9,6 +9,7 @@ import { apiFetch, serverFetch } from './api.js'
 /** This addon's id in Portainer's registry — matches server/routes/setup.js. */
 export const ADDON_ID = 'portainer-run'
 
+// eslint-disable-next-line no-restricted-syntax -- Portainer's add-on config API (apiFetch adds /api), not this add-on's mount path
 const CONFIG_PATH = `/addons/${ADDON_ID}/config`
 
 export const ENCRYPTION_KEY_ENTRY = 'ENCRYPTION_KEY'

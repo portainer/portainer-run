@@ -20,6 +20,7 @@ import http from 'node:http'
 /**
  * Handle all /api/connections/* routes.
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (93); split it once it has tests to refactor against
 export async function handleConnections(req, res, pathname) {
   const method = req.method
 

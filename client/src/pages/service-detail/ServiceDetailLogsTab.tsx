@@ -51,6 +51,7 @@ Provide a concise diagnostic report covering:
 
 If the application is healthy, say so briefly. If logs are empty but events show a problem, focus on the events and container state.`
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (35); split it once it has tests to refactor against
 export function ServiceDetailLogsTab({
   envId,
   namespace,
@@ -299,6 +300,7 @@ Analyse this data and follow the instructions in your system prompt.`
     }
   }
 
+  // eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (18); split it once it has tests to refactor against
   const onStartStream = async () => {
     if (!pod) return
     stopStream()

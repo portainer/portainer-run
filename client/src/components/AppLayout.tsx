@@ -131,6 +131,7 @@ function useShellBreadcrumbs(appSwitcher?: ReactNode): BreadcrumbItem[] {
   ]
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (16); split it once it has tests to refactor against
 export function AppLayout() {
   const navigate = useNavigate()
   const { pathname } = useLocation()

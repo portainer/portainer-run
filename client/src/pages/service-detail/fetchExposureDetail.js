@@ -5,6 +5,7 @@ import { inflightDedupe } from '../../lib/inflightDedupe.js'
  * @returns {Promise<{ rows: [string, string][], emptyMessage?: string, error?: string }>}
  */
 export async function fetchExposureDetail(token, envId, ns, name) {
+  // eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (25); split it once it has tests to refactor against
   return inflightDedupe(`exposure:${envId}:${ns}:${name}`, async () => {
     try {
       const [svcRes, ingRes] = await Promise.all([

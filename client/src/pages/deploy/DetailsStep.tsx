@@ -65,6 +65,7 @@ interface DetailsStepProps {
 }
 
 /** Third wizard step: app name, target environment/namespace, and exposure. */
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (33); split it once it has tests to refactor against
 export function DetailsStep({
   availableEnvs,
   appName,

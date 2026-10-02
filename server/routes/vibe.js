@@ -37,6 +37,19 @@ import {
   stackNameConflictMessage,
 } from '../lib/stack-name.js'
 
+// Function declarations are hoisted, so the handlers below are defined by the
+// time a request reaches the table.
+const VIBE_ROUTES = {
+  'POST /api/vibe/deploy': handleVibeDeploy,
+  'POST /api/vibe/update': handleVibeUpdate,
+  'POST /api/vibe/update-exposure': handleVibeUpdateExposure,
+  'GET /api/vibe/manifest-exposure': handleVibeManifestExposure,
+  'GET /api/vibe/manifest-env': handleVibeManifestEnv,
+  'POST /api/vibe/update-env': handleVibeUpdateEnv,
+  'POST /api/vibe/delete-manifest': handleVibeDeleteManifest,
+  'POST /api/vibe/delete-stack': handleVibeDeleteStack,
+}
+
 /**
  * Handle all /api/vibe/* routes.
  *
@@ -66,39 +79,8 @@ export async function handleVibe(req, res, pathname) {
     return true
   }
 
-  if (pathname === '/api/vibe/deploy' && req.method === 'POST') {
-    return handleVibeDeploy(req, res)
-  }
-
-  if (pathname === '/api/vibe/update' && req.method === 'POST') {
-    return handleVibeUpdate(req, res)
-  }
-
-  if (pathname === '/api/vibe/update-exposure' && req.method === 'POST') {
-    return handleVibeUpdateExposure(req, res)
-  }
-
-  if (pathname === '/api/vibe/manifest-exposure' && req.method === 'GET') {
-    return handleVibeManifestExposure(req, res)
-  }
-
-  if (pathname === '/api/vibe/manifest-env' && req.method === 'GET') {
-    return handleVibeManifestEnv(req, res)
-  }
-
-  if (pathname === '/api/vibe/update-env' && req.method === 'POST') {
-    return handleVibeUpdateEnv(req, res)
-  }
-
-  if (pathname === '/api/vibe/delete-manifest' && req.method === 'POST') {
-    return handleVibeDeleteManifest(req, res)
-  }
-
-  if (pathname === '/api/vibe/delete-stack' && req.method === 'POST') {
-    return handleVibeDeleteStack(req, res)
-  }
-
-  return null
+  const route = VIBE_ROUTES[`${req.method} ${pathname}`]
+  return route ? route(req, res) : null
 }
 
 // --- sanitize helpers (mirrors gitops.js) ---
@@ -265,6 +247,7 @@ function splitSensitiveEnv(envVars) {
   return { plain, sensitive }
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (31); split it once it has tests to refactor against
 function buildVibeManifests({
   appName,
   ns,
@@ -581,6 +564,7 @@ function buildVibeManifests({
 // Main handler
 // ---------------------------------------------------------------------------
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (47); split it once it has tests to refactor against
 async function handleVibeDeploy(req, res) {
   const body = await readBody(req)
   const data = parseJson(body)
@@ -1247,6 +1231,7 @@ async function handleVibeUpdate(req, res) {
  * documents with a regenerated version matching the new exposure settings,
  * and commits the updated file back.
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (29); split it once it has tests to refactor against
 async function handleVibeUpdateExposure(req, res) {
   const body = await readBody(req)
   const data = parseJson(body)
@@ -1418,6 +1403,7 @@ async function handleVibeUpdateExposure(req, res) {
  * Fetches the manifest YAML from git and parses the current Service
  * exposure settings so the edit form can pre-populate correctly.
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (18); split it once it has tests to refactor against
 async function handleVibeManifestExposure(req, res) {
   const url = new URL(req.url, 'http://localhost')
   const gitTargetId = url.searchParams.get('gitTargetId')
@@ -1554,6 +1540,7 @@ async function handleVibeManifestEnv(req, res) {
  * array, and regenerates the vibe-env init container so the .env file written
  * into the volume stays in sync. Portainer reconciles on the next poll cycle.
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (22); split it once it has tests to refactor against
 async function handleVibeUpdateEnv(req, res) {
   const body = await readBody(req)
   const data = parseJson(body)

@@ -91,6 +91,7 @@ function LoadingRow({ depth }: { depth: number }) {
   )
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (43); split it once it has tests to refactor against
 function FolderRow({
   node,
   depth,
