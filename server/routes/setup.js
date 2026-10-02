@@ -37,6 +37,7 @@ function json(res, status, body) {
  * @param {string} pathname
  * @returns {Promise<true | null>} true when handled, null to fall through
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (24); split it once it has tests to refactor against
 export async function handleSetup(req, res, pathname) {
   const caller = await resolveCallerIdentity(req)
   if (!caller) {

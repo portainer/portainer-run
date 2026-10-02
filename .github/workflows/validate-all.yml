@@ -1,0 +1,148 @@
+# The shared validate workflow plus the whole-repo checks:
+# `pnpm run lint:deep` and `pnpm run lint:chart`, tests with coverage
+# thresholds (`pnpm run test:coverage`), and the chart install, upgrade and
+# uninstall test on kind (`pnpm run test:lifecycle`).
+# ci.yml runs all of it on pushes to develop and release/**. On PRs it runs
+# with pull-request: true, which keeps the checks that take seconds
+# (`pnpm run lint:repo` in place of `lint:deep`, and `lint:chart`) and drops
+# the rest: validate, since ci.yml runs that on PRs under the check names
+# the ruleset requires, and the slower lint:deep and lifecycle test.
+#
+# Composite actions are pinned to the same github-actions commit as the
+# shared workflows ci.yml and release.yml call.
+
+name: validate-all
+
+on:
+  workflow_call:
+    inputs:
+      pull-request:
+        type: boolean
+        default: false
+    secrets:
+      app-id:
+        required: true
+      app-private-key:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    if: ${{ !inputs.pull-request }}
+    uses: portainer/github-actions/.github/workflows/validate.yml@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
+    with:
+      runtime: node
+      package-manager: pnpm
+      app-repositories: portainer-run,design-system
+      # Same as ci.yml's PR validate: tests plus the coverage thresholds in
+      # .c8rc.json (server/, shared/) and client/vite.config.ts.
+      test-script: test:coverage
+    secrets:
+      app-id: ${{ secrets.app-id }}
+      app-private-key: ${{ secrets.app-private-key }}
+
+  # lint:repo is the repo rules and doc links, which lint:deep also runs.
+  lint-deep:
+    name: ${{ inputs.pull-request && 'lint-repo' || 'lint-deep' }}
+    runs-on: ubuntu-latest
+    steps:
+      # knip resolves @ds/* imports, so it needs the design-system submodule.
+      - uses: portainer/github-actions/.github/actions/checkout-with-submodules@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
+        with:
+          app-id: ${{ secrets.app-id }}
+          private-key: ${{ secrets.app-private-key }}
+          repositories: portainer-run,design-system
+
+      - uses: portainer/github-actions/.github/actions/setup-toolchain@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
+        with:
+          runtime: node
+          package-manager: pnpm
+
+      - name: '[validation] run lint:deep'
+        if: ${{ !inputs.pull-request }}
+        shell: bash
+        run: pnpm run lint:deep
+
+      - name: '[validation] run lint:repo'
+        if: ${{ inputs.pull-request }}
+        shell: bash
+        run: pnpm run lint:repo
+
+  lint-chart:
+    name: lint-chart
+    runs-on: ubuntu-latest
+    steps:
+      # Renders chart/ only, so no submodule is needed.
+      - name: '[preparation] checkout'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: '[preparation] set up helm'
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+
+      # Pinned and checksummed like the shared workflow's gitleaks install.
+      - name: '[preparation] install kubeconform'
+        shell: bash
+        env:
+          KUBECONFORM_VERSION: v0.8.0
+          KUBECONFORM_SHA256: 9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883
+        run: |
+          curl -fsSLo /tmp/kubeconform.tar.gz \
+            "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          echo "${KUBECONFORM_SHA256}  /tmp/kubeconform.tar.gz" | sha256sum -c -
+          mkdir -p "${RUNNER_TEMP}/bin"
+          tar -xzf /tmp/kubeconform.tar.gz -C "${RUNNER_TEMP}/bin" kubeconform
+          echo "${RUNNER_TEMP}/bin" >> "${GITHUB_PATH}"
+
+      - uses: portainer/github-actions/.github/actions/setup-toolchain@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
+        with:
+          runtime: node
+          package-manager: pnpm
+
+      - name: '[validation] run lint:chart'
+        shell: bash
+        run: pnpm run lint:chart
+
+  # Installs, tests, upgrades and uninstalls the chart on a throwaway kind
+  # cluster, the way Portainer's install flow does, and fails on anything the
+  # uninstall leaves behind. It takes a few minutes, which is why it doesn't
+  # run on PRs. Portainer's own flows (Repair, the gateway) stay a manual
+  # check.
+  chart-lifecycle:
+    name: chart-lifecycle
+    if: ${{ !inputs.pull-request }}
+    runs-on: ubuntu-latest
+    steps:
+      # The image build needs the design-system submodule.
+      - uses: portainer/github-actions/.github/actions/checkout-with-submodules@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
+        with:
+          app-id: ${{ secrets.app-id }}
+          private-key: ${{ secrets.app-private-key }}
+          repositories: portainer-run,design-system
+
+      - uses: portainer/github-actions/.github/actions/setup-toolchain@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
+        with:
+          runtime: node
+          package-manager: pnpm
+
+      - name: '[preparation] set up helm'
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+
+      # Pinned and checksummed like kubeconform in lint-chart above.
+      - name: '[preparation] install kind'
+        shell: bash
+        env:
+          KIND_VERSION: v0.33.0
+          KIND_SHA256: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
+        run: |
+          mkdir -p "${RUNNER_TEMP}/bin"
+          curl -fsSLo "${RUNNER_TEMP}/bin/kind" \
+            "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
+          echo "${KIND_SHA256}  ${RUNNER_TEMP}/bin/kind" | sha256sum -c -
+          chmod +x "${RUNNER_TEMP}/bin/kind"
+          echo "${RUNNER_TEMP}/bin" >> "${GITHUB_PATH}"
+
+      - name: '[validation] install, upgrade and uninstall the chart'
+        shell: bash
+        run: pnpm run test:lifecycle

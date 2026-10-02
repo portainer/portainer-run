@@ -3,10 +3,15 @@
 //   { state: { user: { Id, Username, ThemeSettings: { color }, ... } } }
 export const CURRENT_USER_STORAGE_KEY = 'portainer.current_user'
 
+// The record is shared with Portainer and any other same-origin code, so it can
+// hold any JSON at all; only an object is a record, the rest reads as empty.
 export function readCurrentUser() {
   try {
     const raw = localStorage.getItem(CURRENT_USER_STORAGE_KEY)
-    return raw ? JSON.parse(raw) : {}
+    const parsed = raw ? JSON.parse(raw) : undefined
+    const isRecord =
+      typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+    return isRecord ? parsed : {}
   } catch {
     return {}
   }

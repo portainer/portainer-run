@@ -136,6 +136,16 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       environment: 'jsdom',
+      // `pnpm run test:coverage` fails below these. They're the coverage
+      // client/ had when they were set, rounded down: raise them as tests are
+      // added, and never lower them to get a change through.
+      coverage: {
+        provider: 'v8',
+        include: ['src/**/*.{js,jsx,ts,tsx}'],
+        exclude: ['src/**/*.test.{js,jsx,ts,tsx}', 'src/**/*.d.ts'],
+        reporter: ['text', 'text-summary'],
+        thresholds: { statements: 7, branches: 5, functions: 5, lines: 8 },
+      },
     },
   }
 })

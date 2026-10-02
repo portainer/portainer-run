@@ -65,8 +65,31 @@ jobs:
       app-id: ${{ secrets.PORTAINER_BOT_ID }}
       app-private-key: ${{ secrets.PORTAINER_BOT_KEY }}
 
+  # A license still pending FOSSCC approval only warns in lint:deep and the
+  # build, so CI keeps working while the FOSSCC decides. A GA release can't
+  # ship it, so here it fails. A pre-release still only warns.
+  licenses:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: portainer/github-actions/.github/actions/checkout-with-submodules@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
+        with:
+          app-id: ${{ secrets.PORTAINER_BOT_ID }}
+          private-key: ${{ secrets.PORTAINER_BOT_KEY }}
+          repositories: portainer-run,design-system
+
+      - uses: portainer/github-actions/.github/actions/setup-toolchain@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
+        with:
+          runtime: node
+          package-manager: pnpm
+
+      - name: '[validation] check licenses'
+        shell: bash
+        env:
+          RELEASE_FLAG: ${{ !inputs.pre-release && '--release' || '' }}
+        run: node scripts/check-licenses.ts $RELEASE_FLAG
+
   build-app-image:
-    needs: [validate, normalize-version]
+    needs: [validate, licenses, normalize-version]
     uses: portainer/github-actions/.github/workflows/build-image.yml@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
     with:
       image-name: portainer-run

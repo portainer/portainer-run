@@ -1,0 +1,12 @@
+{
+  "threshold": 5,
+  "format": ["javascript", "typescript", "jsx", "tsx"],
+  "ignore": [
+    "**/design-system/**",
+    "**/dist/**",
+    "**/node_modules/**",
+    "**/coverage/**",
+    "data/**"
+  ],
+  "reporters": ["console"]
+}

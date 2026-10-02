@@ -1,0 +1,29 @@
+// Unused files, dependencies and exports. Run by `pnpm run lint:deep`.
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      // scripts/ and the repo-level tests are run directly with node.
+      "entry": ["scripts/*.ts", "test/**/*.test.js"],
+      "project": ["scripts/**/*.ts", "test/**/*.js", "shared/**/*.js"],
+    },
+    "client": {
+      // src/ is reached from index.html via the Vite plugin. sanitize.ts is the
+      // sanitize-at-sink helper the react/no-danger gate in eslint.config.js
+      // sends any HTML render to; nothing renders HTML yet, so nothing imports it.
+      "entry": ["src/lib/sanitize.ts"],
+      // CSS is included so `@import 'tailwindcss'` counts as a use of the dependency.
+      "project": ["src/**/*.{js,jsx,ts,tsx,css}", "*.ts"],
+      // design-system/ ships no node_modules; its components import clsx from ours.
+      "ignoreDependencies": ["clsx"],
+    },
+    "server": {
+      "entry": ["**/*.test.js"],
+      "project": ["**/*.js"],
+    },
+  },
+  // System tools scripts/ shells out to, not npm packages.
+  "ignoreBinaries": ["kubectl", "kind", "k3d", "helm", "kubeconform"],
+  // Keep exports that are also used in their own file.
+  "ignoreExportsUsedInFile": true,
+}

@@ -5,7 +5,7 @@ import { Avatar } from '@ds/v3-components/Avatar/Avatar'
 import { SegmentedControl } from '@ds/v3-components/Segmented/Segmented'
 
 import { useAppStore } from '../store/useAppStore.js'
-import { disconnect } from '../services/session.js'
+import { logout } from '../services/session.js'
 import { useTheme, type Theme } from '../hooks/useTheme'
 
 const APPEARANCE_OPTIONS = [
@@ -79,7 +79,7 @@ export function AccountMenuSlot() {
           <div className="acm-sep" />
 
           <Popover.Close asChild>
-            <button type="button" className="acm-logout" onClick={disconnect}>
+            <button type="button" className="acm-logout" onClick={logout}>
               <LogOut size={15} aria-hidden />
               Log out
             </button>

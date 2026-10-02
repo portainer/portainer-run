@@ -566,6 +566,7 @@ async function toolRequestUploadSession() {
   return requestUploadSession()
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (41); split it once it has tests to refactor against
 async function toolDeployVibeApp(req, args, caller) {
   const {
     appName,
@@ -821,6 +822,7 @@ async function toolDeployVibeApp(req, args, caller) {
   }
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (22); split it once it has tests to refactor against
 async function toolGetAppStatus(req, args) {
   const { appName, envId, namespace } = args
   if (!appName || !envId || !namespace) {

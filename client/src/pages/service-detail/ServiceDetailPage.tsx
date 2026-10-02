@@ -77,6 +77,7 @@ export function ServiceDetailIndexRedirect() {
   )
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (20); split it once it has tests to refactor against
 export function ServiceDetailPage() {
   const { envId = '', namespace = '', name = '', tab: tabParam } = useParams()
   const navigate = useNavigate()

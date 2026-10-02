@@ -787,6 +787,7 @@ export function VibeDeploy() {
   // Poll Kubernetes (via Portainer) until the app's pods are ready, surfacing a
   // friendly status while it boots. Stops on ready, a blocking error, cancel, or
   // timeout.
+  // eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (18); split it once it has tests to refactor against
   async function waitForAppReady(sp: DeployStagedParams) {
     const safeApp = sanitizeAppName(sp.appName)
     const deadline = Date.now() + STARTUP_TIMEOUT_MS

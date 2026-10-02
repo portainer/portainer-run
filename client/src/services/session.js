@@ -153,6 +153,3 @@ export async function logout() {
   st().reset()
   redirectToLogin()
 }
-
-// Back-compat alias for existing callers (e.g. the account menu).
-export const disconnect = logout

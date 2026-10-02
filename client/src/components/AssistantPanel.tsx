@@ -79,6 +79,7 @@ export function AssistantPanel({
     ])
   }, [])
 
+  // eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (18); split it once it has tests to refactor against
   const sendChat = useCallback(async () => {
     const text = input.trim()
     if (!text || sendingRef.current) return

@@ -1,0 +1,19 @@
+{
+  "exceptions": {
+    "argparse": {
+      "license": "Python-2.0",
+      "status": "pending",
+      "reason": "Pulled in by js-yaml, the server's one runtime dependency, and shipped unmodified in the image. Python-2.0 (the PSF license) is permissive, but isn't in the FOSS Table of Licenses."
+    }
+  },
+  "bundledFiles": [
+    {
+      "name": "DM Sans",
+      "path": "client/src/assets/fonts",
+      "license": "OFL-1.1",
+      "licenseFile": "client/src/assets/fonts/OFL.txt",
+      "status": "pending",
+      "reason": "Self-hosted font files, shipped unmodified. OFL-1.1 isn't in the FOSS Table of Licenses."
+    }
+  ]
+}

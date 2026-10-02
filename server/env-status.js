@@ -52,6 +52,7 @@ function kubeCall(token, envId, kubePath, target) {
   )
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (42); split it once it has tests to refactor against
 function resolveStatusReason(pod) {
   const scheduledCond = (pod.status?.conditions || []).find(
     (c) => c.type === 'PodScheduled',
@@ -142,6 +143,7 @@ function resolveStatusReason(pod) {
   return null
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (21); split it once it has tests to refactor against
 export function resolveUrl(appName, svcs, ings, nodeIp) {
   for (const ing of ings.filter(
     (i) => i.metadata?.labels?.app === appName || i.metadata?.name === appName,
@@ -200,6 +202,7 @@ export function resolveUrl(appName, svcs, ings, nodeIp) {
  * @param {{ host: string, port: number, isHttps: boolean, key: string }} target
  * @param {string[]} namespaces  Known namespaces for this user — used as fallback when cluster-level calls return 403
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing (31); split it once it has tests to refactor against
 async function buildEnvStatus(token, envId, target, namespaces = []) {
   const labelSel = encodeURIComponent('managed-by=portainer-run')
   const [podsR, svcsR, ingsR, nodesR] = await Promise.all([
