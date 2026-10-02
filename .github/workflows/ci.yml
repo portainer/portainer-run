@@ -28,7 +28,12 @@ permissions:
   contents: read
 
 jobs:
+  # PRs run validate plus the quick whole-repo checks from validate-all;
+  # pushes to develop and release/** run all of validate-all, which runs
+  # validate itself along with the slower checks listed at the top of
+  # validate-all.yml.
   validate:
+    if: github.event_name == 'pull_request'
     uses: portainer/github-actions/.github/workflows/validate.yml@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
     with:
       runtime: node
@@ -39,12 +44,27 @@ jobs:
       # the exact exception chart-render-guard's own description names
       # this repo for, confirmed by actually rendering the chart before
       # deciding.
+      # Tests plus the coverage thresholds in .c8rc.json (server/, shared/)
+      # and client/vite.config.ts, so a PR that drops below them fails here
+      # and not after merge.
+      test-script: test:coverage
     secrets:
       app-id: ${{ secrets.PORTAINER_BOT_ID }}
       app-private-key: ${{ secrets.PORTAINER_BOT_KEY }}
 
+  validate-all:
+    uses: ./.github/workflows/validate-all.yml
+    with:
+      pull-request: ${{ github.event_name == 'pull_request' }}
+    secrets:
+      app-id: ${{ secrets.PORTAINER_BOT_ID }}
+      app-private-key: ${{ secrets.PORTAINER_BOT_KEY }}
+
+  # The skipped validate job would otherwise skip this and every job after
+  # it, so each downstream job runs unless something failed or was cancelled.
   build-app-image:
-    needs: [validate]
+    needs: [validate, validate-all]
+    if: ${{ !failure() && !cancelled() }}
     uses: portainer/github-actions/.github/workflows/build-image.yml@fb36fbd33331b28f8f7b565e7d58d8c23e34859c # v1.0.0
     with:
       image-name: portainer-run
@@ -57,6 +77,7 @@ jobs:
 
   scout-app-image:
     needs: [build-app-image]
+    if: ${{ !failure() && !cancelled() }}
     # A job's own permissions: replaces the workflow-level default, not adds
     # to it — contents: read must be explicit here or scout.yml gets none.
     permissions:
@@ -78,6 +99,7 @@ jobs:
   # alongside it. Only publishes on a push event — PRs never publish one.
   publish-chart:
     needs: [build-app-image, scout-app-image]
+    if: ${{ !failure() && !cancelled() }}
     permissions:
       contents: read
       packages: write

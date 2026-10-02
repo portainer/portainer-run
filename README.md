@@ -236,6 +236,18 @@ pnpm run dev
 
 The root, `client/` and `server/` are one pnpm workspace with a single `pnpm-lock.yaml`, so one `pnpm install` covers all three. Commit the lockfile with any dependency change: CI and the image install with `--frozen-lockfile` and reject a stale one. New versions are held back for 7 days (`minimumReleaseAge` in `pnpm-workspace.yaml`).
 
+Before you push, run the same checks CI does:
+
+```bash
+pnpm run lint && pnpm run lint:deep && pnpm run typecheck && pnpm run test:coverage && pnpm run format:check
+pnpm run lint:chart       # if you changed chart/; needs helm, and kubeconform for schemas
+pnpm run test:lifecycle   # chart install/upgrade/uninstall on kind; needs docker, kind, helm and kubectl
+```
+
+PRs run `lint:repo` (the repo rules and doc links) in place of `lint:deep`, and skip
+`test:lifecycle`; both run on pushes to `develop` and `release/**`, where a failure blocks that
+branch's image and chart. [AGENTS.md](AGENTS.md#commands) says what each one checks.
+
 The 22.22.1 floor is lint-staged's, the highest of any locked dependency. Nothing
 here runs under Bun: SQLite comes from `node:sqlite`, and the container image
 installs and runs on Node too (see the `Dockerfile`).
