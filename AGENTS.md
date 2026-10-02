@@ -112,10 +112,11 @@ with `--frozen-lockfile`. New package versions are held back for 7 days
   path in from `ADDON_BASE_PATH` at build time, so client code uses
   `import.meta.env.BASE_URL`. The gateway strips the prefix before forwarding,
   so server routes match root-relative paths (`/api/...`, `/mcp`).
-  `pnpm run lint` rejects an `/addons/` literal in `client/src/`, and an
-  external URL in a load (`fetch`, `<img src>` and the like): the gateway's
-  CSP only allows same-origin loads, and `pnpm run build` checks the built
-  HTML and CSS for the same.
+  `pnpm run lint` rejects an `/addons/` literal in `client/src/` (`lint:repo`
+  does the same for its stylesheets), and an external URL in a load
+  (`fetch`, `<img src>` and the like): the gateway's CSP only allows
+  same-origin loads, and `pnpm run build` checks the built HTML and CSS for
+  the same.
 - Branch off and open PRs into `develop` by default. A fix for a release
   line that already shipped goes into its `release/X.Y` branch instead, then
   gets cherry-picked forward to `develop`
